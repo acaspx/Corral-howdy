@@ -1,0 +1,98 @@
+# Corral CI. Mirrors `just check`. See docs/04-test-plan.md and docs/06-loop-engineering.md.
+# Before turning on branch protection: pin every third-party action to a full commit SHA (security model T12).
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+    name: lint (fmt, clippy, typecheck, eslint)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: "rustfmt, clippy" }
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: cargo fmt --all -- --check
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r typecheck
+      - run: pnpm -r lint
+      # The Tauri shell embeds the built frontend, so build it before clippy compiles the workspace.
+      - run: pnpm -r build
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+  test:
+    name: test (Rust + TS)
+    runs-on: macos-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: cargo test
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r test
+
+  eval-gate:
+    name: eval gate
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo run -q -p corral-evals -- --suite gate --report evals/reports/gate.json --baseline evals/reports/baselines/main.json | tee -a "$GITHUB_STEP_SUMMARY"
+
+  native:
+    name: native (CorralNative, Swift)
+    # Needs Xcode 26 / the macOS 26 SDK. Confirm this runner label is available in M0.
+    runs-on: macos-26
+    needs: lint
+    # The Swift/Metal prototype hasn't been compiled yet (Spike S5). Remove this line once S5 is green.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - run: xcodebuild test -scheme CorralNative -destination 'platform=macOS'
+        working-directory: native/CorralNative
+
+  scope-guard:
+    name: scope guard (test changes need a reason)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - run: ./scripts/ci/scope_guard.sh "${{ github.event.pull_request.base.sha }}"
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+
+  security:
+    name: security (cargo-deny, gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with: { arguments: --workspace }
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

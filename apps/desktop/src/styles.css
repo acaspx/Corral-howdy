@@ -1,0 +1,16 @@
+:root {
+  color-scheme: light dark;
+  --glass-tint: #9eb8d1;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  background: Canvas;
+  color: CanvasText;
+}
+body { margin: 0; }
+.shell { max-width: 880px; margin: 0 auto; padding: 48px 32px; }
+h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: -0.01em; }
+.lede { margin: 0 0 32px; opacity: 0.7; }
+.sections { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.sections li { border: 1px solid color-mix(in srgb, var(--glass-tint) 45%, transparent); border-radius: 14px; padding: 14px 16px; }
+.sections h2 { font-size: 15px; margin: 0 0 6px; }
+.sections p { font-size: 13px; margin: 0; opacity: 0.75; }
+.status { margin-top: 32px; font-size: 12px; opacity: 0.6; }

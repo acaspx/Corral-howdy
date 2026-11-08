@@ -1,0 +1,30 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "apps/desktop/src-tauri"]
+# `cargo test` / `cargo build` at the root skip the Tauri shell by default (it needs the frontend
+# built first). CI and `just check` use `--workspace`, which includes it.
+default-members = ["crates/*"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.90"
+license = "MIT"
+repository = "https://github.com/acaspx/corral-howdy"
+publish = false
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml_ng = "0.10"
+thiserror = "2"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"          # AGENTS.md: no `unsafe` without an ADR
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"            # AGENTS.md: no unwrap() outside tests (see clippy.toml)
+wildcard_enum_match_arm = "warn" # AGENTS.md rule 8: exhaustive matches on ActionClass / Event kinds
+dbg_macro = "deny"
+todo = "warn"

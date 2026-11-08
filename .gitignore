@@ -1,0 +1,26 @@
+# Rust
+/target/
+# Node / frontend
+node_modules/
+apps/desktop/dist/
+*.tsbuildinfo
+# Tauri generated
+apps/desktop/src-tauri/gen/
+apps/desktop/src-tauri/target/
+# Swift / Xcode
+native/CorralNative/.build/
+native/CorralNative/.swiftpm/
+*.xcuserstate
+DerivedData/
+# Eval reports (baselines are committed)
+evals/reports/*
+!evals/reports/baselines/
+# OS / editors
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+# Never commit secrets
+.env
+.env.*
+*.pem

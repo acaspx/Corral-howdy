@@ -1,0 +1,18 @@
+[package]
+name = "corral-evals"
+description = "Runs Corral's eval suites (docs/05-evals.md) and compares results against a baseline."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml_ng.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

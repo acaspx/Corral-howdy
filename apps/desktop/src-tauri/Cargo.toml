@@ -1,0 +1,22 @@
+[package]
+name = "corral-desktop"
+description = "Corral's thin Tauri shell: windows, tray, hotkeys and IPC wiring. No decisions live here."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "corral_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+
+[lints]
+workspace = true

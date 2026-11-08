@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Corral: liquid-glass shape preview</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #d9d9db; font: 13px -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; color: #2b2f36; overflow: hidden; }
+  canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+  .hud { position: fixed; top: 16px; left: 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+         background: rgba(255,255,255,.55); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+         border: 1px solid rgba(255,255,255,.7); border-radius: 14px; padding: 10px 12px; box-shadow: 0 6px 24px rgba(20,30,50,.12); }
+  button { font: inherit; border: 1px solid rgba(40,50,70,.15); background: rgba(255,255,255,.7); border-radius: 9px; padding: 6px 10px; cursor: pointer; }
+  button:hover { background: #fff; }
+  .count { min-width: 120px; font-weight: 600; }
+  .note { position: fixed; bottom: 10px; right: 14px; opacity: .55; font-size: 11px; }
+  .labels { position: fixed; inset: 0; pointer-events: none; }
+  .labels span { position: absolute; transform: translate(-50%, -50%); text-align: center; font-weight: 600; font-size: 14px; line-height: 1.1; color: rgba(30,40,55,.72); letter-spacing: .2px; }
+  .labels small { display: block; font-size: 10px; font-weight: 500; opacity: .7; }
+  .chooser { position: fixed; top: 76px; left: 16px; width: 280px; display: none; background: rgba(255,255,255,.7);
+             backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border: 1px solid rgba(255,255,255,.8);
+             border-radius: 14px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(20,30,50,.14); }
+  .chooser h3 { margin: 0 0 4px; font-size: 13px; } .chooser p { margin: 0 0 8px; opacity: .7; }
+  .chooser label { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; }
+  .chooser .row { display: flex; gap: 8px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="Corral preview"></canvas>
+<div class="labels" id="labels"></div>
+<div class="hud" role="toolbar" aria-label="Preview controls">
+  <span class="count" id="count">3 agents in corral</span>
+  <button id="add">+ Add agent</button>
+  <button id="remove">− Remove agent</button>
+  <button id="recall">Recall all</button>
+  <button id="usage">Simulate a week of use</button>
+  <button id="choose">Choose shown…</button>
+  <span style="opacity:.7">Click a drop to deploy it. Numbers = usage rank.</span>
+</div>
+<div class="chooser" id="chooser" role="dialog" aria-label="Choose which agents show in the corral">
+  <h3>Your corral holds up to 8</h3>
+  <p>Choose which agents show. The rest stay reachable from the prompt bar and main window.</p>
+  <div id="chooserList"></div>
+  <div class="row"><button id="chooserDone">Done</button></div>
+</div>
+<div class="note">Same SDF maths as CorralGlass.metal · procedural wallpaper stands in for the system Liquid Glass backdrop</div>
+
+<script>
+// ---- model: agents, usage, shown set (in the app this all lives in the Rust core) ----
+const M = { R: 34, GAP: 40, BR: 0.22, NECK: 9, MAX_SHOWN: 8 };
+const NAMES = ["Gk","Ms","Dt","Cl","Cx","Gm","Sc","Ed","Lx","Rx","Vo","Ny"];
+let nextId = 0;
+const agents = [];                       // {id,label,uses,lastUsed,shown,deployed}
+function makeAgent() {
+  const id = "a" + nextId; const label = NAMES[nextId % NAMES.length]; nextId++;
+  const a = { id, label, uses: 0, lastUsed: 0, shown: agents.filter(x => x.shown).length < M.MAX_SHOWN, deployed: false };
+  agents.push(a); return a;
+}
+const n0 = Math.max(0, Math.min(12, parseInt(new URLSearchParams(location.search).get("n") ?? "3", 10) || 0));
+for (let i = 0; i < n0; i++) { const a = makeAgent(); a.uses = Math.round(Math.random() * 20); }
+
+// Usage rank: most uses first, then most recent use, then creation order (stable).
+function ranked() {
+  return agents.slice().sort((x, y) => (y.uses - x.uses) || (y.lastUsed - x.lastUsed) || (x.id < y.id ? -1 : 1));
+}
+function shownInCorral() { return ranked().filter(a => a.shown && !a.deployed).slice(0, M.MAX_SHOWN); }
+
+// ---- shape grammar + slot order (mirrors CorralLayout.swift) ----
+function ringAngles(n) { return [...Array(n)].map((_, k) => Math.PI / 2 + Math.PI / n + 2 * Math.PI * k / n); }
+function topLeftSlot(n) {
+  const t = 5 * Math.PI / 4, A = ringAngles(n);
+  const d = a => { const x = Math.abs((a - t) % (2 * Math.PI)); return Math.min(x, 2 * Math.PI - x); };
+  let best = 0;
+  for (let i = 1; i < n; i++) {
+    const di = d(A[i]), db = d(A[best]);
+    if (di < db - 1e-6 || (Math.abs(di - db) <= 1e-6 && Math.sin(A[i]) < Math.sin(A[best]))) best = i;
+  }
+  return best;
+}
+function layout(ids) {
+  const n = ids.length; const out = [];
+  if (n === 0) { const r = M.R * .55; out.push({ id: "puddleA", x: -r * .7, y: 0, r, ring: false, rank: 0 }, { id: "puddleB", x: r * .7, y: 0, r, ring: false, rank: 0 }); }
+  else if (n === 1) out.push({ id: ids[0], x: 0, y: 0, r: M.R, ring: false, rank: 1 });
+  else if (n === 2) { const h = M.R + M.GAP / 2; out.push({ id: ids[0], x: -h, y: 0, r: M.R, ring: true, rank: 1 }, { id: ids[1], x: h, y: 0, r: M.R, ring: true, rank: 2 }); }
+  else {
+    const R = (2 * M.R + M.GAP) / (2 * Math.sin(Math.PI / n)), A = ringAngles(n), s = topLeftSlot(n);
+    ids.forEach((id, rank) => { const a = A[(s + rank) % n]; out.push({ id, x: R * Math.cos(a), y: R * Math.sin(a), r: M.R, ring: true, rank: rank + 1 }); });
+  }
+  return out;   // offsets relative to the shape's centre (pivot)
+}
+
+// ---- morph: polar springs around the pivot (mirrors CorralMorph) ----
+let blobs = [];  // {id,x,y,r,att,va,vd,ring,rank,tx,ty,tr,tatt,leaving,label}
+let pivotY = 0, pivotYTarget = 0;
+const arc = (a, b) => { let d = (b - a) % (2 * Math.PI); if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI; return d; };
+function retarget() {
+  const shown = shownInCorral();
+  const target = layout(shown.map(a => a.id));
+  const map = new Map(target.map(b => [b.id, b]));
+  blobs.forEach(b => {
+    const t = map.get(b.id);
+    if (t) { Object.assign(b, { tx: t.x, ty: t.y, tr: t.r, tatt: 1, ring: t.ring, rank: t.rank, leaving: false }); map.delete(b.id); }
+    else if (!b.leaving) { b.leaving = true; b.tatt = 0; b.ty = b.y - 140; b.tx = b.x; b.tr = b.r * .55; b.ring = false; }
+  });
+  map.forEach(t => {
+    const agent = agents.find(a => a.id === t.id);
+    blobs.push({ id: t.id, x: t.x * .2, y: t.y * .2 + 60, r: t.r * .3, att: 0, va: 0, vd: 0, ring: t.ring, rank: t.rank, tx: t.x, ty: t.y, tr: t.r, tatt: 1, leaving: false, label: agent ? agent.label : "" });
+  });
+  blobs.sort((a, b) => (a.leaving - b.leaving) || (a.rank - b.rank));   // ring order for the shader's bridges
+  pivotYTarget = -Math.max(0, ...target.map(b => b.y + b.r));         // keep the shape's bottom on the "ground"
+  const hidden = agents.filter(a => !a.shown).length, out = agents.filter(a => a.deployed).length;
+  document.getElementById("count").textContent = `${shown.length} in corral` + (out ? ` · ${out} deployed` : "") + (hidden ? ` · ${hidden} not shown` : "");
+}
+function step(dt) {
+  const k = 190, c = 24;
+  pivotY += (pivotYTarget - pivotY) * Math.min(1, dt * 8);
+  blobs.forEach(b => {
+    const ca = Math.atan2(b.y, b.x), cd = Math.hypot(b.x, b.y), ta = Math.atan2(b.ty, b.tx), td = Math.hypot(b.tx, b.ty);
+    const dA = (cd < 1 || td < 1) ? 0 : arc(ca, ta), dD = td - cd;
+    b.va += (k * dA - c * b.va) * dt; b.vd += (k * dD - c * b.vd) * dt;
+    const na = cd < 1 ? ta : ca + b.va * dt, nd = cd + b.vd * dt;
+    b.x = nd * Math.cos(na); b.y = nd * Math.sin(na);
+    b.r += (b.tr - b.r) * Math.min(1, dt * 9); b.att += (b.tatt - b.att) * Math.min(1, dt * 7);
+    if (b.leaving) b.fade = Math.max(0, (b.fade ?? 1) - dt * 1.6);
+  });
+  blobs = blobs.filter(b => !(b.leaving && b.fade <= 0));
+}
+
+// ---- WebGL ----
+const cv = document.getElementById("c");
+const gl = cv.getContext("webgl", { premultipliedAlpha: false });
+const MAXB = 12;
+const vs = `attribute vec2 p; void main(){ gl_Position = vec4(p,0.,1.); }`;
+const fs = `
+precision highp float;
+uniform vec2 uRes; uniform vec2 uOrigin; uniform float uTime;
+uniform vec4 uB[${MAXB}]; uniform float uFade[${MAXB}]; uniform int uN; uniform int uRing;
+uniform float uNeck; uniform float uBR;
+float smin(float a,float b,float k){ float h=clamp(.5+.5*(b-a)/k,0.,1.); return mix(b,a,h)-k*h*(1.-h); }
+float sdCap(vec2 p, vec2 a, vec2 b, float r){ vec2 pa=p-a, ba=b-a; float h=clamp(dot(pa,ba)/max(dot(ba,ba),1e-4),0.,1.); return length(pa-ba*h)-r; }
+float field(vec2 p){
+  float d=1e5;
+  for(int i=0;i<${MAXB};i++){ if(i>=uN) break; vec4 b=uB[i]; if(b.z<.5) continue; d=smin(d,length(p-b.xy)-b.z,uNeck); }
+  int bc = uRing==2 ? 1 : (uRing>=3 ? uRing : 0);
+  for(int i=0;i<${MAXB};i++){
+    if(i>=bc) break;
+    int j = i+1; if(j>=uRing) j=0;
+    vec4 a=uB[0], b=uB[0];
+    for(int q=0;q<${MAXB};q++){ if(q==i) a=uB[q]; if(q==j) b=uB[q]; }
+    float att=min(a.w,b.w); if(att<.01) continue;
+    d=smin(d, sdCap(p,a.xy,b.xy,min(a.z,b.z)*uBR*att), uNeck*att);
+  }
+  return d;
+}
+vec3 wallpaper(vec2 p){
+  vec2 uv=p/uRes;
+  vec3 top=vec3(.90,.90,.91), bot=vec3(.80,.81,.83);
+  vec3 c=mix(top,bot,uv.y);
+  c-=.035*smoothstep(.45,.0,length(uv-vec2(.25,.35)));
+  c+=vec3(-.02,0.,.03)*smoothstep(.5,.0,length(uv-vec2(.78,.62)));
+  float g=step(.985,fract(p.x/48.))+step(.985,fract(p.y/48.));
+  c-=g*.025;
+  return c;
+}
+void main(){
+  vec2 p=vec2(gl_FragCoord.x, uRes.y-gl_FragCoord.y) - uOrigin;   // corral space, y-down
+  vec2 sp=p+uOrigin;
+  float d=field(p);
+  vec3 bg=wallpaper(sp);
+  if(d>.5){
+    float ds=field(p-vec2(3.,5.));
+    float sh=(1.-smoothstep(0.,14.,ds))*.16;
+    gl_FragColor=vec4(mix(bg,vec3(0.,.02,.06),sh),1.); return;
+  }
+  float e=1.;
+  vec2 g=normalize(vec2(field(p+vec2(e,0.))-field(p-vec2(e,0.)), field(p+vec2(0.,e))-field(p-vec2(0.,e)))+1e-5);
+  float inside=clamp(-d/12.,0.,1.), slope=1.-inside;
+  vec3 n=normalize(vec3(g*slope*1.6,1.));
+  vec2 uv=sp-g*14.*slope*slope;
+  float f=1.+.35*3.*slope;
+  vec3 col=wallpaper(uv)*.4+(wallpaper(uv+vec2(f,0.))+wallpaper(uv-vec2(f,0.))+wallpaper(uv+vec2(0.,f))+wallpaper(uv-vec2(0.,f)))*.15;
+  vec3 L=normalize(vec3(-.45,-.75,.9)), H=normalize(L+vec3(0.,0.,1.));
+  float spec=pow(max(dot(n,H),0.),60.)*.55;
+  float fres=pow(1.-max(n.z,0.),3.);
+  float rim=smoothstep(2.5,0.,-d)*.35;
+  float inner=smoothstep(0.,1.,slope)*max(dot(g,normalize(vec2(.5,.8))),0.)*.18;
+  float caustic=(.5+.5*sin(sp.x*.045+uTime*.35)*sin(sp.y*.05-uTime*.25))*inside*.04;
+  vec3 tint=vec3(.62,.72,.82);
+  vec3 rgb=mix(col,tint,fres*.55+.06)+spec+rim+caustic-inner;
+  float a=clamp(.5-d,0.,1.);
+  gl_FragColor=vec4(mix(bg,clamp(rgb,0.,1.),a),1.);
+}`;
+function sh(t, s) { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw gl.getShaderInfoLog(o); return o; }
+const prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(prog); gl.useProgram(prog);
+const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+const loc = gl.getAttribLocation(prog, "p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+const U = n => gl.getUniformLocation(prog, n);
+
+let dpr = 1, W = 0, H = 0;
+function resize() { dpr = Math.min(2, window.devicePixelRatio || 1); W = innerWidth; H = innerHeight; cv.width = W * dpr; cv.height = H * dpr; gl.viewport(0, 0, cv.width, cv.height); }
+addEventListener("resize", resize); resize();
+const DOCK = 70;  // pretend Dock height
+function origin() { return [W / 2, H - DOCK - 24 + pivotY]; }
+
+const labels = document.getElementById("labels");
+function drawLabels(o) {
+  labels.innerHTML = "";
+  blobs.forEach(b => {
+    if (b.r < 12) return;
+    const s = document.createElement("span");
+    const ag = agents.find(a => a.id === b.id);
+    s.innerHTML = ag ? `${ag.label}<small>#${b.rank} · ${ag.uses} uses</small>` : "";
+    s.style.left = (o[0] + b.x) + "px"; s.style.top = (o[1] + b.y) + "px";
+    s.style.opacity = b.leaving ? (b.fade ?? 1) : 1;
+    labels.appendChild(s);
+  });
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(1 / 30, (now - last) / 1000); last = now;
+  step(dt);
+  const o = origin();
+  const arr = new Float32Array(MAXB * 4), fades = new Float32Array(MAXB);
+  const vis = blobs.slice(0, MAXB);
+  vis.forEach((b, i) => { const s = b.leaving ? (b.fade ?? 1) : 1; arr.set([b.x * dpr, b.y * dpr, b.r * dpr * s, b.att], i * 4); });
+  gl.uniform2f(U("uRes"), cv.width, cv.height);
+  gl.uniform2f(U("uOrigin"), o[0] * dpr, o[1] * dpr);
+  gl.uniform1f(U("uTime"), now / 1000);
+  gl.uniform4fv(U("uB"), arr); gl.uniform1i(U("uN"), vis.length);
+  gl.uniform1i(U("uRing"), vis.filter(b => b.ring && !b.leaving).length);
+  gl.uniform1f(U("uNeck"), M.NECK * dpr); gl.uniform1f(U("uBR"), M.BR);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  drawLabels(o);
+  requestAnimationFrame(frame);
+}
+
+// ---- interactions ----
+let clock = 1;
+function openChooser() {
+  const list = document.getElementById("chooserList"); list.innerHTML = "";
+  ranked().forEach(a => {
+    const row = document.createElement("label");
+    row.innerHTML = `<span><input type="checkbox" ${a.shown ? "checked" : ""}> ${a.label}</span><span style="opacity:.6">${a.uses} uses</span>`;
+    const box = row.querySelector("input");
+    box.onchange = () => {
+      if (box.checked && agents.filter(x => x.shown).length >= M.MAX_SHOWN) { box.checked = false; return; }
+      a.shown = box.checked; retarget();
+    };
+    list.appendChild(row);
+  });
+  document.getElementById("chooser").style.display = "block";
+}
+document.getElementById("chooserDone").onclick = () => { document.getElementById("chooser").style.display = "none"; };
+document.getElementById("choose").onclick = openChooser;
+document.getElementById("add").onclick = () => {
+  const a = makeAgent(); retarget();
+  if (!a.shown) openChooser();          // 9th agent: the user decides which 8 show
+};
+document.getElementById("remove").onclick = () => { const last = agents.pop(); retarget(); };
+document.getElementById("recall").onclick = () => { agents.forEach(a => a.deployed = false); retarget(); };
+document.getElementById("usage").onclick = () => {
+  agents.forEach(a => { a.uses += Math.round(Math.random() * 12); });
+  retarget();                           // order updates; drops travel around the ring
+};
+cv.addEventListener("click", e => {
+  const o = origin(); const x = e.clientX - o[0], y = e.clientY - o[1];
+  const hit = blobs.find(b => !b.leaving && b.id[0] === "a" && Math.hypot(x - b.x, y - b.y) < b.r);
+  if (!hit) return;
+  const a = agents.find(r => r.id === hit.id); a.deployed = true; a.uses += 1; a.lastUsed = clock++;
+  retarget();
+});
+retarget(); requestAnimationFrame(frame);
+</script>
+</body>
+</html>

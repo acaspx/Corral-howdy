@@ -1,0 +1,12 @@
+# Protected paths: human code-owner review required. See docs/02-security-model.md.
+# Add the pair reviewer's handle next to the owner once he has agreed to be a code owner.
+
+*                                   @acaspx
+
+/crates/corral-policy/              @acaspx
+/crates/corral-tools/src/fs/        @acaspx
+/crates/corral-core/src/budget/     @acaspx
+/apps/desktop/src-tauri/capabilities/ @acaspx
+/evals/safety/                      @acaspx
+/.github/workflows/                 @acaspx
+/AGENTS.md                          @acaspx
