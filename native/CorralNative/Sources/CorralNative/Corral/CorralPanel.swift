@@ -28,6 +28,16 @@ public final class CorralPanel: NSPanel {
         contentView = NSHostingView(rootView: rootView)
     }
 
+    /// Borderless windows can't become key by default. The corral needs keyboard focus for the
+    /// prompt bar and the hover card's keyboard path (TP-PLACE-04, TP-HOVER-07). With
+    /// `becomesKeyOnlyIfNeeded`, plain clicks on drops still leave the user's app focused.
+    public override var canBecomeKey: Bool { true }
+    public override var canBecomeMain: Bool { false }
+
+    /// The display with the menu bar (docs/07 §5), not `NSScreen.main`, which is whichever
+    /// display holds the key window (TP-PLACE-05).
+    public static func defaultScreen() -> NSScreen? { NSScreen.screens.first }
+
     public func apply(level: CorralLevel) {
         switch level {
         case .floating:
@@ -39,7 +49,7 @@ public final class CorralPanel: NSPanel {
 
     /// Bottom-centre of the screen's visible frame, so the corral never overlaps the Dock
     /// or the menu bar wherever the user keeps them.
-    public func place(canvas: CGSize, on screen: NSScreen? = NSScreen.main, bottomMargin: CGFloat = 12) {
+    public func place(canvas: CGSize, on screen: NSScreen? = CorralPanel.defaultScreen(), bottomMargin: CGFloat = 12) {
         guard let screen else { return }
         let vf = screen.visibleFrame
         let origin = CGPoint(x: vf.midX - canvas.width / 2, y: vf.minY + bottomMargin)

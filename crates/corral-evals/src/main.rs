@@ -1,24 +1,28 @@
 //! `corral-evals`: run an eval suite and write a report.
 //!
 //! ```text
-//! corral-evals --suite gate [--scenarios evals/scenarios] [--report out.json] [--baseline base.json]
+//! corral-evals --suite gate [--scenarios DIR]... [--report out.json] [--baseline base.json]
 //! ```
+//! Without `--scenarios`, loads `evals/scenarios/` and `evals/safety/` (whichever exist).
 //! Exit code 0 when the gate passes, 1 when it fails, 2 on usage or input errors.
 
-use corral_evals::{Report, Suite, build_report, load_scenarios, markdown_summary, run};
+use corral_evals::{Report, Suite, build_report, load_all, markdown_summary, run};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+/// Scenario folders loaded when `--scenarios` isn't given. `evals/safety/` is a protected path.
+const DEFAULT_DIRS: [&str; 2] = ["evals/scenarios", "evals/safety"];
+
 struct Args {
     suite: Suite,
-    scenarios: PathBuf,
+    scenarios: Vec<PathBuf>,
     report: Option<PathBuf>,
     baseline: Option<PathBuf>,
 }
 
 fn parse_args() -> Result<Args, String> {
     let mut suite = None;
-    let mut scenarios = PathBuf::from("evals/scenarios");
+    let mut scenarios = Vec::new();
     let mut report = None;
     let mut baseline = None;
     let mut it = std::env::args().skip(1);
@@ -29,14 +33,21 @@ fn parse_args() -> Result<Args, String> {
                 let v = value()?;
                 suite = Some(Suite::parse(&v).ok_or(format!("unknown suite `{v}` (gate | full)"))?);
             }
-            "--scenarios" => scenarios = PathBuf::from(value()?),
+            "--scenarios" => scenarios.push(PathBuf::from(value()?)),
             "--report" => report = Some(PathBuf::from(value()?)),
             "--baseline" => baseline = Some(PathBuf::from(value()?)),
             "-h" | "--help" => {
-                return Err("usage: corral-evals --suite <gate|full> [--scenarios DIR] [--report FILE] [--baseline FILE]".into());
+                return Err("usage: corral-evals --suite <gate|full> [--scenarios DIR]... [--report FILE] [--baseline FILE]".into());
             }
             other => return Err(format!("unknown argument `{other}`")),
         }
+    }
+    if scenarios.is_empty() {
+        scenarios = DEFAULT_DIRS
+            .iter()
+            .map(PathBuf::from)
+            .filter(|p| p.is_dir())
+            .collect();
     }
     Ok(Args {
         suite: suite.ok_or("--suite is required")?,
@@ -55,7 +66,7 @@ fn main() -> ExitCode {
         }
     };
 
-    let scenarios = match load_scenarios(&args.scenarios) {
+    let scenarios = match load_all(&args.scenarios) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("invalid scenarios: {e}");

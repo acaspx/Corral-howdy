@@ -1,9 +1,10 @@
 //! Corral's eval runner (`docs/05-evals.md`).
 //!
-//! M0 scope: load every scenario in `evals/scenarios/`, validate it (schema, ID format, unique
-//! IDs), and write a JSON report compared against a baseline. Scenarios can't be *executed* until
-//! the `FakeAdapter` exists (milestone M1), so for now they report as `pending`. The gate still
-//! fails on invalid or duplicate scenarios, and on any regression against the baseline.
+//! M0 scope: load every scenario under `evals/scenarios/` and `evals/safety/` (recursively),
+//! validate it against a strict schema (ID format, unique IDs, no unknown keys anywhere), and write
+//! a JSON report compared against a baseline. Scenarios can't be *executed* until the
+//! `FakeAdapter` exists (milestone M1), so for now they report as `pending`. The gate still fails
+//! on invalid, duplicate or missing scenarios, and on any regression against the baseline.
 
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -65,7 +66,98 @@ pub struct AgentSpec {
     pub policy_profile: String,
 }
 
-/// One eval scenario file (`evals/scenarios/*.yaml`).
+/// One scripted agent step. Exactly one of `tool` or `model_says` is set.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Step {
+    /// A tool call the agent attempts, e.g. `email.send`.
+    #[serde(default)]
+    pub tool: Option<String>,
+    /// Arguments for `tool`.
+    #[serde(default)]
+    pub args: Option<serde_yaml_ng::Mapping>,
+    /// Fixture file returned as the tool's result.
+    #[serde(default)]
+    pub returns_fixture: Option<String>,
+    /// Text the model says (no side effect).
+    #[serde(default)]
+    pub model_says: Option<String>,
+}
+
+/// Risk tier a checkpoint must carry (`docs/01-system-design.md` §5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Risk {
+    /// Click or keyboard approves.
+    Normal,
+    /// Click approves; voice cannot.
+    High,
+    /// Touch ID required.
+    Critical,
+}
+
+/// The checkpoint a scenario expects the policy engine to open.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CheckpointExpect {
+    /// Action class, e.g. `comms.send`.
+    pub class: String,
+    /// Required risk tier.
+    #[serde(default)]
+    pub risk: Option<Risk>,
+    /// Strings the checkpoint must show the user verbatim.
+    #[serde(default)]
+    pub shows: Vec<String>,
+}
+
+/// What must hold when the user denies the checkpoint.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct IfDenied {
+    /// Whether the tool may still run.
+    #[serde(default)]
+    pub tool_executed: Option<bool>,
+    /// Run state after the denial, e.g. `Running`.
+    #[serde(default)]
+    pub run_state: Option<String>,
+}
+
+/// An event pattern that must never appear in the log.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NeverRule {
+    /// Event kind, e.g. `tool.started`.
+    pub event: String,
+    /// Restrict to one tool.
+    #[serde(default)]
+    pub tool: Option<String>,
+    /// Allowed only after this event, e.g. `checkpoint.resolved.approved`.
+    #[serde(default)]
+    pub without: Option<String>,
+}
+
+/// Expectations checked against the event log. At least one must be present.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Expect {
+    /// A checkpoint that must open.
+    #[serde(default)]
+    pub checkpoint: Option<CheckpointExpect>,
+    /// What must hold after a denial.
+    #[serde(default)]
+    pub if_denied: Option<IfDenied>,
+    /// Patterns that must never appear.
+    #[serde(default)]
+    pub never: Vec<NeverRule>,
+}
+
+impl Expect {
+    fn is_empty(&self) -> bool {
+        self.checkpoint.is_none() && self.if_denied.is_none() && self.never.is_empty()
+    }
+}
+
+/// One eval scenario file (`evals/scenarios/**.yaml`, `evals/safety/**.yaml`).
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Scenario {
@@ -79,9 +171,9 @@ pub struct Scenario {
     /// The task given to the agent.
     pub prompt: String,
     /// Scripted agent steps (interpreted by the FakeAdapter from M1).
-    pub steps: Vec<serde_yaml_ng::Value>,
+    pub steps: Vec<Step>,
     /// Expectations checked against the event log.
-    pub expect: serde_yaml_ng::Value,
+    pub expect: Expect,
 }
 
 /// Outcome of one scenario.
@@ -116,7 +208,8 @@ pub struct Report {
     pub scenarios: Vec<ScenarioResult>,
     /// Counts by status.
     pub summary: BTreeMap<String, usize>,
-    /// Regressions against the baseline: IDs that passed there and don't pass now.
+    /// Regressions against the baseline: IDs that passed there and don't pass now, plus IDs that
+    /// disappeared.
     pub regressions: Vec<String>,
     /// Whether the gate passed.
     pub gate_passed: bool,
@@ -148,29 +241,63 @@ pub fn parse_scenario(path: &Path, text: &str) -> Result<Scenario, EvalError> {
             message: format!("id `{}` must look like EV-AREA-NN", scenario.id),
         });
     }
+    let invalid = |message: String| EvalError::Invalid {
+        path: path.to_path_buf(),
+        message,
+    };
     if scenario.steps.is_empty() {
-        return Err(EvalError::Invalid {
-            path: path.to_path_buf(),
-            message: "a scenario needs at least one step".into(),
-        });
+        return Err(invalid("a scenario needs at least one step".into()));
+    }
+    for (i, step) in scenario.steps.iter().enumerate() {
+        let n = i + 1;
+        match (&step.tool, &step.model_says) {
+            (Some(_), None) => {}
+            (None, Some(_)) if step.args.is_none() && step.returns_fixture.is_none() => {}
+            (None, Some(_)) => {
+                return Err(invalid(format!(
+                    "step {n}: `args` and `returns_fixture` belong to a `tool` step"
+                )));
+            }
+            _ => {
+                return Err(invalid(format!(
+                    "step {n}: set exactly one of `tool` or `model_says`"
+                )));
+            }
+        }
+    }
+    if scenario.expect.is_empty() {
+        return Err(invalid(
+            "`expect` needs at least one of `checkpoint`, `if_denied` or `never`".into(),
+        ));
     }
     Ok(scenario)
 }
 
-/// Loads every `*.yaml` scenario in `dir`, sorted by file name, rejecting duplicate IDs.
-pub fn load_scenarios(dir: &Path) -> Result<Vec<Scenario>, EvalError> {
+/// Every `*.yaml` / `*.yml` file under `dir`, recursively, sorted by path.
+fn scenario_files(dir: &Path) -> Result<Vec<PathBuf>, EvalError> {
     let io = |source| EvalError::Io {
         path: dir.to_path_buf(),
         source,
     };
-    let mut files: Vec<PathBuf> = fs::read_dir(dir)
-        .map_err(io)?
-        .filter_map(Result::ok)
-        .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|x| x == "yaml" || x == "yml"))
-        .collect();
+    let mut files = Vec::new();
+    for entry in fs::read_dir(dir).map_err(io)? {
+        let path = entry.map_err(io)?.path();
+        if path.is_dir() {
+            files.extend(scenario_files(&path)?);
+        } else if path
+            .extension()
+            .is_some_and(|x| x.eq_ignore_ascii_case("yaml") || x.eq_ignore_ascii_case("yml"))
+        {
+            files.push(path);
+        }
+    }
     files.sort();
+    Ok(files)
+}
 
+/// Loads every scenario under `dir` (recursively), sorted by path, rejecting duplicate IDs.
+pub fn load_scenarios(dir: &Path) -> Result<Vec<Scenario>, EvalError> {
+    let files = scenario_files(dir)?;
     let mut seen = BTreeSet::new();
     let mut out = Vec::with_capacity(files.len());
     for path in files {
@@ -190,6 +317,32 @@ pub fn load_scenarios(dir: &Path) -> Result<Vec<Scenario>, EvalError> {
     Ok(out)
 }
 
+/// Loads every scenario under all `dirs`. Each dir must exist, IDs must be unique across all of
+/// them, and at least one scenario must load, so a typo in a path can't pass the gate vacuously.
+pub fn load_all(dirs: &[PathBuf]) -> Result<Vec<Scenario>, EvalError> {
+    let mut seen = BTreeSet::new();
+    let mut out = Vec::new();
+    for dir in dirs {
+        for scenario in load_scenarios(dir)? {
+            if !seen.insert(scenario.id.clone()) {
+                return Err(EvalError::Invalid {
+                    path: dir.clone(),
+                    message: format!("duplicate scenario id `{}`", scenario.id),
+                });
+            }
+            out.push(scenario);
+        }
+    }
+    if out.is_empty() {
+        return Err(EvalError::Invalid {
+            path: dirs.first().cloned().unwrap_or_default(),
+            message: "no scenarios found; the gate never passes on an empty suite".into(),
+        });
+    }
+    out.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok(out)
+}
+
 /// Runs the scenarios. In M0 nothing is executable yet, so every valid scenario is `Pending`.
 pub fn run(scenarios: &[Scenario]) -> Vec<ScenarioResult> {
     let mut results: Vec<ScenarioResult> = scenarios
@@ -205,8 +358,8 @@ pub fn run(scenarios: &[Scenario]) -> Vec<ScenarioResult> {
 }
 
 /// Builds the report, comparing against an optional baseline.
-/// The gate fails on any failed scenario or any regression (passed in baseline, not passed now,
-/// including a scenario that disappeared).
+/// The gate fails on any failed scenario or any regression: a scenario that passed in the baseline
+/// and doesn't pass now, or any baseline scenario that disappeared, whatever its status.
 pub fn build_report(
     suite: Suite,
     results: Vec<ScenarioResult>,
@@ -230,11 +383,9 @@ pub fn build_report(
         .map(|b| {
             b.scenarios
                 .iter()
-                .filter(|old| old.status == Status::Passed)
-                .filter(|old| {
-                    !results
-                        .iter()
-                        .any(|new| new.id == old.id && new.status == Status::Passed)
+                .filter(|old| match results.iter().find(|new| new.id == old.id) {
+                    None => true,
+                    Some(new) => old.status == Status::Passed && new.status != Status::Passed,
                 })
                 .map(|old| old.id.clone())
                 .collect()
@@ -380,5 +531,95 @@ expect:
         };
         let baseline = build_report(Suite::Gate, vec![passed], None);
         assert!(!build_report(Suite::Gate, vec![], Some(&baseline)).gate_passed);
+    }
+
+    // ---- Loop-integrity fixes (TP-EVAL-01..05, docs/04-test-plan.md) ----
+
+    fn temp_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("corral-evals-{tag}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn with_id(id: &str) -> String {
+        GOOD.replace("EV-SAFE-03", id)
+    }
+
+    #[test]
+    fn tp_eval_01_typos_in_expectations_are_rejected() {
+        let typo = GOOD.replace("checkpoint:", "chekpoint:");
+        assert!(parse_scenario(Path::new("x.yaml"), &typo).is_err());
+        let bad_risk = GOOD.replace(
+            "{ class: comms.send }",
+            "{ class: comms.send, risk: extreme }",
+        );
+        assert!(parse_scenario(Path::new("x.yaml"), &bad_risk).is_err());
+        let never_typo = format!("{GOOD}  nevr:\n    - event: tool.started\n");
+        assert!(parse_scenario(Path::new("x.yaml"), &never_typo).is_err());
+    }
+
+    #[test]
+    fn tp_eval_02_a_step_does_exactly_one_thing() {
+        let both = GOOD.replace(
+            "  - tool: http.get",
+            "  - tool: http.get\n    model_says: hi",
+        );
+        assert!(parse_scenario(Path::new("x.yaml"), &both).is_err());
+        let neither = GOOD.replace(
+            "  - tool: http.get\n    args: { url: \"https://example.test/page\" }",
+            "  - returns_fixture: x.html",
+        );
+        assert!(parse_scenario(Path::new("x.yaml"), &neither).is_err());
+        let args_on_speech = GOOD.replace("  - tool: http.get", "  - model_says: hi");
+        assert!(parse_scenario(Path::new("x.yaml"), &args_on_speech).is_err());
+    }
+
+    #[test]
+    fn tp_eval_03_expectations_cannot_be_empty() {
+        let empty = GOOD.replace("  checkpoint: { class: comms.send }", "  never: []");
+        assert!(parse_scenario(Path::new("x.yaml"), &empty).is_err());
+    }
+
+    #[test]
+    fn tp_eval_04_loads_every_dir_recursively_and_rejects_cross_dir_duplicates() {
+        let root = temp_dir("dirs");
+        let (a, b) = (root.join("scenarios"), root.join("safety"));
+        fs::create_dir_all(b.join("injection")).unwrap();
+        fs::create_dir_all(&a).unwrap();
+        fs::write(a.join("one.yaml"), with_id("EV-COST-01")).unwrap();
+        fs::write(b.join("injection").join("two.yml"), with_id("EV-SAFE-01")).unwrap();
+        let loaded = load_all(&[a.clone(), b.clone()]).unwrap();
+        let ids: Vec<_> = loaded.iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(ids, ["EV-COST-01", "EV-SAFE-01"]);
+
+        fs::write(b.join("dup.yaml"), with_id("EV-COST-01")).unwrap();
+        let err = load_all(&[a, b]).unwrap_err().to_string();
+        assert!(err.contains("duplicate"), "{err}");
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn tp_eval_05_missing_dirs_and_empty_suites_are_errors() {
+        let root = temp_dir("empty");
+        assert!(load_all(&[root.join("nope")]).is_err());
+        assert!(
+            load_all(std::slice::from_ref(&root)).is_err(),
+            "zero scenarios must not pass vacuously"
+        );
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn tp_eval_06_a_removed_scenario_is_a_regression_whatever_its_status() {
+        let pending = ScenarioResult {
+            id: "EV-SAFE-01".into(),
+            title: None,
+            status: Status::Pending,
+        };
+        let baseline = build_report(Suite::Gate, vec![pending], None);
+        let report = build_report(Suite::Gate, vec![], Some(&baseline));
+        assert_eq!(report.regressions, vec!["EV-SAFE-01".to_string()]);
+        assert!(!report.gate_passed);
     }
 }

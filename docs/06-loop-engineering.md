@@ -52,8 +52,8 @@ Corral is built mostly by coding agents (Claude Code, Codex, others) working iss
 1. **One issue, one branch, one worktree.** Branch name `agent/<issue#>-<slug>`.
 2. **Iteration budget:** at most 3 red CI cycles per PR. Then the agent stops, labels the PR `needs-human` and writes what it tried.
 3. **Scope fence:** the issue lists allowed paths. CI fails if the diff touches paths outside them (plus tests and fixtures) without a `scope-change` note.
-4. **Test-change detector:** CI diffs existing test files. Any modified assertion requires a "Test changes" section and a human approval.
-5. **Protected paths** (security model §Protected) require a code-owner review. Agents may *propose* changes there but can't get them merged alone.
+4. **Test-change detector:** CI checks every changed or deleted line of existing test code: test files, and inline `#[cfg(test)]` modules (kept at the end of each file by clippy). Any such change requires a "Test changes" section and a human approval. Adding tests never does.
+5. **Protected paths** (security model §Protected) require a code-owner review. Agents may *propose* changes there but can't get them merged alone. This includes the **loop-integrity files** (CI, scripts, lint and toolchain config, the eval runner and its baseline). **Checks judge PRs from the base commit:** CI runs the base commit's scope guard and compares evals against the base commit's baseline, every step runs with pipefail, actions are pinned by SHA and the Rust toolchain is pinned. A PR can't make its own checks easier. The checks have their own tests (`just ci-test`, TP-CI-*).
 6. **WIP limit:** at most 4 open agent PRs at once, so review stays faster than generation.
 7. **No secrets in agent sessions.** Builder agents work with cassettes and fakes only. Live keys exist only in the protected CI environment.
 8. **No merges by agents.** Branch protection: required checks, one human approval, linear history, signed commits.

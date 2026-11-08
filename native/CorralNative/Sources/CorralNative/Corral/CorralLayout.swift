@@ -100,10 +100,13 @@ public enum CorralLayout {
     }
 
     /// Full layout. `rankedIDs` = drops to show, most used first (≤ 8; extras are ignored).
+    /// Duplicate IDs are dropped (the first, highest-ranked one wins): this input comes from
+    /// across the C ABI, and the view must never trap on it (TP-SHAPE-08).
     public static func layout(rankedIDs: [String], metrics m: CorralMetrics = .init())
         -> (blobs: [CorralBlob], canvas: CGSize, pivot: CGPoint, shape: CorralShape)
     {
-        let ids = Array(rankedIDs.prefix(CorralMetrics.maxShown))
+        var seen = Set<String>()
+        let ids = Array(rankedIDs.filter { seen.insert($0).inserted }.prefix(CorralMetrics.maxShown))
         let shape = shape(forShownCount: ids.count)
         var blobs: [CorralBlob] = []
 

@@ -1,0 +1,25 @@
+# Weekly dependency updates (security model T12). Grouped to keep review load low:
+# one PR per ecosystem per week. Security updates still open immediately.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      actions: { patterns: ["*"] }
+
+  - package-ecosystem: cargo
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      cargo: { patterns: ["*"], update-types: [minor, patch] }
+
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      npm: { patterns: ["*"], update-types: [minor, patch] }
+    ignore:
+      # typescript-eslint supports TypeScript < 6.1; bump together, by hand.
+      - dependency-name: typescript
+        update-types: [version-update:semver-minor, version-update:semver-major]

@@ -136,7 +136,7 @@ pub trait AgentAdapter: Send + Sync {
 |---|---|---|---|
 | `native` (**primary**) | Corral | xAI Grok (Responses API), OpenAI-compatible endpoints, Anthropic Messages, Meta Model API (Muse Spark; it accepts the OpenAI and Anthropic SDK formats) | Full: Corral executes every local tool, so it gates every call |
 | `managed` | Vendor | OpenAI Agents API | Function tools return to Corral (`requires_action`) and are fully gated. Sessions default to environment `none`, so every side effect is a Corral function tool. Hosted sandboxes and the hosted browser are opt-in, with partial gating (Spike S3) |
-| `acp` | The CLI agent | Claude Code, Codex CLI, Gemini CLI, any ACP agent | ACP permission requests are mapped to Corral checkpoints. Corral is the ACP *client* |
+| `acp` | The CLI agent | Claude Code, Codex CLI, Gemini CLI, any ACP agent | ACP permission requests are mapped to Corral checkpoints. Corral is the ACP *client*. Gating is `Partial` unless Corral sets the agent's permission mode for the session, because a CLI agent's own settings can pre-approve tools (T22) |
 | `a2a` (v1.1) | Remote agent | Agents exposing A2A v1.0 Agent Cards | A2A `input-required` task state → checkpoint |
 | `custom` | Corral (compiles to `native`) | User manifests | Same as native |
 | `fake` | Test script | Tests and evals | Scripted |
@@ -150,6 +150,7 @@ pub trait AgentAdapter: Send + Sync {
 - **Side-effecting vendor tools** (code execution with network, hosted shells and sandboxes, the hosted browser) are off by default and high-risk to enable.
 - **Adapters report a `gating` level** (`Full` / `Partial` / `PreflightOnly`) in `Capabilities`. A run below the agent profile's minimum (default `Full`) won't start.
 - **Corral never enables vendor auto-approval** such as the Agents API's `auto_review`.
+- **Launching a program is itself gated.** Starting an MCP server or an ACP agent command asks once per (path, SHA-256) as an `exec.shell`-class checkpoint; a changed binary asks again (T23). ACP agents run under a small reaper that kills their process group when Corral's pipe closes, so a crash can't orphan them (T26).
 
 ### Provider clients
 `corral-adapters::providers` holds one thin client per wire format: `openai_responses`, `openai_chat` (legacy fallback), `anthropic_messages`. xAI and the Meta Model API reuse the OpenAI-compatible clients with a different base URL and key. Each client normalizes streaming deltas, tool calls and usage into `AgentEvent`s. Model IDs are config, never hard-coded.
@@ -219,7 +220,7 @@ checkpoint_timeout = "30m"
 on_timeout         = "deny"   # deny | cancel_run
 ```
 
-**Checkpoint resolution options:** Approve once · Deny (with optional note sent to the agent) · Edit arguments then approve · Allow this class for the rest of this run. "Allow forever" is *only* available in the policy editor, never one click away on a checkpoint. That keeps approval drift deliberate.
+**Checkpoint resolution options:** Approve once · Deny (with optional note sent to the agent) · Edit arguments then approve · Allow for the rest of this run. For normal-risk classes, allow-for-run covers the class. For high and critical classes it covers the class *and the destination* (same recipient, domain or path root), so one approval can't sweep through a later injected action (T21). "Allow forever" is *only* available in the policy editor, never one click away on a checkpoint. That keeps approval drift deliberate.
 
 **Risk tiers → required gesture:**
 - normal: click or keyboard
@@ -229,7 +230,7 @@ on_timeout         = "deny"   # deny | cancel_run
 ## 6. Event store and traces (ADR-002)
 
 - SQLite (WAL mode) at `~/Library/Application Support/Corral/corral.db`. Large payloads (tool outputs over 64 KB) go to content-addressed blobs next to it.
-- Append-only `events` table: `(run_id, seq, ts, kind, span_id, parent_span_id, payload_json, prev_hash, hash)`. The hash chain makes after-the-fact edits detectable, so the audit log can't be quietly rewritten.
+- Append-only `events` table: `(run_id, seq, ts, kind, span_id, parent_span_id, payload_json, prev_hash, hash)`. The hash chain makes after-the-fact edits detectable. To catch a *whole-log* rewrite, each run's final head hash is MACed with a key held only in the Keychain and verified on open (T24).
 - Projections (`runs_view`, `spend_view`, `checkpoints_view`, `usage_rank`, `plan_view`) are rebuilt from events and can be dropped and regenerated at any time. A test proves the rebuild gives identical results.
 - **Trace export** follows OpenTelemetry GenAI semantic conventions (`invoke_agent`, `chat`, `execute_tool` spans; `gen_ai.*` attributes). Those conventions are still marked *Development*, and in June 2026 they moved to a dedicated repository, so we **pin a version** in `corral-core::otel` and run a mapping test per version bump. Export is opt-in: OTLP to a user-specified endpoint (Langfuse, Phoenix, Jaeger) or a JSON file.
 - Prompt and response content is stored locally only. Export redacts content unless the user explicitly enables it.
@@ -239,7 +240,7 @@ on_timeout         = "deny"   # deny | cancel_run
 
 ## 7. Budgets
 
-`BudgetMeter` sits in front of every model request. It estimates cost before the request (tokens × price table, which is config) and blocks if the request would cross a **hard cap**. When the provider reports usage, it reconciles to the real numbers. A **soft limit** raises a `budget.threshold` checkpoint. Caps exist per run, per agent per month, and globally. The price table is versioned config with a "last verified" date shown in the UI.
+`BudgetMeter` sits in front of every model request. It estimates cost before the request (tokens × price table, which is config) and blocks if the request would cross a **hard cap**. Because output and reasoning tokens aren't known up front, every request also sets its max output tokens from the remaining budget, and per-call vendor tool fees are priced before the call (T25). When the provider reports usage, it reconciles to the real numbers. A **soft limit** raises a `budget.threshold` checkpoint. Caps exist per run, per agent per month, and globally. The price table is versioned config with a "last verified" date shown in the UI.
 
 ## 8. Concurrency and the supervisor
 
@@ -247,6 +248,7 @@ on_timeout         = "deny"   # deny | cancel_run
 - The supervisor owns the actor registry and enforces global limits: max concurrent runs (default 8) and per-provider rate limits.
 - **Recall-all** (global hotkey + menu item) broadcasts `Cancel` to every actor. Adapters must stop within 2 s or are force-dropped: ACP child processes are killed, HTTP streams are aborted. Covered by an eval.
 - Crash safety: on launch, any run in `Running` without a terminal event is marked `Failed{reason: "app_restarted"}`. Runs are not auto-resumed in v1.
+- **Process model (decided in Spike S1):** the Swift UI is linked in-process, so a UI crash would take the supervisor down. S1 decides between keeping one process (with hardened, bounded Swift input) and running the core as a separate helper process the UI talks to. Closing the main window never quits Corral; only Quit does.
 
 ## 9. UI surfaces
 
