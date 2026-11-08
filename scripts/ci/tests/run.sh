@@ -98,6 +98,24 @@ else
     env CORRAL_EVALS_BIN="$evals_bin" bash -c "cd '$r' && bash '$ci/eval_gate.sh'"
 fi
 
+echo "fail closed (a broken lookup must never pass a PR)"
+r="$(new_repo)"; printf '#[test]\nfn another() {}\n' >> "$r/crates/demo/tests/it.rs"; commit "$r"
+expect "TP-CI-10 scope guard: an unknown base ref fails instead of passing" 1 \
+  bash -c "cd '$r' && PR_BODY='' bash '$ci/scope_guard.sh' no-such-ref"
+
+r="$(new_repo)"; sed -i.bak 's/assert_eq!(super::answer(), 42)/assert!(true)/' "$r/crates/demo/src/lib.rs"; rm "$r"/crates/demo/src/*.bak; commit "$r"
+blob="$(git -C "$r" rev-parse base:crates/demo/src/lib.rs)"
+rm -f "$r/.git/objects/${blob:0:2}/${blob:2}"   # the base version can no longer be read
+expect "TP-CI-11 scope guard: an unreadable base file fails instead of passing" 1 guard "$r" "$NONE"
+
+if [ -x "$evals_bin" ]; then
+  r="$(new_repo)"; mkdir -p "$r/evals/safety"; cp "$repo_root/evals/safety/"*.yaml "$r/evals/safety/"; commit "$r"
+  expect "TP-CI-12 eval gate: an unknown base ref fails instead of comparing against nothing" 1 \
+    env CORRAL_EVALS_BIN="$evals_bin" bash -c "cd '$r' && bash '$ci/eval_gate.sh' no-such-ref"
+  expect "TP-CI-13 eval gate: an all-zero base (first push of a branch) runs without a baseline" 0 \
+    env CORRAL_EVALS_BIN="$evals_bin" bash -c "cd '$r' && bash '$ci/eval_gate.sh' 0000000000000000000000000000000000000000"
+fi
+
 echo
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

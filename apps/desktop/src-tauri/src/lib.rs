@@ -37,6 +37,8 @@ pub fn run() {
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     MENU_SHOW => {
                         if let Some(window) = app.get_webview_window("main") {
+                            // Best effort: if the window can't be shown, the tray stays usable and
+                            // nothing is lost. There is no safer fallback to report to.
                             let _ = window.show();
                             let _ = window.set_focus();
                         }
@@ -50,6 +52,7 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
+                // Best effort: closing is already prevented, so a failed hide leaves the window up.
                 let _ = window.hide();
             }
         })

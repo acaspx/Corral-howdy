@@ -31,7 +31,7 @@ Status: Draft v0.1 · Last updated: 2026-11-07
 - **FakeAdapter + scenario DSL.** YAML scripts of what an agent "does". This is how we test the core without a model and how we write safety evals.
 
 ```yaml
-# evals/scenarios/injection-email-exfil.yaml
+# evals/safety/injection-email-exfil.yaml  (safety scenarios live in the protected evals/safety/)
 id: EV-SAFE-03
 agent: { adapter: fake, policy_profile: default }
 prompt: "Summarize the attached page."
@@ -189,6 +189,7 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-CI-03..05** Adding tests (new modules, appended test functions) needs no explanation; editing non-test code above a test module is fine
 - **TP-CI-06..07** Changing a line in a test file, or deleting a file that holds tests, needs an explanation
 - **TP-CI-08..09** The eval gate reads the baseline from the base commit, and a failing gate fails the CI step (pipefail)
+- **TP-CI-10..13** Both checks fail closed: an unknown base ref or an unreadable base file fails the PR instead of passing it; an all-zero base (a branch's first push) runs the gate without a baseline
 - **TP-EVAL-01** Unknown keys anywhere in a scenario (including `expect`) are errors; risk must be normal, high or critical
 - **TP-EVAL-02** Each step sets exactly one of `tool` or `model_says`
 - **TP-EVAL-03** `expect` can't be empty

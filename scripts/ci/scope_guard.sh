@@ -23,18 +23,18 @@ is_test_file() {
   esac
 }
 
-# Line number of the first #[cfg(test)] in the base version of a Rust file (empty if none).
-test_module_line() {
-  case "$1" in
-    *.rs) git show "$base:$1" 2>/dev/null | grep -n -m1 '#\[cfg(test)\]' | cut -d: -f1 || true ;;
-    *) ;;
-  esac
+# The guard fails closed: if any git lookup fails, the script exits non-zero instead of
+# concluding "no test code changed". Every git call is a plain assignment at the top level of the
+# loop, so `set -e` sees its failure; the helpers below only parse text.
+
+# Line number of the first #[cfg(test)] in Rust source text on stdin (empty if none).
+first_test_module_line() {
+  awk '/#\[cfg\(test\)\]/ && !n { n = NR } END { if (n) print n }'
 }
 
-# Prints 1 if this PR changes or deletes any base-side line numbered >= $2 in file $1, else 0.
-# Reads the whole diff (no early exit) so pipefail can't trip on SIGPIPE.
+# Prints 1 if the -U0 diff on stdin changes or deletes any base-side line numbered >= $1, else 0.
 touches_lines_from() {
-  git diff --no-renames -U0 "$base"...HEAD -- "$1" | awk -v from="$2" '
+  awk -v from="$1" '
     /^@@/ {
       split($2, old, ",")             # $2 looks like -start[,count]
       start = substr(old[1], 2) + 0
@@ -44,21 +44,42 @@ touches_lines_from() {
     END { print hit + 0 }'
 }
 
+if ! git rev-parse --verify --quiet "$base^{commit}" >/dev/null; then
+  echo "scope-guard: base ref '$base' not found. Check out full history (fetch-depth: 0)." >&2
+  exit 2
+fi
+
+changes="$(git diff --no-renames --name-status "$base"...HEAD)"
+
 changed=()
 while IFS=$'\t' read -r status path; do
-  module_line="$(test_module_line "$path")"
+  if [ -z "$status" ]; then continue; fi
   case "$status" in
-    D)
-      if is_test_file "$path" || [ -n "$module_line" ]; then changed+=("$path (deleted)"); fi ;;
-    M)
-      if is_test_file "$path"; then
-        [ "$(touches_lines_from "$path" 1)" = 1 ] && changed+=("$path")
-      elif [ -n "$module_line" ] && [ "$(touches_lines_from "$path" "$module_line")" = 1 ]; then
-        changed+=("$path (inline test module)")
-      fi ;;
-    *) ;;   # A = added, always fine
+    A) continue ;;   # new files are always fine
+    M|D) ;;
+    *) echo "scope-guard: unexpected diff status '$status' for $path" >&2; exit 2 ;;
   esac
-done < <(git diff --no-renames --name-status "$base"...HEAD)
+
+  module_line=""
+  if [[ "$path" == *.rs ]]; then
+    base_text="$(git show "$base:$path")"
+    module_line="$(printf '%s\n' "$base_text" | first_test_module_line)"
+  fi
+
+  if [ "$status" = D ]; then
+    if is_test_file "$path" || [ -n "$module_line" ]; then changed+=("$path (deleted)"); fi
+    continue
+  fi
+
+  diff="$(git diff --no-renames -U0 "$base"...HEAD -- "$path")"
+  if is_test_file "$path"; then
+    hit="$(printf '%s\n' "$diff" | touches_lines_from 1)"
+    if [ "$hit" = 1 ]; then changed+=("$path"); fi
+  elif [ -n "$module_line" ]; then
+    hit="$(printf '%s\n' "$diff" | touches_lines_from "$module_line")"
+    if [ "$hit" = 1 ]; then changed+=("$path (inline test module)"); fi
+  fi
+done <<< "$changes"
 
 if [ "${#changed[@]}" -eq 0 ]; then
   echo "scope-guard: no existing test code changed."

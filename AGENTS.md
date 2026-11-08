@@ -41,6 +41,10 @@ Never change these to make your own PR pass. If one is wrong, stop and say so in
 
 ## Rules learned
 <!-- Add one line per lesson from review findings. Newest first. Format: YYYY-MM-DD — rule — (PR #) -->
+- 2026-11-08 — Checks fail closed: if a lookup errors (missing ref, unreadable file), exit non-zero. Never `|| true` or `2>/dev/null` a step whose answer decides pass/fail. — (cleanup)
+- 2026-11-08 — Store reads: load a run's events in one ordered query and project in memory. No query inside a loop over events, spans or runs (N+1); a Tauri command makes at most one query per run snapshot. — (cleanup)
+- 2026-11-08 — Never discard a fallible I/O or provider result (`.ok()`, `let _ =`, `unwrap_or_default()` on a `Result`); map it to a typed error and emit it. Ignoring a UI call's result is fine only with a comment saying why. — (cleanup)
+- 2026-11-08 — Keys and tokens come only from the Keychain at call time. Never in source, config, fixtures, logs or test cassettes (scrub them). — (cleanup)
 - 2026-11-07 — Every CI `run` step uses bash with pipefail; never pipe a check into `tee` without it. — (adversarial review)
 - 2026-11-07 — A check must never read its rules or baseline from the PR it is judging; read them from the base commit. — (adversarial review)
 - 2026-11-07 — Data that crosses into Swift (IDs, text) is untrusted: dedupe and bound it; never trap on bad input. — (adversarial review)

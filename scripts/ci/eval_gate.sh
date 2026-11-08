@@ -4,11 +4,14 @@
 # Usage: eval_gate.sh [base-ref]
 #   With a base ref (CI passes the PR's base commit), the baseline is read from THAT commit, so a
 #   PR can't hide a regression by editing evals/reports/baselines/main.json. Without one, the
-#   working tree's baseline is used (local runs).
+#   working tree's baseline is used (local runs). An all-zero ref (GitHub's "before" on a branch's
+#   first push) means there is no base. Any other ref that doesn't resolve fails the gate: it never
+#   silently compares against nothing.
 # Exits non-zero when the gate fails. Set CORRAL_EVALS_BIN to use a prebuilt binary.
 set -euo pipefail
 
 base="${1:-}"
+if [[ "$base" =~ ^0+$ ]]; then base=""; fi
 baseline_path="evals/reports/baselines/main.json"
 report="evals/reports/gate.json"
 tmp="$(mktemp -d)"
@@ -16,7 +19,11 @@ trap 'rm -rf "$tmp"' EXIT
 
 args=(--suite gate --report "$report")
 if [ -n "$base" ]; then
-  if git cat-file -e "$base:$baseline_path" 2>/dev/null; then
+  if ! git rev-parse --verify --quiet "$base^{commit}" >/dev/null; then
+    echo "eval-gate: base ref '$base' not found. Check out full history (fetch-depth: 0)." >&2
+    exit 2
+  fi
+  if git cat-file -e "$base:$baseline_path" 2>/dev/null; then   # absent only before baselines existed
     git show "$base:$baseline_path" > "$tmp/baseline.json"
     args+=(--baseline "$tmp/baseline.json")
     echo "eval-gate: baseline from $base" >&2
