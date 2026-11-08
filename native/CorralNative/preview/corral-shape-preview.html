@@ -3,113 +3,226 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Corral: liquid-glass shape preview</title>
+<title>Corral: interactive design preview</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #d9d9db; font: 13px -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; color: #2b2f36; overflow: hidden; }
+  :root {
+    --paper: #fbfaf8; --ink: #1d1a17; --ink-2: #6f6962; --ink-3: #9b958e;
+    --maroon: #7b2324; --coral: #c9524a; --hair: rgba(0,0,0,.07);
+    --chip-bg: #eaf1fe; --chip-ink: #3b6fd8; --wire: rgba(120,128,140,.45);
+    --serif: "New York", ui-serif, "Iowan Old Style", Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  }
+  html, body { margin: 0; height: 100%; background: #d9d9db; font: 13px var(--sans); color: var(--ink); overflow: hidden; }
   canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
-  .hud { position: fixed; top: 16px; left: 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  svg.wires { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; }
+  .layer { position: fixed; inset: 0; pointer-events: none; }
+  .layer > * { pointer-events: auto; }
+
+  /* HUD (dev controls for the preview only) */
+  .hud { position: fixed; top: 14px; left: 14px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; z-index: 50;
          background: rgba(255,255,255,.55); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
-         border: 1px solid rgba(255,255,255,.7); border-radius: 14px; padding: 10px 12px; box-shadow: 0 6px 24px rgba(20,30,50,.12); }
-  button { font: inherit; border: 1px solid rgba(40,50,70,.15); background: rgba(255,255,255,.7); border-radius: 9px; padding: 6px 10px; cursor: pointer; }
-  button:hover { background: #fff; }
-  .count { min-width: 120px; font-weight: 600; }
-  .note { position: fixed; bottom: 10px; right: 14px; opacity: .55; font-size: 11px; }
-  .labels { position: fixed; inset: 0; pointer-events: none; }
-  .labels span { position: absolute; transform: translate(-50%, -50%); text-align: center; font-weight: 600; font-size: 14px; line-height: 1.1; color: rgba(30,40,55,.72); letter-spacing: .2px; }
-  .labels small { display: block; font-size: 10px; font-weight: 500; opacity: .7; }
-  .chooser { position: fixed; top: 76px; left: 16px; width: 280px; display: none; background: rgba(255,255,255,.7);
-             backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border: 1px solid rgba(255,255,255,.8);
-             border-radius: 14px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(20,30,50,.14); }
-  .chooser h3 { margin: 0 0 4px; font-size: 13px; } .chooser p { margin: 0 0 8px; opacity: .7; }
-  .chooser label { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; }
-  .chooser .row { display: flex; gap: 8px; margin-top: 10px; }
+         border: 1px solid rgba(255,255,255,.7); border-radius: 14px; padding: 8px 10px; box-shadow: 0 6px 24px rgba(20,30,50,.12); }
+  .hud .count { font-weight: 600; margin-right: 4px; }
+  button { font: inherit; cursor: pointer; }
+  .hud button { border: 1px solid rgba(40,50,70,.15); background: rgba(255,255,255,.75); border-radius: 9px; padding: 5px 9px; }
+
+  /* Logos inside drops (placeholder marks; the app shows each agent's real logo) */
+  .logo { position: absolute; transform: translate(-50%, -50%); display: grid; place-items: center; border-radius: 50%; cursor: pointer; }
+  .logo svg.mark { width: 46%; height: 46%; }
+  .logo .ring { position: absolute; inset: -5px; }
+  .logo .badge { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--maroon);
+                 color: #fff; font: 700 11px var(--sans); display: grid; place-items: center; box-shadow: 0 0 0 2px rgba(255,255,255,.85); }
+  .logo:focus-visible { outline: 2px solid var(--chip-ink); outline-offset: 4px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .ring.spin { animation: spin 2.4s linear infinite; }
+  @keyframes pulse { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
+
+  /* Trace tree: translucent stacked cards */
+  .col { position: absolute; transform: translate(-50%, -100%); width: 236px; display: flex; flex-direction: column; align-items: center; }
+  .stem { width: 1px; height: 18px; background: var(--wire); }
+  .pill { max-width: 236px; padding: 9px 14px; border-radius: 18px; color: #fff; font-size: 12.5px; line-height: 1.35; text-align: center;
+          background: rgba(70,80,100,.55); backdrop-filter: blur(20px) saturate(1.2); -webkit-backdrop-filter: blur(20px) saturate(1.2);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 8px 24px -14px rgba(20,30,50,.6); }
+  .pill span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .col { transition: opacity .2s ease; }
+  .layer.focus .col:not(.on) { opacity: .28; }
+  .deck { position: relative; width: 100%; }
+  .deck .under { position: absolute; left: 50%; border-radius: 16px; background: rgba(255,255,255,.45);
+                 box-shadow: 0 0 0 1px var(--hair); transform: translateX(-50%); }
+  .tcard { position: relative; display: flex; gap: 10px; align-items: flex-start; padding: 11px 13px; border-radius: 16px;
+           background: rgba(255,255,255,.74); backdrop-filter: blur(18px) saturate(1.15); -webkit-backdrop-filter: blur(18px) saturate(1.15);
+           box-shadow: 0 0 0 1px var(--hair), 0 10px 26px -16px rgba(20,30,50,.45); cursor: pointer; }
+  .tcard .ico { width: 26px; height: 26px; flex: none; display: grid; place-items: center; border-radius: 8px; }
+  .tcard .ico svg { width: 18px; height: 18px; }
+  .tcard .meta { font-size: 11.5px; color: var(--ink-3); }
+  .tcard .title { font-weight: 600; font-size: 13.5px; margin: 1px 0 2px; line-height: 1.25; }
+  .tcard .status { font-size: 11.5px; color: var(--ink-2); }
+  .tcard.sub { padding: 9px 12px; }
+  .tcard.sub .title { font-size: 12.5px; font-weight: 500; }
+  .tcard .needs { color: var(--maroon); font-weight: 600; }
+  .more { margin-top: 10px; font-size: 11.5px; color: var(--ink-2); background: rgba(255,255,255,.6); border-radius: 10px; padding: 4px 10px; box-shadow: 0 0 0 1px var(--hair); }
+
+  /* Hover card: paper with a double rim */
+  .hover { position: absolute; transform: translate(-50%, -100%); z-index: 40; width: 340px; padding: 7px; border-radius: 30px;
+           background: rgba(255,255,255,.5); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+           box-shadow: 0 0 0 1px rgba(0,0,0,.06), 0 30px 60px -28px rgba(40,30,20,.45); }
+  .paper { background: var(--paper); border-radius: 23px; padding: 18px 20px 16px; box-shadow: 0 0 0 1px rgba(0,0,0,.05), inset 0 1px 0 #fff; }
+  .label { font: 600 11px var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--maroon); display: flex; justify-content: space-between; }
+  .label .chev { color: var(--ink-3); letter-spacing: 0; font-size: 16px; line-height: 10px; }
+  .headline { font: 500 25px/1.12 var(--serif); letter-spacing: -.01em; margin: 10px 0 6px; }
+  .sub { color: var(--ink-2); font-size: 13px; }
+  .bar { display: flex; gap: 4px; margin: 14px 0 4px; }
+  .bar i { flex: 1; height: 5px; border-radius: 3px; background: #ece8e3; }
+  .bar i.done { background: var(--coral); }
+  .bar i.now { background: var(--coral); animation: pulse 1.4s ease-in-out infinite; }
+  .bar i.skip { background: repeating-linear-gradient(90deg, #e4ddd6 0 3px, transparent 3px 6px); }
+  .step { font-size: 12px; color: var(--ink-2); }
+  .ask { margin-top: 14px; padding: 12px 13px; border-radius: 14px; background: #fff6f2; box-shadow: 0 0 0 1px #f2d9cf; }
+  .ask .k { font: 600 10.5px var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--maroon); }
+  .ask .t { font-weight: 600; margin: 4px 0 3px; }
+  .ask .d { color: var(--ink-2); font-size: 12.5px; line-height: 1.4; }
+  .chips { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { background: var(--chip-bg); color: var(--chip-ink); border-radius: 6px; padding: 2px 7px; font-size: 11.5px; }
+  .chip.risk { background: #fbe9e7; color: var(--maroon); }
+  .ctas { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  .ctas button { border-radius: 12px; padding: 8px 13px; border: 1px solid rgba(0,0,0,.1); background: #fff; color: var(--ink); }
+  .ctas button.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .ctas button.danger { color: var(--maroon); }
+  .ctas button.quiet { margin-left: auto; border-color: transparent; background: transparent; color: var(--ink-2); }
+
+  .mic { position: fixed; right: 26px; bottom: 26px; width: 56px; height: 56px; border-radius: 50%; border: 0; z-index: 30;
+         background: rgba(255,255,255,.6); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+         box-shadow: 0 0 0 1px rgba(0,0,0,.06), 0 12px 28px -12px rgba(20,30,50,.45); display: grid; place-items: center; }
+  .note { position: fixed; bottom: 10px; left: 14px; opacity: .55; font-size: 11px; z-index: 30; }
+  .chooser { position: fixed; top: 64px; left: 14px; width: 280px; display: none; z-index: 60; background: rgba(255,255,255,.8);
+             backdrop-filter: blur(18px); border: 1px solid rgba(255,255,255,.8); border-radius: 14px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(20,30,50,.14); }
+  .chooser label { display: flex; justify-content: space-between; padding: 3px 0; }
 </style>
 </head>
 <body>
-<canvas id="c" aria-label="Corral preview"></canvas>
-<div class="labels" id="labels"></div>
+<canvas id="c" aria-hidden="true"></canvas>
+<svg class="wires" id="wires" aria-hidden="true"></svg>
+<div class="layer" id="layer"></div>
 <div class="hud" role="toolbar" aria-label="Preview controls">
-  <span class="count" id="count">3 agents in corral</span>
-  <button id="add">+ Add agent</button>
-  <button id="remove">− Remove agent</button>
-  <button id="recall">Recall all</button>
+  <span class="count" id="count"></span>
+  <button id="add">+ Agent</button>
+  <button id="remove">− Agent</button>
   <button id="usage">Simulate a week of use</button>
   <button id="choose">Choose shown…</button>
-  <span style="opacity:.7">Click a drop to deploy it. Numbers = usage rank.</span>
+  <span style="opacity:.7">Hover a drop. Click an idle drop to give it a task.</span>
 </div>
 <div class="chooser" id="chooser" role="dialog" aria-label="Choose which agents show in the corral">
-  <h3>Your corral holds up to 8</h3>
-  <p>Choose which agents show. The rest stay reachable from the prompt bar and main window.</p>
-  <div id="chooserList"></div>
-  <div class="row"><button id="chooserDone">Done</button></div>
+  <b>Your corral holds up to 8</b>
+  <div id="chooserList" style="margin-top:8px"></div>
+  <button id="chooserDone" style="margin-top:8px">Done</button>
 </div>
-<div class="note">Same SDF maths as CorralGlass.metal · procedural wallpaper stands in for the system Liquid Glass backdrop</div>
+<button class="mic" aria-label="Push to talk">
+  <svg width="22" height="22" viewBox="0 0 22 22" fill="#1d1a17"><rect x="2" y="9" width="2" height="4" rx="1"/><rect x="6" y="6" width="2" height="10" rx="1"/><rect x="10" y="3" width="2" height="16" rx="1"/><rect x="14" y="6" width="2" height="10" rx="1"/><rect x="18" y="9" width="2" height="4" rx="1"/></svg>
+</button>
+<div class="note">Corral design preview · same SDF maths as CorralGlass.metal · logos are placeholder marks (the app shows each agent's real logo)</div>
 
 <script>
-// ---- model: agents, usage, shown set (in the app this all lives in the Rust core) ----
+// ---------------------------------------------------------------------------
+// Placeholder logo marks. Original abstract glyphs only: the app renders each agent's
+// real logo from the image the user assigns (docs/07 §8). No third-party marks here.
+const MARKS = {
+  spark: c => `<path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z" fill="${c}"/>`,
+  orbit: c => `<circle cx="12" cy="12" r="4.5" fill="${c}"/><ellipse cx="12" cy="12" rx="10" ry="4.2" fill="none" stroke="${c}" stroke-width="1.6" transform="rotate(-25 12 12)"/>`,
+  prism: c => `<path d="M12 3l9 16H3z" fill="none" stroke="${c}" stroke-width="2.2" stroke-linejoin="round"/><path d="M12 9l4 7H8z" fill="${c}"/>`,
+  wave:  c => `<path d="M2 14c3-6 5-6 8 0s5 6 8 0 3-4 4-4" fill="none" stroke="${c}" stroke-width="2.4" stroke-linecap="round"/>`,
+  hex:   c => `<path d="M12 2.5l8.2 4.75v9.5L12 21.5l-8.2-4.75v-9.5z" fill="${c}"/><circle cx="12" cy="12" r="3.2" fill="#fff"/>`,
+  leaf:  c => `<path d="M4 20C4 9 11 4 20 4c0 9-5 16-16 16z" fill="${c}"/><path d="M5 19L15 9" stroke="#fff" stroke-width="1.5"/>`,
+  bolt:  c => `<path d="M13 2L4 14h6l-1 8 9-12h-6z" fill="${c}"/>`,
+  knot:  c => `<circle cx="9" cy="9" r="5" fill="none" stroke="${c}" stroke-width="2.2"/><circle cx="15" cy="15" r="5" fill="none" stroke="${c}" stroke-width="2.2"/>`,
+};
+const mark = (name, color, cls = "mark") => `<svg class="${cls}" viewBox="0 0 24 24">${MARKS[name](color)}</svg>`;
+
+// ---------------------------------------------------------------------------
+// Sample agents and tasks (in the app all of this comes from the Rust core)
+const TASKS = [
+  { prompt: "Every morning, find stale Linear tickets and clean them up or nudge the owner.",
+    title: "Cleaning up stale Linear tickets",
+    steps: ["Fetch issues untouched for 14+ days", "Match linked PRs", "Close issues resolved by PRs", "Update outdated labels", "Nudge owners on what's left"],
+    ask: { at: 4, title: "Post 3 comments in Linear", detail: "Ask the owners of ENG-412, ENG-388 and ENG-371 for a status update.", cls: "comms.send", risk: "high" } },
+  { prompt: "Fix the flaky upload test in backend-api and open a PR.",
+    title: "Fixing the flaky upload test",
+    steps: ["Reproduce the failure", "Find the race in the upload handler", "Patch and add a regression test", "Run the test suite", "Open a pull request"],
+    ask: { at: 3, title: "Run a shell command", detail: "pnpm test -- upload --runInBand (in ~/Corral/Claude Code/backend-api)", cls: "exec.shell", risk: "high" } },
+  { prompt: "Summarize this week's customer feedback into themes for Monday.",
+    title: "Summarizing this week's feedback",
+    steps: ["Collect feedback from the support inbox", "Cluster into themes", "Draft the summary", "Save to ~/Corral/Muse/feedback.md"],
+    ask: null },
+  { prompt: "Check our cloud spend against budget and flag anything unusual.",
+    title: "Reviewing cloud spend",
+    steps: ["Pull this month's billing export", "Compare against budget", "Flag anomalies", "Write a short report"],
+    ask: { at: 3, title: "Write a file outside the sandbox", detail: "~/Documents/Finance/cloud-spend-nov.md", cls: "read.local.outside → write", risk: "high" } },
+];
+const AGENTS0 = [
+  { name: "Scout",       provider: "xAI Grok",        glyph: "spark", color: "#1d1a17", uses: 31 },
+  { name: "Claude Code", provider: "ACP · local CLI", glyph: "orbit", color: "#c9524a", uses: 24 },
+  { name: "Muse",        provider: "Meta Model API",  glyph: "wave",  color: "#3b6fd8", uses: 17 },
+  { name: "Ledger",      provider: "Custom agent",    glyph: "hex",   color: "#2f7d5b", uses: 9 },
+  { name: "Codex",       provider: "OpenAI Agents",   glyph: "prism", color: "#1d1a17", uses: 6 },
+  { name: "Atlas",       provider: "Anthropic",       glyph: "leaf",  color: "#b5651d", uses: 4 },
+  { name: "Relay",       provider: "OpenAI",          glyph: "bolt",  color: "#7b2324", uses: 3 },
+  { name: "Weaver",      provider: "Custom agent",    glyph: "knot",  color: "#5a4fcf", uses: 2 },
+];
 const M = { R: 34, GAP: 40, BR: 0.22, NECK: 9, MAX_SHOWN: 8 };
-const NAMES = ["Gk","Ms","Dt","Cl","Cx","Gm","Sc","Ed","Lx","Rx","Vo","Ny"];
-let nextId = 0;
-const agents = [];                       // {id,label,uses,lastUsed,shown,deployed}
-function makeAgent() {
-  const id = "a" + nextId; const label = NAMES[nextId % NAMES.length]; nextId++;
-  const a = { id, label, uses: 0, lastUsed: 0, shown: agents.filter(x => x.shown).length < M.MAX_SHOWN, deployed: false };
+const params = new URLSearchParams(location.search);
+let nextId = 0, clock = 1;
+const agents = [];
+function makeAgent(seed) {
+  const s = seed || AGENTS0[nextId % AGENTS0.length];
+  const a = { id: "a" + nextId++, ...s, shown: agents.filter(x => x.shown).length < M.MAX_SHOWN,
+              status: "idle", task: null, step: 0, skipped: [], started: 0, lastUsed: 0 };
   agents.push(a); return a;
 }
-const n0 = Math.max(0, Math.min(12, parseInt(new URLSearchParams(location.search).get("n") ?? "3", 10) || 0));
-for (let i = 0; i < n0; i++) { const a = makeAgent(); a.uses = Math.round(Math.random() * 20); }
-
-// Usage rank: most uses first, then most recent use, then creation order (stable).
-function ranked() {
-  return agents.slice().sort((x, y) => (y.uses - x.uses) || (y.lastUsed - x.lastUsed) || (x.id < y.id ? -1 : 1));
+const n0 = Math.max(0, Math.min(10, parseInt(params.get("n") ?? "5", 10) || 0));
+for (let i = 0; i < n0; i++) makeAgent();
+function assign(a, t) {
+  a.task = t; a.step = 0; a.skipped = []; a.status = "working"; a.started = performance.now(); a.uses++; a.lastUsed = clock++;
 }
-function shownInCorral() { return ranked().filter(a => a.shown && !a.deployed).slice(0, M.MAX_SHOWN); }
+// Opening state: two agents waiting on you, one mid-task, the rest idle.
+if (agents[0]) { assign(agents[0], structuredClone(TASKS[0])); agents[0].step = 4; agents[0].status = "needs"; }
+if (agents[1]) { assign(agents[1], structuredClone(TASKS[1])); agents[1].step = 2; }
+if (agents[2]) { assign(agents[2], structuredClone(TASKS[2])); agents[2].step = 1; }
 
-// ---- shape grammar + slot order (mirrors CorralLayout.swift) ----
-function ringAngles(n) { return [...Array(n)].map((_, k) => Math.PI / 2 + Math.PI / n + 2 * Math.PI * k / n); }
+// ---------------------------------------------------------------------------
+// Ranking + shape grammar + slot order (mirrors CorralLayout.swift)
+const ranked = () => agents.slice().sort((x, y) => (y.uses - x.uses) || (y.lastUsed - x.lastUsed) || (x.id < y.id ? -1 : 1));
+const shownInCorral = () => ranked().filter(a => a.shown).slice(0, M.MAX_SHOWN);   // working agents stay in the corral
+const ringAngles = n => [...Array(n)].map((_, k) => Math.PI / 2 + Math.PI / n + 2 * Math.PI * k / n);
 function topLeftSlot(n) {
   const t = 5 * Math.PI / 4, A = ringAngles(n);
   const d = a => { const x = Math.abs((a - t) % (2 * Math.PI)); return Math.min(x, 2 * Math.PI - x); };
   let best = 0;
-  for (let i = 1; i < n; i++) {
-    const di = d(A[i]), db = d(A[best]);
-    if (di < db - 1e-6 || (Math.abs(di - db) <= 1e-6 && Math.sin(A[i]) < Math.sin(A[best]))) best = i;
-  }
+  for (let i = 1; i < n; i++) { const di = d(A[i]), db = d(A[best]);
+    if (di < db - 1e-6 || (Math.abs(di - db) <= 1e-6 && Math.sin(A[i]) < Math.sin(A[best]))) best = i; }
   return best;
 }
 function layout(ids) {
-  const n = ids.length; const out = [];
-  if (n === 0) { const r = M.R * .55; out.push({ id: "puddleA", x: -r * .7, y: 0, r, ring: false, rank: 0 }, { id: "puddleB", x: r * .7, y: 0, r, ring: false, rank: 0 }); }
+  const n = ids.length, out = [];
+  if (n === 0) { const r = M.R * .55; out.push({ id: "pA", x: -r * .7, y: 0, r, ring: false, rank: 0 }, { id: "pB", x: r * .7, y: 0, r, ring: false, rank: 0 }); }
   else if (n === 1) out.push({ id: ids[0], x: 0, y: 0, r: M.R, ring: false, rank: 1 });
   else if (n === 2) { const h = M.R + M.GAP / 2; out.push({ id: ids[0], x: -h, y: 0, r: M.R, ring: true, rank: 1 }, { id: ids[1], x: h, y: 0, r: M.R, ring: true, rank: 2 }); }
-  else {
-    const R = (2 * M.R + M.GAP) / (2 * Math.sin(Math.PI / n)), A = ringAngles(n), s = topLeftSlot(n);
-    ids.forEach((id, rank) => { const a = A[(s + rank) % n]; out.push({ id, x: R * Math.cos(a), y: R * Math.sin(a), r: M.R, ring: true, rank: rank + 1 }); });
-  }
-  return out;   // offsets relative to the shape's centre (pivot)
+  else { const R = (2 * M.R + M.GAP) / (2 * Math.sin(Math.PI / n)), A = ringAngles(n), s = topLeftSlot(n);
+    ids.forEach((id, k) => { const a = A[(s + k) % n]; out.push({ id, x: R * Math.cos(a), y: R * Math.sin(a), r: M.R, ring: true, rank: k + 1 }); }); }
+  return out;
 }
 
-// ---- morph: polar springs around the pivot (mirrors CorralMorph) ----
-let blobs = [];  // {id,x,y,r,att,va,vd,ring,rank,tx,ty,tr,tatt,leaving,label}
-let pivotY = 0, pivotYTarget = 0;
+// Polar morph springs (mirrors CorralMorph)
+let blobs = [], pivotY = 0, pivotYTarget = 0;
 const arc = (a, b) => { let d = (b - a) % (2 * Math.PI); if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI; return d; };
 function retarget() {
-  const shown = shownInCorral();
-  const target = layout(shown.map(a => a.id));
-  const map = new Map(target.map(b => [b.id, b]));
-  blobs.forEach(b => {
-    const t = map.get(b.id);
+  const target = layout(shownInCorral().map(a => a.id)), map = new Map(target.map(b => [b.id, b]));
+  blobs.forEach(b => { const t = map.get(b.id);
     if (t) { Object.assign(b, { tx: t.x, ty: t.y, tr: t.r, tatt: 1, ring: t.ring, rank: t.rank, leaving: false }); map.delete(b.id); }
-    else if (!b.leaving) { b.leaving = true; b.tatt = 0; b.ty = b.y - 140; b.tx = b.x; b.tr = b.r * .55; b.ring = false; }
-  });
-  map.forEach(t => {
-    const agent = agents.find(a => a.id === t.id);
-    blobs.push({ id: t.id, x: t.x * .2, y: t.y * .2 + 60, r: t.r * .3, att: 0, va: 0, vd: 0, ring: t.ring, rank: t.rank, tx: t.x, ty: t.y, tr: t.r, tatt: 1, leaving: false, label: agent ? agent.label : "" });
-  });
-  blobs.sort((a, b) => (a.leaving - b.leaving) || (a.rank - b.rank));   // ring order for the shader's bridges
-  pivotYTarget = -Math.max(0, ...target.map(b => b.y + b.r));         // keep the shape's bottom on the "ground"
-  const hidden = agents.filter(a => !a.shown).length, out = agents.filter(a => a.deployed).length;
-  document.getElementById("count").textContent = `${shown.length} in corral` + (out ? ` · ${out} deployed` : "") + (hidden ? ` · ${hidden} not shown` : "");
+    else if (!b.leaving) { Object.assign(b, { leaving: true, tatt: 0, ty: b.y + 60, tr: b.r * .4, ring: false }); } });
+  map.forEach(t => blobs.push({ id: t.id, x: t.x * .2, y: t.y * .2 + 40, r: t.r * .3, att: 0, va: 0, vd: 0, ring: t.ring, rank: t.rank, tx: t.x, ty: t.y, tr: t.r, tatt: 1, leaving: false }));
+  blobs.sort((a, b) => (a.leaving - b.leaving) || (a.rank - b.rank));
+  pivotYTarget = -Math.max(0, ...target.map(b => b.y + b.r));
+  const hidden = agents.filter(a => !a.shown).length, busy = agents.filter(a => a.task && a.status !== "done").length;
+  document.getElementById("count").textContent = `${shownInCorral().length} in corral · ${busy} working` + (hidden ? ` · ${hidden} not shown` : "");
 }
 function step(dt) {
   const k = 190, c = 24;
@@ -121,155 +234,194 @@ function step(dt) {
     const na = cd < 1 ? ta : ca + b.va * dt, nd = cd + b.vd * dt;
     b.x = nd * Math.cos(na); b.y = nd * Math.sin(na);
     b.r += (b.tr - b.r) * Math.min(1, dt * 9); b.att += (b.tatt - b.att) * Math.min(1, dt * 7);
-    if (b.leaving) b.fade = Math.max(0, (b.fade ?? 1) - dt * 1.6);
+    if (b.leaving) b.fade = Math.max(0, (b.fade ?? 1) - dt * 2);
   });
   blobs = blobs.filter(b => !(b.leaving && b.fade <= 0));
 }
 
-// ---- WebGL ----
-const cv = document.getElementById("c");
-const gl = cv.getContext("webgl", { premultipliedAlpha: false });
+// ---------------------------------------------------------------------------
+// WebGL liquid glass (same field + lighting as CorralGlass.metal)
+const cv = document.getElementById("c"), gl = cv.getContext("webgl", { premultipliedAlpha: false });
 const MAXB = 12;
-const vs = `attribute vec2 p; void main(){ gl_Position = vec4(p,0.,1.); }`;
-const fs = `
-precision highp float;
-uniform vec2 uRes; uniform vec2 uOrigin; uniform float uTime;
-uniform vec4 uB[${MAXB}]; uniform float uFade[${MAXB}]; uniform int uN; uniform int uRing;
-uniform float uNeck; uniform float uBR;
+const fs = `precision highp float;
+uniform vec2 uRes; uniform vec2 uOrigin; uniform float uTime; uniform vec4 uB[${MAXB}]; uniform int uN; uniform int uRing; uniform float uNeck; uniform float uBR;
 float smin(float a,float b,float k){ float h=clamp(.5+.5*(b-a)/k,0.,1.); return mix(b,a,h)-k*h*(1.-h); }
 float sdCap(vec2 p, vec2 a, vec2 b, float r){ vec2 pa=p-a, ba=b-a; float h=clamp(dot(pa,ba)/max(dot(ba,ba),1e-4),0.,1.); return length(pa-ba*h)-r; }
-float field(vec2 p){
-  float d=1e5;
+float field(vec2 p){ float d=1e5;
   for(int i=0;i<${MAXB};i++){ if(i>=uN) break; vec4 b=uB[i]; if(b.z<.5) continue; d=smin(d,length(p-b.xy)-b.z,uNeck); }
   int bc = uRing==2 ? 1 : (uRing>=3 ? uRing : 0);
-  for(int i=0;i<${MAXB};i++){
-    if(i>=bc) break;
-    int j = i+1; if(j>=uRing) j=0;
-    vec4 a=uB[0], b=uB[0];
+  for(int i=0;i<${MAXB};i++){ if(i>=bc) break; int j=i+1; if(j>=uRing) j=0; vec4 a=uB[0], b=uB[0];
     for(int q=0;q<${MAXB};q++){ if(q==i) a=uB[q]; if(q==j) b=uB[q]; }
-    float att=min(a.w,b.w); if(att<.01) continue;
-    d=smin(d, sdCap(p,a.xy,b.xy,min(a.z,b.z)*uBR*att), uNeck*att);
-  }
-  return d;
-}
-vec3 wallpaper(vec2 p){
-  vec2 uv=p/uRes;
-  vec3 top=vec3(.90,.90,.91), bot=vec3(.80,.81,.83);
-  vec3 c=mix(top,bot,uv.y);
-  c-=.035*smoothstep(.45,.0,length(uv-vec2(.25,.35)));
-  c+=vec3(-.02,0.,.03)*smoothstep(.5,.0,length(uv-vec2(.78,.62)));
-  float g=step(.985,fract(p.x/48.))+step(.985,fract(p.y/48.));
-  c-=g*.025;
-  return c;
-}
-void main(){
-  vec2 p=vec2(gl_FragCoord.x, uRes.y-gl_FragCoord.y) - uOrigin;   // corral space, y-down
-  vec2 sp=p+uOrigin;
-  float d=field(p);
-  vec3 bg=wallpaper(sp);
-  if(d>.5){
-    float ds=field(p-vec2(3.,5.));
-    float sh=(1.-smoothstep(0.,14.,ds))*.16;
-    gl_FragColor=vec4(mix(bg,vec3(0.,.02,.06),sh),1.); return;
-  }
-  float e=1.;
-  vec2 g=normalize(vec2(field(p+vec2(e,0.))-field(p-vec2(e,0.)), field(p+vec2(0.,e))-field(p-vec2(0.,e)))+1e-5);
-  float inside=clamp(-d/12.,0.,1.), slope=1.-inside;
-  vec3 n=normalize(vec3(g*slope*1.6,1.));
-  vec2 uv=sp-g*14.*slope*slope;
-  float f=1.+.35*3.*slope;
+    float att=min(a.w,b.w); if(att<.01) continue; d=smin(d, sdCap(p,a.xy,b.xy,min(a.z,b.z)*uBR*att), uNeck*att); }
+  return d; }
+vec3 wallpaper(vec2 p){ vec2 uv=p/uRes; vec3 c=mix(vec3(.90,.90,.91),vec3(.80,.81,.83),uv.y);
+  c-=.035*smoothstep(.45,.0,length(uv-vec2(.25,.35))); c+=vec3(-.02,0.,.03)*smoothstep(.5,.0,length(uv-vec2(.78,.62)));
+  c-=(step(.985,fract(p.x/48.))+step(.985,fract(p.y/48.)))*.02; return c; }
+void main(){ vec2 sp=vec2(gl_FragCoord.x, uRes.y-gl_FragCoord.y), p=sp-uOrigin; float d=field(p); vec3 bg=wallpaper(sp);
+  if(d>.5){ float sh=(1.-smoothstep(0.,14.,field(p-vec2(3.,5.))))*.16; gl_FragColor=vec4(mix(bg,vec3(0.,.02,.06),sh),1.); return; }
+  float e=1.; vec2 g=normalize(vec2(field(p+vec2(e,0.))-field(p-vec2(e,0.)), field(p+vec2(0.,e))-field(p-vec2(0.,e)))+1e-5);
+  float inside=clamp(-d/12.,0.,1.), slope=1.-inside; vec3 n=normalize(vec3(g*slope*1.6,1.)); vec2 uv=sp-g*14.*slope*slope; float f=1.+1.05*slope;
   vec3 col=wallpaper(uv)*.4+(wallpaper(uv+vec2(f,0.))+wallpaper(uv-vec2(f,0.))+wallpaper(uv+vec2(0.,f))+wallpaper(uv-vec2(0.,f)))*.15;
-  vec3 L=normalize(vec3(-.45,-.75,.9)), H=normalize(L+vec3(0.,0.,1.));
-  float spec=pow(max(dot(n,H),0.),60.)*.55;
-  float fres=pow(1.-max(n.z,0.),3.);
-  float rim=smoothstep(2.5,0.,-d)*.35;
-  float inner=smoothstep(0.,1.,slope)*max(dot(g,normalize(vec2(.5,.8))),0.)*.18;
-  float caustic=(.5+.5*sin(sp.x*.045+uTime*.35)*sin(sp.y*.05-uTime*.25))*inside*.04;
-  vec3 tint=vec3(.62,.72,.82);
-  vec3 rgb=mix(col,tint,fres*.55+.06)+spec+rim+caustic-inner;
-  float a=clamp(.5-d,0.,1.);
-  gl_FragColor=vec4(mix(bg,clamp(rgb,0.,1.),a),1.);
-}`;
-function sh(t, s) { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw gl.getShaderInfoLog(o); return o; }
-const prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(prog); gl.useProgram(prog);
-const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+  vec3 L=normalize(vec3(-.45,-.75,.9)), H=normalize(L+vec3(0.,0.,1.)); float spec=pow(max(dot(n,H),0.),60.)*.55, fres=pow(1.-max(n.z,0.),3.);
+  float rim=smoothstep(2.5,0.,-d)*.35, inner=smoothstep(0.,1.,slope)*max(dot(g,normalize(vec2(.5,.8))),0.)*.18;
+  vec3 rgb=mix(col,vec3(.62,.72,.82),fres*.55+.06)+spec+rim-inner; gl_FragColor=vec4(mix(bg,clamp(rgb,0.,1.),clamp(.5-d,0.,1.)),1.); }`;
+const shd = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw gl.getShaderInfoLog(o); return o; };
+const prog = gl.createProgram(); gl.attachShader(prog, shd(gl.VERTEX_SHADER, "attribute vec2 p; void main(){ gl_Position=vec4(p,0.,1.); }")); gl.attachShader(prog, shd(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(prog); gl.useProgram(prog);
+gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
 const loc = gl.getAttribLocation(prog, "p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
 const U = n => gl.getUniformLocation(prog, n);
-
 let dpr = 1, W = 0, H = 0;
-function resize() { dpr = Math.min(2, window.devicePixelRatio || 1); W = innerWidth; H = innerHeight; cv.width = W * dpr; cv.height = H * dpr; gl.viewport(0, 0, cv.width, cv.height); }
+function resize() { dpr = Math.min(2, devicePixelRatio || 1); W = innerWidth; H = innerHeight; cv.width = W * dpr; cv.height = H * dpr; gl.viewport(0, 0, cv.width, cv.height); }
 addEventListener("resize", resize); resize();
-const DOCK = 70;  // pretend Dock height
-function origin() { return [W / 2, H - DOCK - 24 + pivotY]; }
+const origin = () => [W / 2, H - 70 - 24 + pivotY];
 
-const labels = document.getElementById("labels");
-function drawLabels(o) {
-  labels.innerHTML = "";
-  blobs.forEach(b => {
-    if (b.r < 12) return;
-    const s = document.createElement("span");
-    const ag = agents.find(a => a.id === b.id);
-    s.innerHTML = ag ? `${ag.label}<small>#${b.rank} · ${ag.uses} uses</small>` : "";
-    s.style.left = (o[0] + b.x) + "px"; s.style.top = (o[1] + b.y) + "px";
-    s.style.opacity = b.leaving ? (b.fade ?? 1) : 1;
-    labels.appendChild(s);
-  });
+// ---------------------------------------------------------------------------
+// Overlay: logos, trace tree, hover card
+const layer = document.getElementById("layer"), wires = document.getElementById("wires");
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+let hoverId = params.get("hover") ? (agents[+params.get("hover")] || {}).id : null, hoverPinned = !!hoverId, hideTimer = 0;
+const dropPos = id => { const b = blobs.find(x => x.id === id), o = origin(); return b ? { x: o[0] + b.x, y: o[1] + b.y, r: b.r } : null; };
+const elapsed = a => { const s = Math.floor((performance.now() - a.started) / 1000) + 74; return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`; };
+
+function statusLine(a) {
+  if (!a.task) return "Ready";
+  if (a.status === "done") return `Done · ${a.task.steps.length} of ${a.task.steps.length}`;
+  if (a.status === "needs") return `<span class="needs">Needs your approval</span> · step ${a.step + 1} of ${a.task.steps.length}`;
+  return `Step ${a.step + 1} of ${a.task.steps.length} · ${elapsed(a)}`;
+}
+function logoHTML(a, b) {
+  const size = b.r * 2, ringC = a.status === "needs" ? "#7b2324" : "#c9524a";
+  const ring = a.status === "working"
+    ? `<svg class="ring spin" viewBox="0 0 100 100"><circle cx="50" cy="50" r="47" fill="none" stroke="${ringC}" stroke-width="2.2" stroke-dasharray="70 230" stroke-linecap="round"/></svg>`
+    : a.status === "needs" ? `<svg class="ring" viewBox="0 0 100 100" style="animation:pulse 1.4s infinite"><circle cx="50" cy="50" r="47" fill="none" stroke="${ringC}" stroke-width="2.4"/></svg>` : "";
+  return `<div class="logo" data-id="${a.id}" tabindex="0" role="button" aria-label="${esc(a.name)}, ${a.status === "needs" ? "needs your approval" : a.status}"
+           style="width:${size}px;height:${size}px">${mark(a.glyph, a.color)}${ring}${a.status === "needs" ? '<span class="badge">!</span>' : ""}</div>`;
+}
+function shortStatus(a) {
+  if (a.status === "needs") return '<span class="needs">Needs your approval</span>';
+  if (a.status === "done") return "Done";
+  return `Step ${a.step + 1} of ${a.task.steps.length} · ${elapsed(a)}`;
+}
+function traceColumn(a) {
+  const t = a.task, total = t.steps.length, cur = Math.min(a.step, total - 1);
+  const subTitle = a.status === "done" ? "All subtasks done" : (a.status === "needs" ? t.ask.title : t.steps[cur]);
+  const subMeta = a.status === "done" ? `${total} of ${total}` : `Subtask ${cur + 1} of ${total}`;
+  const subStatus = a.status === "needs" ? '<span class="needs">Waiting for you</span>' : a.status === "done" ? "Finished" : "Running · just now";
+  const behind = Math.min(2, total - cur - 1);
+  const unders = [...Array(Math.max(0, behind))].map((_, i) =>
+    `<div class="under" style="top:${10 + i * 6}px;width:${92 - i * 8}%;height:calc(100% - 4px);opacity:${.8 - i * .25}"></div>`).join("");
+  return `<div class="col${a.id === hoverId ? " on" : ""}" data-col="${a.id}">
+    <div class="pill"><span>“${esc(t.prompt)}”</span></div><div class="stem"></div>
+    <div class="deck"><div class="tcard" data-id="${a.id}">
+      <div class="ico" style="background:rgba(0,0,0,.04)">${mark(a.glyph, a.color, "")}</div>
+      <div><div class="meta">${esc(a.provider)}</div><div class="title">${esc(t.title)}</div><div class="status">${shortStatus(a)}</div></div>
+    </div></div><div class="stem"></div>
+    <div class="deck" style="padding-bottom:${behind * 6}px">${unders}<div class="tcard sub" data-id="${a.id}">
+      <div><div class="meta">${subMeta}</div><div class="title">${esc(subTitle)}</div><div class="status">${subStatus}</div></div>
+    </div></div>
+  </div>`;
+}
+function hoverHTML(a) {
+  const t = a.task, n = t ? t.steps.length : 0;
+  const bar = t ? `<div class="bar">${t.steps.map((_, i) => `<i class="${a.skipped.includes(i) ? "skip" : (i < a.step || a.status === "done") ? "done" : i === a.step ? "now" : ""}"></i>`).join("")}</div>
+    <div class="step">${a.status === "done" ? "All steps finished" : `Now: ${esc(t.steps[Math.min(a.step, n - 1)])}`} · ${elapsed(a)} · $0.0${a.step + 2}</div>` : "";
+  const ask = a.status === "needs" ? `<div class="ask"><div class="k">Needs your approval</div><div class="t">${esc(t.ask.title)}</div>
+      <div class="d">${esc(t.ask.detail)}</div><div class="chips"><span class="chip">${esc(t.ask.cls)}</span><span class="chip risk">${t.ask.risk} risk</span></div></div>` : "";
+  let ctas;
+  if (!t) ctas = `<button class="primary" data-act="task">New task</button><button data-act="settings">Settings</button>`;
+  else if (a.status === "needs") ctas = `<button class="primary" data-act="approve">Approve</button><button class="danger" data-act="deny">Deny</button><button data-act="edit">Edit…</button><button class="quiet" data-act="trace">Trace ›</button>`;
+  else if (a.status === "done") ctas = `<button class="primary" data-act="back">Send back</button><button data-act="task">New task</button><button class="quiet" data-act="trace">Trace ›</button>`;
+  else ctas = `<button data-act="pause">Pause</button><button class="danger" data-act="stop">Stop</button><button class="quiet" data-act="trace">Trace ›</button>`;
+  return `<div class="hover" data-hover="${a.id}" role="dialog" aria-label="${esc(a.name)}">
+    <div class="paper"><div class="label"><span>${esc(a.name)} · ${esc(a.provider)}</span><span class="chev">›</span></div>
+      <div class="headline">${t ? esc(t.title) : "Ready for a task"}</div>
+      <div class="sub">${t ? statusLine(a) : `Used ${a.uses} times · ranked #${(blobs.find(b => b.id === a.id) || {}).rank || "–"} in your corral`}</div>
+      ${bar}${ask}<div class="ctas">${ctas}</div></div></div>`;
+}
+let lastSig = "";
+function renderOverlay() {
+  const o = origin(), shown = shownInCorral();
+  const active = shown.filter(a => a.task).sort((x, y) => (x.status === "needs" ? -1 : 0) - (y.status === "needs" ? -1 : 0));
+  const cols = active.slice(0, 3), overflow = active.length - cols.length;
+  const corralTop = Math.min(...blobs.filter(b => !b.leaving).map(b => o[1] + b.y - b.r), o[1] - 40);
+  const baseY = corralTop - 64, colW = 236, gap = 30, x0 = W / 2 - ((cols.length - 1) * (colW + gap)) / 2;
+  const sig = JSON.stringify([agents.map(a => [a.id, a.status, a.step, a.shown, a.uses]), hoverId, Math.round(performance.now() / 1000)]);
+  if (sig !== lastSig) {
+    lastSig = sig;
+    let html = cols.map(traceColumn).join("");
+    if (overflow > 0) html += `<div class="more" style="position:absolute;left:${W / 2}px;top:${baseY + 8}px;transform:translateX(-50%)">+${overflow} more running</div>`;
+    html += shown.map(a => { const b = blobs.find(x => x.id === a.id); return b ? logoHTML(a, b) : ""; }).join("");
+    const ha = agents.find(a => a.id === hoverId); if (ha) html += hoverHTML(ha);
+    layer.innerHTML = html;
+    layer.classList.toggle("focus", !!agents.find(a => a.id === hoverId));
+  }
+  // positions every frame (drops move while morphing)
+  cols.forEach((a, i) => { const el = layer.querySelector(`[data-col="${a.id}"]`); if (el) { el.style.left = (x0 + i * (colW + gap)) + "px"; el.style.top = baseY + "px"; } });
+  layer.querySelectorAll(".logo").forEach(el => { const p = dropPos(el.dataset.id); if (p) { el.style.left = p.x + "px"; el.style.top = p.y + "px"; } });
+  const hv = layer.querySelector(".hover");
+  if (hv) { const p = dropPos(hoverId); if (p) { hv.style.left = Math.max(180, Math.min(W - 180, p.x)) + "px"; hv.style.top = (p.y - p.r - 16) + "px"; } }
+  // connector wires: column bottom → elbow → that agent's drop (like the branch lines in the reference)
+  wires.innerHTML = cols.map((a, i) => { const p = dropPos(a.id); if (!p) return "";
+    const x1 = x0 + i * (colW + gap), y1 = baseY, x2 = p.x, y2 = p.y - p.r - 6, ym = y1 + Math.max(16, (y2 - y1) * .45), r = Math.min(12, Math.abs(x2 - x1) / 2);
+    const dir = Math.sign(x2 - x1);
+    const d = Math.abs(x2 - x1) < 2 ? `M${x1} ${y1} V${y2}` : `M${x1} ${y1} V${ym - r} Q${x1} ${ym} ${x1 + dir * r} ${ym} H${x2 - dir * r} Q${x2} ${ym} ${x2} ${ym + r} V${y2}`;
+    return `<path d="${d}" fill="none" stroke="${a.status === "needs" ? "rgba(123,35,36,.55)" : "rgba(120,128,140,.45)"}" stroke-width="1.2"/>`; }).join("");
 }
 
+// ---------------------------------------------------------------------------
+// Interaction
+layer.addEventListener("mouseover", e => { const el = e.target.closest(".logo"); if (el) { clearTimeout(hideTimer); hoverId = el.dataset.id; } if (e.target.closest(".hover")) clearTimeout(hideTimer); });
+layer.addEventListener("mouseout", e => { if (hoverPinned) return; if (e.target.closest(".logo") || e.target.closest(".hover")) { clearTimeout(hideTimer); hideTimer = setTimeout(() => { hoverId = null; }, 260); } });
+layer.addEventListener("focusin", e => { const el = e.target.closest(".logo"); if (el) hoverId = el.dataset.id; });
+layer.addEventListener("click", e => {
+  const btn = e.target.closest("button[data-act]");
+  if (btn) { act(btn.dataset.act, agents.find(a => a.id === btn.closest(".hover").dataset.hover)); return; }
+  const logo = e.target.closest(".logo");
+  if (logo) { const a = agents.find(x => x.id === logo.dataset.id); hoverId = a.id; hoverPinned = true; if (!a.task) act("task", a); }
+});
+document.addEventListener("click", e => { if (!e.target.closest(".layer > *") && !e.target.closest(".hud")) { hoverPinned = false; } });
+let taskCursor = 3;
+function act(kind, a) {
+  if (!a) return;
+  if (kind === "approve" && a.status === "needs") { a.status = "working"; a.task.ask = { ...a.task.ask, at: -1 }; }
+  if (kind === "deny" && a.status === "needs") { a.skipped.push(a.step); a.status = "working"; a.task.ask = { ...a.task.ask, at: -1 }; a.step++; }
+  if (kind === "stop") { a.status = "done"; }
+  if (kind === "back") { a.task = null; a.status = "idle"; }
+  if (kind === "task") { assign(a, structuredClone(TASKS[taskCursor++ % TASKS.length])); retarget(); }
+  lastSig = "";
+}
+// Simulated progress: one step every ~2.5 s; pause at the step that needs approval
+setInterval(() => { agents.forEach(a => {
+  if (a.status !== "working" || !a.task) return;
+  if (a.task.ask && a.task.ask.at === a.step) { a.status = "needs"; return; }
+  a.step++; if (a.step >= a.task.steps.length) { a.step = a.task.steps.length; a.status = "done"; }
+}); }, 2500);
+
+document.getElementById("add").onclick = () => { const a = makeAgent(); retarget(); if (!a.shown) openChooser(); };
+document.getElementById("remove").onclick = () => { agents.pop(); retarget(); };
+document.getElementById("usage").onclick = () => { agents.forEach(a => a.uses += Math.round(Math.random() * 12)); retarget(); };
+function openChooser() { const list = document.getElementById("chooserList"); list.innerHTML = "";
+  ranked().forEach(a => { const row = document.createElement("label");
+    row.innerHTML = `<span><input type="checkbox" ${a.shown ? "checked" : ""}> ${esc(a.name)}</span><span style="opacity:.6">${a.uses} uses</span>`;
+    const box = row.querySelector("input"); box.onchange = () => { if (box.checked && agents.filter(x => x.shown).length >= M.MAX_SHOWN) { box.checked = false; return; } a.shown = box.checked; retarget(); };
+    list.appendChild(row); });
+  document.getElementById("chooser").style.display = "block"; }
+document.getElementById("choose").onclick = openChooser;
+document.getElementById("chooserDone").onclick = () => document.getElementById("chooser").style.display = "none";
+
+// ---------------------------------------------------------------------------
 let last = performance.now();
 function frame(now) {
-  const dt = Math.min(1 / 30, (now - last) / 1000); last = now;
-  step(dt);
-  const o = origin();
-  const arr = new Float32Array(MAXB * 4), fades = new Float32Array(MAXB);
-  const vis = blobs.slice(0, MAXB);
+  const dt = Math.min(1 / 30, (now - last) / 1000); last = now; step(dt);
+  const o = origin(), arr = new Float32Array(MAXB * 4), vis = blobs.slice(0, MAXB);
   vis.forEach((b, i) => { const s = b.leaving ? (b.fade ?? 1) : 1; arr.set([b.x * dpr, b.y * dpr, b.r * dpr * s, b.att], i * 4); });
-  gl.uniform2f(U("uRes"), cv.width, cv.height);
-  gl.uniform2f(U("uOrigin"), o[0] * dpr, o[1] * dpr);
-  gl.uniform1f(U("uTime"), now / 1000);
-  gl.uniform4fv(U("uB"), arr); gl.uniform1i(U("uN"), vis.length);
-  gl.uniform1i(U("uRing"), vis.filter(b => b.ring && !b.leaving).length);
+  gl.uniform2f(U("uRes"), cv.width, cv.height); gl.uniform2f(U("uOrigin"), o[0] * dpr, o[1] * dpr); gl.uniform1f(U("uTime"), now / 1000);
+  gl.uniform4fv(U("uB"), arr); gl.uniform1i(U("uN"), vis.length); gl.uniform1i(U("uRing"), vis.filter(b => b.ring && !b.leaving).length);
   gl.uniform1f(U("uNeck"), M.NECK * dpr); gl.uniform1f(U("uBR"), M.BR);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-  drawLabels(o);
+  renderOverlay();
   requestAnimationFrame(frame);
 }
-
-// ---- interactions ----
-let clock = 1;
-function openChooser() {
-  const list = document.getElementById("chooserList"); list.innerHTML = "";
-  ranked().forEach(a => {
-    const row = document.createElement("label");
-    row.innerHTML = `<span><input type="checkbox" ${a.shown ? "checked" : ""}> ${a.label}</span><span style="opacity:.6">${a.uses} uses</span>`;
-    const box = row.querySelector("input");
-    box.onchange = () => {
-      if (box.checked && agents.filter(x => x.shown).length >= M.MAX_SHOWN) { box.checked = false; return; }
-      a.shown = box.checked; retarget();
-    };
-    list.appendChild(row);
-  });
-  document.getElementById("chooser").style.display = "block";
-}
-document.getElementById("chooserDone").onclick = () => { document.getElementById("chooser").style.display = "none"; };
-document.getElementById("choose").onclick = openChooser;
-document.getElementById("add").onclick = () => {
-  const a = makeAgent(); retarget();
-  if (!a.shown) openChooser();          // 9th agent: the user decides which 8 show
-};
-document.getElementById("remove").onclick = () => { const last = agents.pop(); retarget(); };
-document.getElementById("recall").onclick = () => { agents.forEach(a => a.deployed = false); retarget(); };
-document.getElementById("usage").onclick = () => {
-  agents.forEach(a => { a.uses += Math.round(Math.random() * 12); });
-  retarget();                           // order updates; drops travel around the ring
-};
-cv.addEventListener("click", e => {
-  const o = origin(); const x = e.clientX - o[0], y = e.clientY - o[1];
-  const hit = blobs.find(b => !b.leaving && b.id[0] === "a" && Math.hypot(x - b.x, y - b.y) < b.r);
-  if (!hit) return;
-  const a = agents.find(r => r.id === hit.id); a.deployed = true; a.uses += 1; a.lastUsed = clock++;
-  retarget();
-});
 retarget(); requestAnimationFrame(frame);
 </script>
 </body>

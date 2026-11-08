@@ -1,6 +1,6 @@
 /**
  * The main window: Corral's deep-work surface (traces, agent and policy editors, spend, settings).
- * The corral itself and the activity cards are native Swift (docs/07-brand-and-corral-surface.md).
+ * The corral, hover cards and trace tree are native Swift (docs/07-brand-and-corral-surface.md).
  * M0 skeleton: real screens arrive in milestone M4.
  */
 const sections = [

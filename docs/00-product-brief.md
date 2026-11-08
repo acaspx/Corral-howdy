@@ -19,12 +19,12 @@ People who use several agents (Grok, Meta's Muse, OpenAI's dots, Claude Code, th
 
 ## Core jobs
 
-1. **Keep a roster.** See every agent you've configured, its provider, status and spend. The corral's shape is the headcount: one drop is a circle, two a dumbbell, three a triangle, four a square, and so on up to an octagon. With more than 8 agents, you choose which ones show. Your most-used agent sits top-left and the rest follow clockwise, re-ordering as your usage changes (see [07-brand-and-corral-surface.md](07-brand-and-corral-surface.md)).
-2. **Deploy.** Click an agent (or several, or all), give it a task by text or voice, and it leaves the corral.
-3. **Keep tabs.** Each deployed agent gets a live activity card showing the current step, tool in use, elapsed time and spend.
-4. **Decide.** Risky actions pause at a checkpoint. You approve, deny, edit or "allow for this run".
+1. **Keep a roster.** See every agent you've configured, each drop carrying its logo, with its provider, status and spend. The corral's shape is the headcount: one drop is a circle, two a dumbbell, three a triangle, four a square, and so on up to an octagon. With more than 8 agents, you choose which ones show. Your most-used agent sits top-left and the rest follow clockwise, re-ordering as your usage changes (see [07-brand-and-corral-surface.md](07-brand-and-corral-surface.md)).
+2. **Deploy.** Click an agent (or several, or all) and give it a task by text or voice. It stays in the corral and starts working; a trace column rises above it.
+3. **Keep tabs.** Above the corral, a trace tree of translucent stacked cards shows each running task and its current subtask. Hover any agent to see what it's working on, its progress, elapsed time and spend.
+4. **Decide.** Risky actions pause at a checkpoint. The agent's drop pulses, and its hover card shows the exact action with Approve, Deny and Edit buttons (or "allow for this run").
 5. **Inspect.** Open a full trace: every model call, tool call, checkpoint and result, in order.
-6. **Recall or re-task.** From the activity card, send the agent back to the corral or prompt it again with its context kept.
+6. **Recall or re-task.** From the hover card, send the agent back (closing its task) or prompt it again with its context kept.
 
 ## What "agents like Grok, Muse, Dot" means in practice (Nov 2026)
 
@@ -42,7 +42,7 @@ Product rule: **Corral never automates a consumer agent through unofficial wrapp
 
 1. **The human is the circuit breaker.** Anything that leaves the Mac, changes files or spends money past a threshold asks first, unless the user has explicitly widened that agent's policy.
 2. **Local first.** Keys live in the macOS Keychain and history in a local database. Sync is opt-in and end-to-end encrypted.
-3. **One mental model for every agent.** Whatever the provider, every agent has the same lifecycle, the same activity card and the same trace format.
+3. **One mental model for every agent.** Whatever the provider, every agent has the same lifecycle, the same hover card and the same trace format.
 4. **Calm by default.** Checkpoints must be rare enough that people actually read them. Approval fatigue is a safety bug.
 5. **Test-first and eval-gated.** No behavior ships without a failing test that turned green. No safety-relevant change ships without the safety eval suite passing.
 6. **Forkable.** In the spirit of Handy: clean crates, clear docs and a codebase a contributor can understand in an afternoon.
@@ -50,7 +50,7 @@ Product rule: **Corral never automates a consumer agent through unofficial wrapp
 ## v1 scope
 
 In:
-- The liquid-glass corral at the bottom center of the desktop (Swift + Metal shader), glass activity and checkpoint cards, a menu-bar fallback, and a main window (traces, settings)
+- The liquid-glass corral at the bottom center of the desktop (Swift + Metal shader), with agent logos in the drops, hover cards with progress and approve/deny buttons, and a trace tree of stacked task/subtask cards above it; a menu-bar fallback; and a main window (traces, settings)
 - Native API agents for xAI Grok, OpenAI-compatible endpoints, Anthropic, and the Meta Model API (Muse Spark)
 - OpenAI Agents API adapter
 - ACP adapter for local CLI agents

@@ -17,7 +17,7 @@ M0 ──► M1 ──► M2 ──► M3 ──► M4 ──► M8 (v1.0 releas
               └──► M6 (voice, parallel after M2)
                     M7 (native extras, parallel after M4)
                                        M9 (v1.1: sync + A2A)
-Spikes S1–S5 run during M0–M1.
+Spikes S1–S6 run during M0–M1.
 ```
 
 The core (M1–M2) is built and proven **with a fake agent before any real provider exists**. That way the safety machinery is tested in isolation, and every real adapter added later must pass the same contract tests.
@@ -30,9 +30,10 @@ The core (M1–M2) is built and proven **with a fake agent before any real provi
 |---|---|---|
 | S1 | Can a Tauri 2 app embed a Swift package (swift-rs) for a non-activating NSPanel, actionable notifications and Touch ID, and ship a WidgetKit extension in the same signed bundle? | Working toy app + ADR-001 confirmed or amended |
 | S2 | UI end-to-end testing on macOS: what's the most reliable way to drive the real app in CI (WebDriver support, accessibility-API scripting, or Playwright against the frontend with a mocked IPC bridge)? | Test harness decision recorded in the test plan |
-| S3 | OpenAI Agents API: does it expose per-tool approval hooks or only up-front tool restriction? Same question for the Meta Model API's agent features and xAI server-side tools | Capability matrix in system design §4 |
+| S3 | OpenAI Agents API: does it expose per-tool approval hooks or only up-front tool restriction? Same question for the Meta Model API's agent features and xAI server-side tools | ✅ Findings 2026-11-07: [spikes/S3-provider-approval-hooks.md](spikes/S3-provider-approval-hooks.md), ADR-013. Cassettes pending keys |
 | S5 | Liquid-glass corral on macOS 26: ~~compile `CorralGlass.metal` + `CorralGlassView`~~ (done 2026-11-07: builds and TP-SHAPE/TP-RANK pass in CI on `macos-26`); pick how system glass and the Metal pass combine (plan A: shader over glass layer, B: merged glass shapes in a `GlassEffectContainer` + Metal highlights, C: wallpaper fallback); tune tokens against the reference image; measure GPU frame time; check that polar morphs read well during usage reorders | Signed-off render at n = 0–8, token file, ADR-009/010 confirmed |
 | S4 | ACP client in Rust: drive Claude Code, Codex CLI and Gemini CLI through the Rust ACP crate; map their permission requests to checkpoints | Toy client + list of permission request shapes |
+| S6 | Hover card + trace tree in SwiftUI: hover tracking in a non-activating panel (does `onContinuousHover` work without focus?), a second click-through panel for the tree, height budget on a 13" display with 3 columns, paper/veil materials over busy wallpapers, logo import (ImageIO, SVG rasterize) | Working prototype matching `corral-shape-preview.html`, token file update, panel layout decision |
 
 ---
 
@@ -91,17 +92,17 @@ Goal: the safety core, proven before any real agent can touch it.
 
 ## M4: The corral UI (~3.5 weeks)
 1. Typed IPC (tauri-specta) + the Rust → Swift snapshot/delta bridge (C ABI)
-2. **Liquid-glass corral** (per S5): `CorralPanel` at bottom center, shape grammar up to an octagon, usage-ranked slots (top-left, clockwise), polar morph springs, drop tokens, deploy (click / drag out / selected / all), return (drag in)
+2. **Liquid-glass corral** (per S5): `CorralPanel` at bottom center, shape grammar up to an octagon, usage-ranked slots (top-left, clockwise), polar morph springs, drop tokens with agent logos and status rings, deploy (click / drag up / selected / all); working agents stay in the shape (ADR-014)
 2a. **Usage ranking in the core:** `usage_rank` projection, idle-gated publishing with hysteresis, "Keep order fixed" setting
 2b. **Shown set:** "Your corral holds up to 8" chooser when a 9th agent is added + Settings → Corral; hidden agents reachable via `@` in the prompt bar
-3. Glass activity cards (SwiftUI): live step, tool, spend, elapsed; Send back / New task
-4. Checkpoint UI: glass checkpoint card + actionable notification; edit-args flow; nonce-bound approve
+3. **Hover cards + trace tree** (per S6; spec in [07 §8](07-brand-and-corral-surface.md)): paper hover card with plan progress, elapsed, spend and state-based buttons; trace tree of translucent prompt/task/subtask cards wired to drops; `plan_view` projection + `plan.updated` events in the core; logo import
+4. Checkpoint UI: approval box in the hover card (stepper for several pending, Touch ID for critical) + actionable notification; edit-args flow; nonce-bound approve; 300 ms input guard
 5. Main window: trace viewer (tree + waterfall), JSON copy
 6. Agent editor + policy editor (shows effective decision per class)
 7. Storybook with fixture event streams for every component state
 8. Accessibility pass (keyboard-only deploy/approve/deny; VoiceOver labels)
 
-**Exit:** E2E journeys J1–J6, J9 and J10 (test plan §6) green; TP-SHAPE-*, TP-RANK-*, TP-USAGE-*, TP-GLASS-*, TP-PLACE-* green; axe zero serious violations; performance budgets met (corral summon p95 < 150 ms, event→UI p95 < 100 ms, idle corral 0 frames, morph < 2 ms GPU).
+**Exit:** E2E journeys J1–J6 and J9–J11 (test plan §6) green; TP-SHAPE-*, TP-RANK-*, TP-USAGE-*, TP-GLASS-*, TP-PLACE-*, TP-HOVER-*, TP-TRACE-*, TP-LOGO-* green; axe zero serious violations; performance budgets met (corral summon p95 < 150 ms, event→UI p95 < 100 ms, idle corral 0 frames, morph < 2 ms GPU).
 
 ## M5: More adapters (~3 weeks; issues parallelize well)
 1. `anthropic_messages` client + native agents on Claude models
@@ -123,7 +124,7 @@ Goal: the safety core, proven before any real agent can touch it.
 **Exit:** TP-VOICE-* green, including TP-VOICE-04 (voice approval of a high-risk checkpoint is impossible); WER on the command phrase set ≤ 5%.
 
 ## M7: Native extras (~1.5 weeks; after M4)
-(The corral panel and glass cards moved into M4.)
+(The corral panel, hover cards and trace tree moved into M4.)
 1. Multi-display behavior + "Desktop only" level setting
 2. Polish pass on glass motion against the brand spec
 3. Actionable notifications (Approve / Deny / Open) wired to the nonce-bound IPC

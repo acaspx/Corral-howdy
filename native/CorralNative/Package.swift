@@ -1,6 +1,6 @@
 // swift-tools-version: 6.2
-// CorralNative: macOS-only surfaces for Corral (the liquid-glass corral, glass activity cards,
-// actionable notifications, Touch ID). Linked into the Tauri app via swift-rs (Spike S1).
+// CorralNative: macOS-only surfaces for Corral (the liquid-glass corral, hover cards,
+// trace tree, actionable notifications, Touch ID). Linked into the Tauri app via swift-rs (Spike S1).
 //
 // Build with Xcode / xcodebuild, not bare `swift build`: SwiftPM's command-line driver
 // does not run the Metal toolchain, so the .metallib would be missing.
