@@ -394,6 +394,7 @@ version = "0.0.1"
 name = "corral-desktop"
 version = "0.0.1"
 dependencies = [
+ "serde_json",
  "tauri",
  "tauri-build",
 ]

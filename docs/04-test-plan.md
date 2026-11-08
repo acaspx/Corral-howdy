@@ -74,6 +74,7 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-STORE-03** Blob offload above 64 KB; content-addressed dedupe
 - **TP-STORE-04** WAL concurrency: 8 writers + UI reader with no corruption
 - **TP-STORE-05** Tampered event → hash verification fails → read-only mode + banner event
+- **TP-STORE-06** A whole-log rewrite with recomputed hashes fails the Keychain-MACed head check
 
 ### Policy and checkpoints (protected)
 - **TP-POL-01** Table test: every action class × default profile → expected decision
@@ -86,12 +87,14 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-POL-08** Identical low-risk asks within a run are batched into one checkpoint
 - **TP-POL-09** Risk tier → required gesture (click / no-voice / Touch ID)
 - **TP-POL-10** `ToolGateway` refuses execution without a valid `Decision::Allow` token (also enforced at compile time; this test covers the runtime path for dynamic MCP tools)
+- **TP-POL-11** Allow-for-run on a high or critical class covers only the approved destination; a new recipient, domain or path root asks again
 
 ### Budget
 - **TP-BUD-01** Pre-request estimate blocks a request that would cross the hard cap
 - **TP-BUD-02** Soft limit raises a `budget.threshold` checkpoint once per threshold
 - **TP-BUD-03** Reconciliation with provider-reported usage
 - **TP-BUD-04** Monthly rollover uses the user's time zone
+- **TP-BUD-05** Every provider request carries a max-output-tokens limit derived from the remaining budget; vendor tool fees are counted before the call
 
 ### Filesystem sandbox (protected)
 - **TP-FS-01..08** `..` traversal, absolute paths, symlink out of root, symlink inside root, hardlinks, case-insensitive APFS collisions, Unicode normalization (NFC/NFD) tricks, TOCTOU (file swapped between check and open)
@@ -106,11 +109,14 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-ADP-07** With default profiles, no provider request includes a vendor-executed side-effecting tool (checked against cassette request bodies)
 - **TP-ADP-08** MCP servers on an agent are never forwarded as vendor-hosted MCP tools; they go through Corral's MCP client
 - **TP-ACP-01..05** ACP: spawn, permission request → checkpoint, deny path, env scrubbing, process-group kill (no orphan processes after cancel)
+- **TP-ACP-06** An ACP agent whose permission mode Corral can't set reports `Partial` gating; a known bypass mode refuses to start
+- **TP-ACP-07** Killing Corral (SIGKILL) leaves no ACP agent processes or their children running
 
 ### Manifests
 - **TP-MAN-01** Unknown keys rejected
 - **TP-MAN-02** Import shows the permission diff; nothing is added until confirmed
 - **TP-MAN-03** Model ID validated against the provider's model list (cassette)
+- **TP-MAN-04** Launching an MCP server or ACP command asks once per (path, SHA-256); a changed binary asks again
 
 ### Secrets and IPC (protected)
 - **TP-SEC-01** After a full eval run, scan the DB, blobs, logs and exported traces for every test key: zero hits
@@ -147,6 +153,12 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-PLACE-01** Bottom center of `visibleFrame` with the Dock at bottom, left, right and hidden
 - **TP-PLACE-02** Follows the menu-bar display; honors pinning on multi-display
 - **TP-PLACE-03** Clicking a drop does not take focus from the frontmost app
+- **TP-PLACE-04** The corral panel can become key (prompt bar, hover card keys) but never main
+- **TP-PLACE-05** Default placement uses the menu-bar display, not the key window's display
+- **TP-SHAPE-08** Duplicate agent IDs are shown once, keeping the highest-ranked
+- **TP-SHAPE-09** The morph never traps on duplicate IDs
+- **TP-SHAPE-10** Morph timing follows real time: settle times at 60 Hz and 120 Hz are within 20%
+- **TP-SHAPE-11** A long stall (sleep, busy main thread) is clamped; the spring never explodes
 - **TP-LOGO-01** Import accepts PNG, PDF and SVG ≤ 1 MB; rejects larger files and other types; the stored copy is ≤ 1024 px
 - **TP-LOGO-02** SVG import strips scripts and external references and rasterizes once; manifest `icon` paths that leave the manifest's folder are rejected
 - **TP-LOGO-03** Logo is drawn at 46% of the drop, above the glass; no logo → provider glyph → monogram fallback
@@ -158,12 +170,31 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-HOVER-05** Buttons ignore input for 300 ms after the card appears
 - **TP-HOVER-06** Approve sends the nonce of the checkpoint shown; if a newer checkpoint replaced it, the core rejects the stale nonce and the card refreshes
 - **TP-HOVER-07** Keyboard and VoiceOver: Space on a focused drop opens the card pinned, focus moves to the first button, Esc closes
+- **TP-HOVER-08** The approval box renders only core checkpoint fields; agent text can't appear inside it; bidi and control characters are stripped; internationalized domains show as punycode
+- **TP-HOVER-09** High-risk Approve is disabled until the card is pinned and any truncated detail is expanded
 - **TP-TRACE-01** (Rust) `plan_view` builds subtasks from `plan.updated` events, falling back to top-level spans when no plan is published
 - **TP-TRACE-02** At most 3 columns; extra runs collapse into "+N more running"; needs-you columns sort first
 - **TP-TRACE-03** Each column's wire ends at its agent's drop (or the hidden bead) after a shape morph or a usage reorder
 - **TP-TRACE-04** Advancing a subtask moves the stack; finishing and Send back fold the column into the drop
 - **TP-TRACE-05** Clicking a task card opens that run in the trace viewer; clicking the stack fans it out
 - **TP-TRACE-06** Nothing running → no trace tree, and the corral idles at zero frames
+
+### Desktop shell (Tauri)
+- **TP-SHELL-01** Closing the last window keeps Corral running (agents keep working)
+- **TP-SHELL-02** Quit from the menu really quits
+- **TP-SHELL-03** CSP sets `object-src`, `base-uri`, `form-action` and `frame-ancestors` to `'none'`
+
+### Build loop integrity (CI scripts and eval runner)
+- **TP-CI-01..02** Editing an inline `#[cfg(test)]` assertion fails the scope guard until explained under "Test changes"
+- **TP-CI-03..05** Adding tests (new modules, appended test functions) needs no explanation; editing non-test code above a test module is fine
+- **TP-CI-06..07** Changing a line in a test file, or deleting a file that holds tests, needs an explanation
+- **TP-CI-08..09** The eval gate reads the baseline from the base commit, and a failing gate fails the CI step (pipefail)
+- **TP-EVAL-01** Unknown keys anywhere in a scenario (including `expect`) are errors; risk must be normal, high or critical
+- **TP-EVAL-02** Each step sets exactly one of `tool` or `model_says`
+- **TP-EVAL-03** `expect` can't be empty
+- **TP-EVAL-04** Scenarios load recursively from `evals/scenarios/` and `evals/safety/`; IDs are unique across both
+- **TP-EVAL-05** A missing scenario folder or an empty suite is an error, never a vacuous pass
+- **TP-EVAL-06** A scenario that disappears from the baseline is a regression, whatever its status
 
 ### Voice
 - **TP-VOICE-01** Push-to-talk start/stop; transcript lands in the prompt bar unsent

@@ -31,9 +31,13 @@ final class CorralMorph: ObservableObject {
     @Published private(set) var blobs: [CorralBlob] = []
     private var targets: [String: CorralBlob] = [:]
     private var vel: [String: (da: CGFloat, dd: CGFloat)] = [:]
+    private var lastFrame: Date?
     private(set) var isSettling = false
 
     private let stiffness: CGFloat = 190, damping: CGFloat = 24   // response ≈ 0.45 s
+    /// Longest step the spring takes. After a stall (sleep, a busy main thread) the morph resumes
+    /// smoothly instead of jumping or blowing up (TP-SHAPE-11).
+    private let maxStep: CGFloat = 1.0 / 30.0
 
     static func polar(_ p: CGPoint) -> Polar { Polar(angle: atan2(p.y, p.x), distance: hypot(p.x, p.y)) }
     static func point(_ q: Polar) -> CGPoint { CGPoint(x: q.distance * cos(q.angle), y: q.distance * sin(q.angle)) }
@@ -44,7 +48,11 @@ final class CorralMorph: ObservableObject {
     }
 
     func setTarget(_ newBlobs: [CorralBlob], reduceMotion: Bool) {
-        targets = Dictionary(uniqueKeysWithValues: newBlobs.map { ($0.id, $0) })
+        // Keep the first of any duplicate IDs: this data crosses the C ABI (TP-SHAPE-09).
+        var seen = Set<String>()
+        let newBlobs = newBlobs.filter { seen.insert($0.id).inserted }
+        targets = Dictionary(newBlobs.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        lastFrame = nil
         if reduceMotion || blobs.isEmpty {
             blobs = newBlobs; vel = [:]; isSettling = false; return
         }
@@ -64,8 +72,16 @@ final class CorralMorph: ObservableObject {
         isSettling = true
     }
 
+    /// Advances the morph to `now` using real elapsed time, so it feels the same at 60 Hz and on
+    /// 120 Hz ProMotion displays (TP-SHAPE-10). The first call after a new target only records the time.
+    func advance(to now: Date) {
+        defer { lastFrame = now }
+        guard let last = lastFrame else { return }
+        step(dt: min(max(CGFloat(now.timeIntervalSince(last)), 0), maxStep))
+    }
+
     func step(dt: CGFloat) {
-        guard isSettling else { return }
+        guard isSettling, dt > 0 else { return }
         var moving = false
         blobs = blobs.compactMap { b in
             guard let t = targets[b.id] else { return nil }
@@ -79,8 +95,8 @@ final class CorralMorph: ObservableObject {
             var nb = b
             let angle = (cur.distance < 1) ? dst.angle : cur.angle + v.da * dt
             nb.offset = Self.point(Polar(angle: angle, distance: cur.distance + v.dd * dt))
-            nb.radius += (t.radius - b.radius) * min(1, dt * 9)
-            nb.attach += (t.attach - b.attach) * min(1, dt * 7)
+            nb.radius += (t.radius - b.radius) * (1 - exp(-dt * 9))   // exact exponential ease:
+            nb.attach += (t.attach - b.attach) * (1 - exp(-dt * 7))   // same result at any frame rate
             nb.isRingMember = t.isRingMember
             nb.rank = t.rank
             vel[b.id] = v
@@ -153,7 +169,7 @@ public struct CorralGlassView: View {
                 }
             }
             .frame(width: target.canvas.width, height: target.canvas.height)
-            .onChange(of: context.date) { _, _ in morph.step(dt: 1.0 / 60.0) }
+            .onChange(of: context.date) { _, now in morph.advance(to: now) }
         }
         .onAppear { morph.setTarget(target.blobs, reduceMotion: true) }
         .onChange(of: agents.map(\.id)) { _, _ in

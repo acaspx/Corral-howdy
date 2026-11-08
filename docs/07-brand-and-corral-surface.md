@@ -160,7 +160,8 @@ Opens above the hovered drop, centered and clamped to the screen edges, never co
 **Safety rules for the buttons** (security model T18; the policy engine still decides, this is presentation):
 - Hovering never approves anything. Approve needs a click or Return on a focused button.
 - Buttons ignore input for 300 ms after a card appears, so a card popping up under the pointer can't be clicked through by accident.
-- High-risk actions approve with a click. Critical ones read "Approve with Touch ID".
+- High-risk actions approve with a click, but only on a **pinned** card (clicked or opened from the keyboard) and only after any truncated detail has been expanded. Critical ones read "Approve with Touch ID".
+- The approval box is drawn only from the core's checkpoint data. Agent-written text (titles, plan steps, summaries) uses its own style, is length-capped, and has control and bidi characters stripped; destinations show internationalized domains as punycode (security model T20).
 - Voice can't press Approve on high or critical actions.
 - Approve uses the checkpoint's single-use nonce.
 - Deny optionally takes a note that is sent to the agent.

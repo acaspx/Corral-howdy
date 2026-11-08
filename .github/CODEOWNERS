@@ -3,10 +3,22 @@
 
 *                                   @acaspx
 
+# Safety logic
 /crates/corral-policy/              @acaspx
 /crates/corral-tools/src/fs/        @acaspx
 /crates/corral-core/src/budget/     @acaspx
 /apps/desktop/src-tauri/capabilities/ @acaspx
 /evals/safety/                      @acaspx
-/.github/workflows/                 @acaspx
+
+# Loop integrity: the files that decide whether a PR passes.
+/.github/                           @acaspx
+/scripts/ci/                        @acaspx
+/justfile                           @acaspx
+/Cargo.toml                         @acaspx
+/clippy.toml                        @acaspx
+/deny.toml                          @acaspx
+/rust-toolchain.toml                @acaspx
+/crates/corral-evals/               @acaspx
+/evals/reports/baselines/           @acaspx
 /AGENTS.md                          @acaspx
+/CLAUDE.md                          @acaspx

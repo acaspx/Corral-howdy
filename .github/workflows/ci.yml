@@ -1,5 +1,12 @@
 # Corral CI. Mirrors `just check`. See docs/04-test-plan.md and docs/06-loop-engineering.md.
-# Before turning on branch protection: pin every third-party action to a full commit SHA (security model T12).
+#
+# Hardening (adversarial review, 2026-11-07):
+# - Every run step uses bash with -eo pipefail, so a failing command in a pipeline fails the step.
+# - Third-party actions are pinned to full commit SHAs (security model T12). Dependabot bumps them.
+# - The Rust toolchain comes from rust-toolchain.toml (pinned), so a new stable clippy can't turn
+#   unrelated PRs red.
+# - Loop-integrity checks run the BASE commit's copy of their inputs: the scope guard script and
+#   the eval baseline. A PR can't weaken the checks that judge it.
 name: ci
 
 on:
@@ -14,6 +21,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -22,12 +33,11 @@ jobs:
     name: lint (fmt, clippy, typecheck, eslint)
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with: { components: "rustfmt, clippy" }
-      - uses: Swatinem/rust-cache@v2
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - run: rustup toolchain install && rustup show active-toolchain
+      - uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c # v2.9.3
+      - uses: pnpm/action-setup@a15d269cd4658e1107c09f1fabf4cbd7bd1f308a # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version: 22, cache: pnpm }
       - run: cargo fmt --all -- --check
       - run: pnpm install --frozen-lockfile
@@ -42,25 +52,34 @@ jobs:
     runs-on: macos-latest
     needs: lint
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c # v2.9.3
+      - uses: pnpm/action-setup@a15d269cd4658e1107c09f1fabf4cbd7bd1f308a # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version: 22, cache: pnpm }
-      - run: cargo test
       - run: pnpm install --frozen-lockfile
+      - run: pnpm -r build
+      - run: cargo test --workspace
       - run: pnpm -r test
 
   eval-gate:
-    name: eval gate
+    name: eval gate + CI script tests
     runs-on: ubuntu-latest
     needs: test
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo run -q -p corral-evals -- --suite gate --report evals/reports/gate.json --baseline evals/reports/baselines/main.json | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with: { fetch-depth: 0 }
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c # v2.9.3
+      - run: cargo build -q -p corral-evals
+      - name: CI script tests (TP-CI-*)
+        run: scripts/ci/tests/run.sh
+      - name: eval gate (baseline from the base commit)
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CORRAL_EVALS_BIN: target/debug/corral-evals
+        run: scripts/ci/eval_gate.sh "$BASE"
 
   native:
     name: native (CorralNative, Swift)
@@ -68,7 +87,7 @@ jobs:
     runs-on: macos-26
     needs: lint
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - run: xcodebuild test -scheme CorralNative -destination 'platform=macOS'
         working-directory: native/CorralNative
 
@@ -77,20 +96,28 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with: { fetch-depth: 0 }
-      - run: ./scripts/ci/scope_guard.sh "${{ github.event.pull_request.base.sha }}"
+      - name: run the base commit's guard against this PR
         env:
+          BASE: ${{ github.event.pull_request.base.sha }}
           PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          git show "$BASE:scripts/ci/scope_guard.sh" > "$RUNNER_TEMP/scope_guard.sh"
+          bash "$RUNNER_TEMP/scope_guard.sh" "$BASE"
 
   security:
-    name: security (cargo-deny, gitleaks)
+    name: security (cargo-deny, pnpm audit, gitleaks)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with: { fetch-depth: 0 }
-      - uses: EmbarkStudios/cargo-deny-action@v2
+      - uses: EmbarkStudios/cargo-deny-action@c3bbe7e4e3f7baeee1a3dd9aec0a3b2aded580fb # v2.1.1
         with: { arguments: --workspace }
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: pnpm/action-setup@a15d269cd4658e1107c09f1fabf4cbd7bd1f308a # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm audit --prod --audit-level high
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
