@@ -24,3 +24,14 @@ evals/reports/*
 .env
 .env.*
 *.pem
+
+# Agent skills from paid courses are licensed to the buyer: keep them local, never commit.
+# (Emil Kowalski's AI for UI course installs as .claude/skills/emil-*; his public MIT skills,
+# vendored in .claude/skills/, are committed. emil-design-eng is one of the public ones.)
+.claude/skills/emil-*/
+!.claude/skills/emil-design-eng/
+# Other agents' local config and skill folders (any layout, e.g. .gemini/antigravity/skills/).
+.cursor/
+.gemini/
+.agents/
+.codex/
