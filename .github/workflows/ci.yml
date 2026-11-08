@@ -115,8 +115,10 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@c3bbe7e4e3f7baeee1a3dd9aec0a3b2aded580fb # v2.1.1
         with: { arguments: --workspace }
       - uses: pnpm/action-setup@a15d269cd4658e1107c09f1fabf4cbd7bd1f308a # v4.4.0
+      # No `cache: pnpm` here: this job never installs packages, so there is no store to save and
+      # setup-node's post step would fail the job ("Path Validation Error").
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with: { node-version: 22, cache: pnpm }
+        with: { node-version: 22 }
       - run: pnpm audit --prod --audit-level high
       - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
         env:
