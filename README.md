@@ -163,6 +163,7 @@ Most of Corral is written by coding agents working one issue at a time, and ever
 - [Handy](https://github.com/cjpais/Handy) by CJ Pais, the model for this project's approach to forkability, candor and on-device voice
 - [Tauri](https://tauri.app), [Agent Client Protocol](https://agentclientprotocol.com), [OpenTelemetry GenAI conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/)
 - Apple's Liquid Glass and SwiftUI Metal shaders
+- [Emil Kowalski](https://github.com/emilkowalski)'s [Skills for Designers and Engineers](https://github.com/emilkowalski/skills) (MIT), included in [`.claude/skills/`](.claude/skills/) so coding agents get animation, gesture and Apple-platform details right. More from Emil at [emilkowal.ski](https://emilkowal.ski) and [aiforui.dev](https://aiforui.dev/skills)
 
 ## License
 
