@@ -15,6 +15,8 @@ allow = [
   "Unicode-3.0", "Unicode-DFS-2016", "BSL-1.0", "MPL-2.0", "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.9
+# The allowlist is policy (what we accept), not an inventory of what is in the tree today.
+unused-allowed-license = "allow"
 
 [bans]
 multiple-versions = "allow"   # Tauri's tree has many duplicates; revisit after M8

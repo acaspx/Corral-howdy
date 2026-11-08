@@ -56,7 +56,7 @@ Corral is built mostly by coding agents (Claude Code, Codex, others) working iss
 5. **Protected paths** (security model §Protected) require a code-owner review. Agents may *propose* changes there but can't get them merged alone. This includes the **loop-integrity files** (CI, scripts, lint and toolchain config, the eval runner and its baseline). **Checks judge PRs from the base commit:** CI runs the base commit's scope guard and compares evals against the base commit's baseline, every step runs with pipefail, actions are pinned by SHA and the Rust toolchain is pinned. A PR can't make its own checks easier. The checks have their own tests (`just ci-test`, TP-CI-*).
 6. **WIP limit:** at most 4 open agent PRs at once, so review stays faster than generation.
 7. **No secrets in agent sessions.** Builder agents work with cassettes and fakes only. Live keys exist only in the protected CI environment.
-8. **No merges by agents.** Branch protection: required checks, one human approval, linear history, signed commits.
+8. **No merges by agents.** A branch ruleset on `main` (§7) requires a PR, all six CI checks passing on an up-to-date branch, squash merges only (linear history), and blocks force pushes and deletion. Nobody is on the bypass list, so nothing merges red.
 9. **Docs are the spec.** If code and docs disagree, the PR must update the doc or the code, and say which.
 
 ## 4. Writing an issue that agents finish in one loop
@@ -83,6 +83,11 @@ Builders read, in order: `AGENTS.md` → the issue → linked doc sections → t
 
 ## 7. Starting the loop (first week)
 1. Create the GitHub repo; push this docs set + AGENTS.md + templates + CI skeleton.
-2. Turn on branch protection: require the CI checks and one approval. Because the owner can't approve their own PRs, owner-authored PRs merge with admin bypass; agent-authored PRs get a normal approval.
+2. Turn on the branch ruleset for `main` (Settings → Rules → Rulesets), with an **empty bypass list**:
+   - Require a pull request before merging, **0 required approvals**, squash merges only
+   - Require status checks to pass, with "Require branches to be up to date": `lint`, `test`, `eval gate + CI script tests`, `native`, `scope guard`, `security`
+   - Require linear history; block force pushes and deletion
+
+   **Why 0 approvals:** GitHub never lets a PR's author approve it, and while every PR is pushed from the owner's account a required approval could only be met with a bypass, which would skip CI too. The owner still reviews every PR before merging. When agents open PRs under their own GitHub identity (a GitHub App or bot account with write access), raise required approvals to 1 and require code-owner review.
 3. Planner files M0 issues and the four spike issues.
 4. First builder run: issue "CI skeleton passes on a no-op PR". This proves the loop before any product code.
