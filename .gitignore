@@ -24,3 +24,7 @@ evals/reports/*
 .env
 .env.*
 *.pem
+
+.claude/skills/
+.cursor/skills/
+.gemini/skills/
