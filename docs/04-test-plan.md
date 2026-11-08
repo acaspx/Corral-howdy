@@ -20,7 +20,7 @@ Status: Draft v0.1 · Last updated: 2026-11-07
 | Contract | Shared `adapter_contract!` macro | Every adapter must pass the same suite | Every PR (cassettes) |
 | Integration (Rust) | nextest + temp SQLite + `FakeAdapter` scenarios | Supervisor + store + policy + tools together | Every PR |
 | Component visual | Storybook + snapshot tests | Every component state from fixture event streams | Every PR |
-| E2E | Per Spike S2 (default plan: Playwright against the frontend with a mocked IPC bridge, plus a thin native smoke layer) | User journeys J1–J10 | Every PR (mocked) / nightly (native) |
+| E2E | Per Spike S2 (default plan: Playwright against the frontend with a mocked IPC bridge, plus a thin native smoke layer) | User journeys J1–J11 | Every PR (mocked) / nightly (native) |
 | Live provider smoke | Real keys in a protected GitHub environment, $1 cap | One short task per provider | Nightly + before release |
 | Fuzz | `cargo-fuzz` | Manifest parser, policy matcher, path canonicalizer, event decoder | Nightly 30 min/target; 1 h before release |
 | Evals | `corral-evals` | Behavior and safety at the system level (see [05-evals.md](05-evals.md)) | Gate suite every PR; full suite nightly |
@@ -102,6 +102,9 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-ADP-03** Cancel stops output within 2 s
 - **TP-ADP-04** Provider errors (401, 429, 5xx, malformed stream) map to typed failures; 429 retried with backoff
 - **TP-ADP-05** Usage reported and reconciled
+- **TP-ADP-06** The adapter's reported `gating` level matches the tools actually sent to the provider
+- **TP-ADP-07** With default profiles, no provider request includes a vendor-executed side-effecting tool (checked against cassette request bodies)
+- **TP-ADP-08** MCP servers on an agent are never forwarded as vendor-hosted MCP tools; they go through Corral's MCP client
 - **TP-ACP-01..05** ACP: spawn, permission request → checkpoint, deny path, env scrubbing, process-group kill (no orphan processes after cancel)
 
 ### Manifests
@@ -138,12 +141,29 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-USAGE-05** (Rust) Shown set ≤ 8; adding a 9th agent emits a `corral.choose_shown` prompt and changes nothing until answered; removing a shown agent never auto-promotes a hidden one
 - **TP-GLASS-01** Render snapshots n = 0–8 match baselines (tolerance-based)
 - **TP-GLASS-02** Reduce Transparency → opaque fill; Reduce Motion → no springs, caustics frozen
-- **TP-GLASS-03** Monogram contrast ≥ 4.5:1 over light, dark and busy test wallpapers
+- **TP-GLASS-03** Logo plate, fallback monogram and status ring contrast ≥ 4.5:1 (3:1 for rings) over light, dark and busy test wallpapers
 - **TP-GLASS-04** The app never requests Screen Recording; the backdrop comes only from system glass (or the wallpaper file as fallback)
 - **TP-GLASS-05** Idle corral schedules zero frames (TimelineView paused)
 - **TP-PLACE-01** Bottom center of `visibleFrame` with the Dock at bottom, left, right and hidden
 - **TP-PLACE-02** Follows the menu-bar display; honors pinning on multi-display
 - **TP-PLACE-03** Clicking a drop does not take focus from the frontmost app
+- **TP-LOGO-01** Import accepts PNG, PDF and SVG ≤ 1 MB; rejects larger files and other types; the stored copy is ≤ 1024 px
+- **TP-LOGO-02** SVG import strips scripts and external references and rasterizes once; manifest `icon` paths that leave the manifest's folder are rejected
+- **TP-LOGO-03** Logo is drawn at 46% of the drop, above the glass; no logo → provider glyph → monogram fallback
+- **TP-LOGO-04** Status rings: working / needs-you / done / error each have a distinct shape cue, not only color; Reduce Motion shows a static progress arc
+- **TP-HOVER-01** Hover opens the card after 120 ms and keeps it while the pointer is on the drop or the card; it closes 260 ms after leaving; a click pins it
+- **TP-HOVER-02** The button set matches the state table in 07 §8.2 for idle, working, needs-you, done and error (snapshot per state)
+- **TP-HOVER-03** Progress segments and "Now:" line match the run's `plan_view` and spend projections
+- **TP-HOVER-04** Hover alone never sends an approve intent; Approve needs a click or Return on the focused button
+- **TP-HOVER-05** Buttons ignore input for 300 ms after the card appears
+- **TP-HOVER-06** Approve sends the nonce of the checkpoint shown; if a newer checkpoint replaced it, the core rejects the stale nonce and the card refreshes
+- **TP-HOVER-07** Keyboard and VoiceOver: Space on a focused drop opens the card pinned, focus moves to the first button, Esc closes
+- **TP-TRACE-01** (Rust) `plan_view` builds subtasks from `plan.updated` events, falling back to top-level spans when no plan is published
+- **TP-TRACE-02** At most 3 columns; extra runs collapse into "+N more running"; needs-you columns sort first
+- **TP-TRACE-03** Each column's wire ends at its agent's drop (or the hidden bead) after a shape morph or a usage reorder
+- **TP-TRACE-04** Advancing a subtask moves the stack; finishing and Send back fold the column into the drop
+- **TP-TRACE-05** Clicking a task card opens that run in the trace viewer; clicking the stack fans it out
+- **TP-TRACE-06** Nothing running → no trace tree, and the corral idles at zero frames
 
 ### Voice
 - **TP-VOICE-01** Push-to-talk start/stop; transcript lands in the prompt bar unsent
@@ -160,18 +180,20 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **FZ-03** Policy matcher (domain globs, path globs)
 - **FZ-04** Event decoder (corrupt or truncated rows)
 - **FZ-05** Provider stream parsers (SSE framing)
+- **FZ-06** Logo import (PNG/PDF/SVG decoder and SVG sanitizer)
 
 ## 6. End-to-end journeys
-- **J1** First launch → add xAI key → create agent → deploy → watch card → completed → send back
-- **J2** Deploy three agents at once ("Deploy selected"); all three cards update independently
+- **J1** First launch → add xAI key → create agent (with a logo) → deploy → watch its trace column and hover card → completed → send back
+- **J2** Deploy three agents at once ("Deploy selected"); all three trace columns update independently
 - **J3** Checkpoint: approve, deny with note, edit args, allow-for-run
-- **J4** Open trace from a card; filter to tool calls; copy JSON
+- **J4** Open trace from a task card (or Trace › in the hover card); filter to tool calls; copy JSON
 - **J5** Budget soft limit → checkpoint → raise limit → continue
 - **J6** Recall-all from the hotkey during 5 active runs
 - **J7** Voice: push-to-talk → edit transcript → deploy
 - **J8** Import a manifest from file → permission diff → accept → deploy
-- **J9** Corral morph: start with 3 agents (triangle) → drag one out to deploy (dumbbell) → add an agent (triangle) → send the deployed one back (square)
+- **J9** Corral morph: start with 3 agents (triangle) → deploy one (the shape stays a triangle, its ring turns) → add an agent (square) → remove one (triangle) → send the working one back (still a triangle; its column folds away)
 - **J10** Usage order + shown set: deploy the rank-4 agent repeatedly until it outranks #1 → with the corral idle, it glides to top-left → add a 9th agent → chooser appears → uncheck one → the corral stays an octagon with the chosen 8
+- **J11** Hover approval: an agent hits a `comms.send` checkpoint → its drop pulses and its wire turns maroon → hover → the card shows the exact destination and message → Deny with a note → the agent continues → next checkpoint → Approve → the column advances
 
 ## 7. Performance budgets
 | Metric | Budget |

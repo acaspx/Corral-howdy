@@ -35,7 +35,7 @@ Read first: [00-product-brief.md](00-product-brief.md). Security details: [02-se
 │  │  └────────────────────────────────────────────────┘    │   │
 │  │            │ C ABI via swift-rs                        │   │
 │  │  CorralNative (Swift + Metal): liquid-glass corral,    │   │
-│  │  glass cards, notifications, Touch ID, App Intents     │   │
+│  │  hover cards, trace tree, notifications, Touch ID      │   │
 │  └────────────────────────────────────────────────────────┘   │
 │                       │ HTTPS (only to configured providers)  │
 └───────────────────────┼───────────────────────────────────────┘
@@ -56,7 +56,7 @@ Read first: [00-product-brief.md](00-product-brief.md). Security details: [02-se
 | Electron | Fastest prototype | Heavier, larger attack surface, Node in the main process | Rejected |
 
 **Split by surface (amended for the liquid-glass brand, ADR-009):**
-- **Swift + Metal (CorralNative)** owns everything you see at a glance: the liquid-glass corral at the bottom of the desktop (a custom Metal shader), glass activity and checkpoint cards, actionable notifications, Touch ID prompts for critical approvals, App Intents/Shortcuts, and later a WidgetKit widget.
+- **Swift + Metal (CorralNative)** owns everything you see at a glance: the liquid-glass corral at the bottom of the desktop (a custom Metal shader) with agent logos, the hover cards and checkpoint buttons, the trace tree, actionable notifications, Touch ID prompts for critical approvals, App Intents/Shortcuts, and later a WidgetKit widget.
 - **React (webviews)** owns deep work: trace viewer, agent and policy editors, spend, settings.
 - **Rust core** owns every decision. Swift and React only display state and send intents back.
 
@@ -69,7 +69,7 @@ AgentDefinition ─┐          ┌─ Checkpoint (0..n per run)
   id, name,      │          │    action, risk, args, preview,
   adapter kind,  │   Run ───┤    status: open|approved|denied|expired
   provider/model,├─► id,    │
-  persona,       │   agent_id, session_id, prompt, state,
+  persona, icon, │   agent_id, session_id, prompt, state,
   tools (MCP),   │   budget, spend, started/ended
   policy_profile,│          │
   budget         │          └─ Event (append-only, many per run)
@@ -78,9 +78,9 @@ Session ─────────┘              seq, ts, kind, payload, pare
   that survives runs
 ```
 
-- **AgentDefinition**: what lives in the corral. Created from the UI or a `corral-agent.toml` manifest.
+- **AgentDefinition**: what lives in the corral. Created from the UI or a `corral-agent.toml` manifest. `icon` is a reference to a logo image the user assigned, stored in Corral's own folder (see [07 §8.1](07-brand-and-corral-surface.md)).
 - **Run**: one deployment on one task. "Prompt again" creates a new Run in the **same Session**, so context carries over. "Send back to corral" closes the Session.
-- **Event**: the single source of truth (ADR-002). Run state, activity cards, traces and spend are all *projections* of the event log.
+- **Event**: the single source of truth (ADR-002). Run state, hover cards, the trace tree, traces and spend are all *projections* of the event log.
 - **Checkpoint**: a pending human decision. It is itself recorded as events (`checkpoint.opened`, `checkpoint.resolved`).
 
 ### Run lifecycle
@@ -135,7 +135,7 @@ pub trait AgentAdapter: Send + Sync {
 | Adapter | Who runs the agent loop | Used for | Checkpoint mechanism |
 |---|---|---|---|
 | `native` (**primary**) | Corral | xAI Grok (Responses API), OpenAI-compatible endpoints, Anthropic Messages, Meta Model API (Muse Spark; it accepts the OpenAI and Anthropic SDK formats) | Full: Corral executes every local tool, so it gates every call |
-| `managed` | Vendor | OpenAI Agents API | Pre-flight: restrict tools/sandbox at request time. Per-call gating only where the API exposes approval hooks (**Spike S3** verifies) |
+| `managed` | Vendor | OpenAI Agents API | Function tools return to Corral (`requires_action`) and are fully gated. Sessions default to environment `none`, so every side effect is a Corral function tool. Hosted sandboxes and the hosted browser are opt-in, with partial gating (Spike S3) |
 | `acp` | The CLI agent | Claude Code, Codex CLI, Gemini CLI, any ACP agent | ACP permission requests are mapped to Corral checkpoints. Corral is the ACP *client* |
 | `a2a` (v1.1) | Remote agent | Agents exposing A2A v1.0 Agent Cards | A2A `input-required` task state → checkpoint |
 | `custom` | Corral (compiles to `native`) | User manifests | Same as native |
@@ -143,6 +143,13 @@ pub trait AgentAdapter: Send + Sync {
 | `linked` | Vendor app | Consumer Muse, consumer dots | None. Not managed; open-in-app only |
 
 **Provider-side tools** (e.g. xAI server-side web search, code execution) run on the vendor's servers, where Corral can't intercept individual calls. They are a separate permission (`provider_tools`) decided *before* the request, and the UI labels them "runs on xAI's servers".
+
+**Gating rules from Spike S3** ([findings](spikes/S3-provider-approval-hooks.md)): only OpenAI's hosted MCP offers per-call approval for vendor-executed tools; xAI, Anthropic and Meta offer only up-front allowlists. So:
+- **Corral connects MCP servers itself.** MCP always goes through Corral's own MCP client in the `ToolGateway`, never through a vendor-hosted MCP connector.
+- **Read-only vendor tools** (web search) are a deploy-time `provider_tools` permission.
+- **Side-effecting vendor tools** (code execution with network, hosted shells and sandboxes, the hosted browser) are off by default and high-risk to enable.
+- **Adapters report a `gating` level** (`Full` / `Partial` / `PreflightOnly`) in `Capabilities`. A run below the agent profile's minimum (default `Full`) won't start.
+- **Corral never enables vendor auto-approval** such as the Agents API's `auto_review`.
 
 ### Provider clients
 `corral-adapters::providers` holds one thin client per wire format: `openai_responses`, `openai_chat` (legacy fallback), `anthropic_messages`. xAI and the Meta Model API reuse the OpenAI-compatible clients with a different base URL and key. Each client normalizes streaming deltas, tool calls and usage into `AgentEvent`s. Model IDs are config, never hard-coded.
@@ -156,6 +163,7 @@ adapter     = "native"
 provider    = "xai"                 # key resolved from Keychain item "corral.xai"
 model       = "grok-4.5"            # user-editable; validated against provider /models
 persona     = "You research topics and return cited summaries."
+icon        = "scout.png"           # optional; relative to the manifest, copied in at import
 provider_tools = ["web_search"]     # vendor-side; needs policy allow
 
 [[mcp_servers]]
@@ -222,12 +230,12 @@ on_timeout         = "deny"   # deny | cancel_run
 
 - SQLite (WAL mode) at `~/Library/Application Support/Corral/corral.db`. Large payloads (tool outputs over 64 KB) go to content-addressed blobs next to it.
 - Append-only `events` table: `(run_id, seq, ts, kind, span_id, parent_span_id, payload_json, prev_hash, hash)`. The hash chain makes after-the-fact edits detectable, so the audit log can't be quietly rewritten.
-- Projections (`runs_view`, `spend_view`, `checkpoints_view`, `usage_rank`) are rebuilt from events and can be dropped and regenerated at any time. A test proves the rebuild gives identical results.
+- Projections (`runs_view`, `spend_view`, `checkpoints_view`, `usage_rank`, `plan_view`) are rebuilt from events and can be dropped and regenerated at any time. A test proves the rebuild gives identical results.
 - **Trace export** follows OpenTelemetry GenAI semantic conventions (`invoke_agent`, `chat`, `execute_tool` spans; `gen_ai.*` attributes). Those conventions are still marked *Development*, and in June 2026 they moved to a dedicated repository, so we **pin a version** in `corral-core::otel` and run a mapping test per version bump. Export is opt-in: OTLP to a user-specified endpoint (Langfuse, Phoenix, Jaeger) or a JSON file.
 - Prompt and response content is stored locally only. Export redacts content unless the user explicitly enables it.
 
 ### Event kinds (v1)
-`run.queued · run.started · model.request · model.delta · model.response · tool.requested · policy.decided · checkpoint.opened · checkpoint.resolved · tool.started · tool.result · usage.reported · budget.warned · run.paused · run.resumed · run.completed · run.failed · run.cancelled · session.closed`
+`run.queued · run.started · plan.updated · model.request · model.delta · model.response · tool.requested · policy.decided · checkpoint.opened · checkpoint.resolved · tool.started · tool.result · usage.reported · budget.warned · run.paused · run.resumed · run.completed · run.failed · run.cancelled · session.closed`
 
 ## 7. Budgets
 
@@ -242,13 +250,15 @@ on_timeout         = "deny"   # deny | cancel_run
 
 ## 9. UI surfaces
 
-**Desktop form:** a liquid-glass corral at the bottom center of the desktop, glass cards above it, and a main window for deep work. Full spec: [07-brand-and-corral-surface.md](07-brand-and-corral-surface.md).
+**Desktop form:** a liquid-glass corral at the bottom center of the desktop, a trace tree and hover cards above it, and a main window for deep work. Full spec: [07-brand-and-corral-surface.md](07-brand-and-corral-surface.md).
 
-- **The corral (Swift + Metal):** each shown agent is a glass drop. Drops are joined by liquid bridges into a shape that encodes the count: circle, dumbbell, triangle, square, then polygons up to an octagon (8 is the maximum; with more agents the user chooses which show). The most-used agent sits top-left and the rest follow clockwise, re-ordered as usage changes. Deploying pinches a drop off and the shape re-forms. Status shows as a glyph and pulse on the drop.
-- **Glass cards (SwiftUI):** each deployed agent gets an activity card fanned above the corral, showing current step, tool, elapsed, spend, inline checkpoint buttons, and **Send back** / **New task**. The prompt bar slides up from the corral, with a mic button (push-to-talk) and "Deploy selected" / "Deploy all".
+- **The corral (Swift + Metal):** each shown agent is a glass drop. Drops are joined by liquid bridges into a shape that encodes the count: circle, dumbbell, triangle, square, then polygons up to an octagon (8 is the maximum; with more agents the user chooses which show). The most-used agent sits top-left and the rest follow clockwise, re-ordered as usage changes. Each drop shows the agent's logo. **Working agents stay in the shape** (ADR-014); status shows as a ring and badge around the logo.
+- **Hover cards (SwiftUI, paper material):** hovering or focusing a drop opens a card with the agent, its current task, segmented plan progress, elapsed and spend, the pending checkpoint's exact detail, and the buttons for its state (Approve / Deny / Edit…, Pause / Stop, Send back / New task, Trace ›).
+- **Trace tree (SwiftUI, translucent cards):** one column per running task above the corral (max 3): prompt pill → task card → stack of subtask cards, wired into the agent's drop. Subtasks come from the `plan_view` projection: `plan.updated` events from the adapter (ACP plan updates, a native plan tool), or top-level trace spans when the agent publishes no plan.
+- **Prompt bar:** slides up from the corral, with a mic button (push-to-talk) and "Deploy selected" / "Deploy all".
 - **Menu-bar icon:** a fallback entry point (show corral, settings, quit).
 - **Main window (deep work):** trace viewer (span tree plus waterfall, filter by kind, copy as JSON), agent editor, policy editor (shows the effective decision for each action class), spend dashboard, settings.
-- **Notifications:** checkpoints raise an actionable notification (Approve / Deny / Open). High and critical risks open the glass checkpoint card above the corral instead of offering inline approve.
+- **Notifications:** checkpoints raise an actionable notification (Approve / Deny / Open). High and critical risks open that agent's hover card above the corral instead of offering inline approve.
 - **Global hotkeys (configurable):** summon corral + prompt bar, push-to-talk, Recall-all.
 - Native state: Swift receives roster and run snapshots plus deltas from the core over the C ABI. For the corral, the core sends the shown agents in the corral (≤ 8), already sorted by `usage_rank`; Swift only maps rank → slot. A shared snapshot fixture format drives both SwiftUI previews and Storybook.
 - **Usage ranking (core):** `usage_rank` scores each agent by deploys in the last 90 days with a 14-day half-life. Tie-breaks are most recent deploy, then creation order. New orders are published only when the corral reports idle, with 10% hysteresis between neighbors. Details: [07 §3.1](07-brand-and-corral-surface.md).
@@ -282,7 +292,7 @@ corral/
 │  ├─ corral-tools/        # tool gateway: fs sandbox, MCP client
 │  ├─ corral-voice/        # STT (Handy-derived)
 │  └─ corral-evals/        # eval runner + graders
-├─ native/CorralNative/    # Swift + Metal: liquid-glass corral, glass cards, notifications, Touch ID
+├─ native/CorralNative/    # Swift + Metal: liquid-glass corral, hover cards, trace tree, Touch ID
 ├─ evals/                  # scenarios, injection corpus, golden traces
 ├─ docs/                   # these docs + ADRs
 └─ .github/                # CI, templates, CODEOWNERS
@@ -304,6 +314,8 @@ corral/
 | 010 | Glass material is system Liquid Glass with a Metal pass for shape and highlights (plan A/B per Spike S5; wallpaper crop only as fallback); never Screen Recording | Proposed |
 | 011 | Minimum macOS 26, so system Liquid Glass is always available | **Accepted** 2026-11-07 |
 | 012 | Corral shows at most 8 drops (octagon); with more agents the user chooses the shown set. Drops are ordered by usage: rank 1 top-left, then clockwise, re-ranked from a decayed usage score in the core | **Accepted** 2026-11-07 |
+| 013 | Corral owns tool execution: MCP through Corral's own client, vendor-executed side-effecting tools off by default, adapters report a gating level, never vendor auto-approval (Spike S3) | Proposed |
+| 014 | Working agents stay in the corral. Hover cards (paper) carry progress and checkpoint buttons; a trace tree of translucent stacked cards shows running tasks. Replaces pinch-off activity cards. Agent logos are user-assigned; no third-party marks ship in the repo | **Accepted** 2026-11-07 |
 
 Each ADR becomes `docs/adr/NNN-title.md` when accepted.
 
@@ -312,6 +324,7 @@ Each ADR becomes `docs/adr/NNN-title.md` when accepted.
 - xAI API is OpenAI-compatible with a Responses API and server-side tools: https://ai-sdk.dev/v7/providers/ai-sdk-providers/xai · https://docs.apiyi.com/en/api-capabilities/grok/overview
 - Meta Muse is a consumer agent on a Meta-hosted VM: https://www.bitdoze.com/md/muse-ai-meta-agent.md · Meta Model API / Muse Spark / Muse Code: https://developer.meta.com/ai/ · OpenAI- and Anthropic-SDK compatibility: https://medium.com/@isaakmwangi2018/meta-muse-spark-1-1-tutorial-benchmarks-pricing-5dc7aa1f08f8
 - OpenAI dots have no dots API; developers use the Agents API: https://www.rewarx.com/blogs/what-is-openai-dots-complete-overview-and-architecture-explained · Agents API public beta: https://techjacksolutions.com/?p=91547
+- Provider approval hooks (Spike S3): see [spikes/S3-provider-approval-hooks.md](spikes/S3-provider-approval-hooks.md) for sources
 - Agent Client Protocol and registry: https://zed.dev/blog/acp-registry · https://www.danilchenko.dev/posts/agent-client-protocol/
 - A2A v1.0 under the Linux Foundation: https://ai-era.pages.dev/frameworks/a2a-protocol
 - OTel GenAI agent spans (Development status): https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans · repository move: https://klu.ai/glossary/llm-session-tracing-opentelemetry

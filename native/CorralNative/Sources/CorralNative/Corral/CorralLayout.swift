@@ -30,7 +30,7 @@ public struct CorralBlob: Equatable, Sendable, Identifiable {
     public var id: String          // agent id, or "corral.puddle.*"
     public var offset: CGPoint     // centre relative to the shape pivot
     public var radius: CGFloat
-    /// 1 = fully attached to its neighbours, 0 = pinched off (deploy/return animation).
+    /// 1 = fully attached to its neighbours, 0 = detached (add/remove animation).
     public var attach: CGFloat
     /// Whether this blob takes part in ring bridges.
     public var isRingMember: Bool

@@ -48,7 +48,7 @@ final class CorralMorph: ObservableObject {
         if reduceMotion || blobs.isEmpty {
             blobs = newBlobs; vel = [:]; isSettling = false; return
         }
-        // Leaving drops pinch off and rise toward their activity card; new drops grow from a bead.
+        // Removed drops detach and shrink away; new drops grow from a bead (docs/07 §7).
         var merged = blobs.map { b -> CorralBlob in
             guard targets[b.id] == nil else { return b }
             var t = b; t.attach = 0; t.radius = 0.01; t.isRingMember = false

@@ -37,6 +37,8 @@ Corral holds API keys and can make agents act on a user's behalf. Treat it like 
 | T15 | Sync server reads user data | E2E encryption; server only sees ciphertext; keys never sync | TP-SYNC-* (v1.1) |
 | T16 | Using unofficial consumer-agent wrappers leaks account credentials / breaks ToS | Product rule ADR-005: not supported | Review gate |
 | T17 | Glass effect used as a pretext to capture the screen | Backdrop is system Liquid Glass (no permission), or the wallpaper file as a fallback; Screen Recording is never requested (ADR-010) | TP-GLASS-04 |
+| T18 | Accidental approval from a hover card (card appears under the pointer, a stray click or keypress) | Hover never approves; Approve needs a click or Return on the focused button; buttons ignore input for 300 ms after the card appears; critical needs Touch ID; the approve command carries the checkpoint's single-use nonce, so a stale card can't approve a newer checkpoint | TP-HOVER-04..06 |
+| T19 | Malicious agent logo file (decoder exploits, SVG scripts or external references, huge images) | Copied into Corral's folder and never hot-linked; ≤ 1 MB and ≤ 1024 px; decoded with ImageIO; SVG rasterized once at import with scripts and external references stripped; manifest `icon` paths can't leave the manifest's folder | TP-LOGO-01..02, fuzz FZ-06 |
 
 ## Defaults a user gets on first launch
 - No agent can send, post, buy, delete, or run shell without asking.

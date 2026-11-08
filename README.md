@@ -21,13 +21,13 @@ Corral doesn't build agents. It's a calm place to keep the ones you already have
 
 1. **Pick:** click a drop in the corral (or ⌘-click several, or deploy them all)
 2. **Prompt:** type the task, or hold the push-to-talk key and say it. Transcription happens on your Mac
-3. **Watch:** the drop pinches off and becomes a live activity card showing the current step, tool, time and spend
-4. **Decide:** risky actions pause at a checkpoint: approve, deny, edit the arguments, or allow for this run
-5. **Return or re-task:** send the agent back to the corral, or give it another task with its context kept
+3. **Watch:** the agent stays in the corral and starts working. A column of translucent cards rises above it: your prompt, the task, and a stack of subtasks. Hover the drop to see what it's doing, how far along it is, the time and spend
+4. **Decide:** risky actions pause at a checkpoint. The drop pulses, and its hover card shows exactly what the agent wants to do, with Approve, Deny and Edit buttons
+5. **Return or re-task:** send the agent back, or give it another task with its context kept
 
 ### The corral
 
-Each agent is a drop of glass. The corral's shape tells you how many agents are home:
+Each agent is a drop of glass carrying its logo (you choose the logo; Corral ships no third-party marks). The corral's shape tells you how many agents you have:
 
 | Agents | Shape |
 |---|---|
@@ -39,7 +39,7 @@ Each agent is a drop of glass. The corral's shape tells you how many agents are 
 
 The corral shows at most 8 drops. If you have more agents, you choose which 8 show, and the rest stay one `@` away in the prompt bar. Your **most-used agent sits top-left**, the rest follow clockwise, and drops quietly slide around the ring as your habits change.
 
-Try it now, no build needed: open [`native/CorralNative/preview/corral-shape-preview.html`](native/CorralNative/preview/corral-shape-preview.html) in a browser.
+Try it now, no build needed (logos, hover cards, the trace tree and usage ordering are all in it): open [`native/CorralNative/preview/corral-shape-preview.html`](native/CorralNative/preview/corral-shape-preview.html) in a browser.
 
 ## Status
 
@@ -50,7 +50,7 @@ Try it now, no build needed: open [`native/CorralNative/preview/corral-shape-pre
 - ✅ The corral's shape and ordering maths are prototyped and checked with renders
 - ✅ The Swift and Metal corral code in `native/` builds on macOS 26, and its shape and ordering tests pass in CI
 - ⏳ Tuning the glass on real hardware is next (Spike S5)
-- ⏳ The Rust core, adapters and app shell start at milestone M0
+- ⏳ The core runtime (milestone M1) is next: event log, run lifecycle, a scripted fake agent
 
 ### Known limitations (by design or by circumstance)
 
@@ -78,7 +78,7 @@ Not yet available. v1.0 will ship as a signed, notarized download from GitHub Re
 
 ### Development Setup
 
-Once milestone M0 lands, you'll need:
+You'll need:
 
 - macOS 26 and Xcode 26
 - Rust (stable), Node.js with pnpm, and [`just`](https://github.com/casey/just)
@@ -96,7 +96,7 @@ Corral is a [Tauri 2](https://tauri.app) app with three layers. One rule holds e
 | Layer | Built with | Owns |
 |---|---|---|
 | **Core** | Rust | Agent lifecycle, the policy engine that decides what needs your approval, budgets, the event log, Keychain access, voice transcription |
-| **Corral and cards** | Swift + Metal | The liquid-glass corral, activity and checkpoint cards, notifications, Touch ID |
+| **Corral and cards** | Swift + Metal | The liquid-glass corral, hover cards, trace tree, notifications, Touch ID |
 | **Main window** | React + TypeScript | Trace viewer, agent and policy editors, spend, settings |
 
 Core pieces (planned):
@@ -111,7 +111,7 @@ Core pieces (planned):
 corral/
 ├─ crates/              # Rust core: lifecycle, policy, store, adapters, tools, voice, evals
 ├─ apps/desktop/        # Tauri shell + React main window
-├─ native/CorralNative/ # Swift + Metal: the liquid-glass corral, glass cards
+├─ native/CorralNative/ # Swift + Metal: the corral, hover cards, trace tree
 ├─ evals/               # Safety, cost and control scenarios
 └─ docs/                # Everything below
 ```
@@ -140,7 +140,7 @@ Out of the box, no agent can send, post, buy, delete or run a shell command with
 | M0 | Repo, CI, agent rules, app skeleton |
 | M1–M2 | Core runtime, policy engine and checkpoints, proven against a scripted fake agent first |
 | M3 | First real provider: xAI Grok |
-| M4 | The liquid-glass corral, activity cards, main window |
+| M4 | The liquid-glass corral, hover cards, trace tree, main window |
 | M5 | Anthropic, Meta Model API, OpenAI Agents API, CLI agents, custom agents |
 | M6–M7 | Voice, Touch ID, notifications, Shortcuts |
 | M8 | **v1.0:** signed release, Homebrew, onboarding |

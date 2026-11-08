@@ -1,8 +1,8 @@
 # CorralNative
 
-The macOS-only Swift layer of Corral: the liquid-glass corral surface, glass activity cards and checkpoints, actionable notifications, and Touch ID. Design spec: [`docs/07-brand-and-corral-surface.md`](../../docs/07-brand-and-corral-surface.md).
+The macOS-only Swift layer of Corral: the liquid-glass corral surface with agent logos, hover cards (progress and checkpoint buttons), the trace tree, actionable notifications, and Touch ID. Design spec: [`docs/07-brand-and-corral-surface.md`](../../docs/07-brand-and-corral-surface.md).
 
-**Requires macOS 26 / Xcode 26.** **Status: Spike S5 prototype.** The package builds on macOS 26 and its tests (TP-SHAPE-*, TP-RANK-*) pass in CI. The geometry and shader maths were also checked with a numpy render and a WebGL port (`preview/`). Still to do in S5: tune the glass on real hardware and choose how the Metal pass and system Liquid Glass combine (docs/07 §4).
+**Requires macOS 26 / Xcode 26.** **Status: Spike S5 prototype.** The package builds on macOS 26 and its tests (TP-SHAPE-*, TP-RANK-*) pass in CI. The geometry and shader maths were also checked with a numpy render and a WebGL port. `preview/corral-shape-preview.html` is the interactive design reference for logos, hover cards and the trace tree (Spike S6). Still to do in S5: tune the glass on real hardware and choose how the Metal pass and system Liquid Glass combine (docs/07 §4).
 
 | File | What it is |
 |---|---|
