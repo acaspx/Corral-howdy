@@ -7,7 +7,7 @@ How work flows through agents and reviewers: [06-loop-engineering.md](06-loop-en
 - Work is cut into **milestones** (M0–M9). Each has **exit criteria that are tests or evals**, not opinions.
 - Each milestone breaks into **issues** small enough for one agent to finish in one loop (target: ≤ ~400 changed lines excluding tests and fixtures).
 - **Spikes** are time-boxed investigations that end in a written finding plus an ADR update. No production code is merged from a spike.
-- Durations are rough calendar estimates for an agent-built, human-reviewed loop with two reviewers. Review bandwidth, not typing speed, will be the bottleneck. Re-plan after M2 using real loop metrics.
+- Durations are rough calendar estimates for an agent-built loop with one human reviewer (the owner). Review bandwidth, not typing speed, will be the bottleneck. Re-plan after M2 using real loop metrics.
 
 ## Critical path
 
@@ -31,7 +31,7 @@ The core (M1–M2) is built and proven **with a fake agent before any real provi
 | S1 | Can a Tauri 2 app embed a Swift package (swift-rs) for a non-activating NSPanel, actionable notifications and Touch ID, and ship a WidgetKit extension in the same signed bundle? | Working toy app + ADR-001 confirmed or amended |
 | S2 | UI end-to-end testing on macOS: what's the most reliable way to drive the real app in CI (WebDriver support, accessibility-API scripting, or Playwright against the frontend with a mocked IPC bridge)? | Test harness decision recorded in the test plan |
 | S3 | OpenAI Agents API: does it expose per-tool approval hooks or only up-front tool restriction? Same question for the Meta Model API's agent features and xAI server-side tools | Capability matrix in system design §4 |
-| S5 | Liquid-glass corral on macOS 26: compile `CorralGlass.metal` + `CorralGlassView`; pick how system glass and the Metal pass combine (plan A: shader over glass layer, B: merged glass shapes in a `GlassEffectContainer` + Metal highlights, C: wallpaper fallback); tune tokens against the reference image; measure GPU frame time; check that polar morphs read well during usage reorders | Signed-off render at n = 0–8, token file, ADR-009/010 confirmed |
+| S5 | Liquid-glass corral on macOS 26: ~~compile `CorralGlass.metal` + `CorralGlassView`~~ (done 2026-11-07: builds and TP-SHAPE/TP-RANK pass in CI on `macos-26`); pick how system glass and the Metal pass combine (plan A: shader over glass layer, B: merged glass shapes in a `GlassEffectContainer` + Metal highlights, C: wallpaper fallback); tune tokens against the reference image; measure GPU frame time; check that polar morphs read well during usage reorders | Signed-off render at n = 0–8, token file, ADR-009/010 confirmed |
 | S4 | ACP client in Rust: drive Claude Code, Codex CLI and Gemini CLI through the Rust ACP crate; map their permission requests to checkpoints | Toy client + list of permission request shapes |
 
 ---
@@ -47,6 +47,8 @@ Goal: a repo where agents can work safely from day one.
 - `corral-evals` crate stub that runs an empty suite and reports JSON
 
 **Exit:** a no-op PR passes all CI jobs in < 10 min; a PR touching a protected path requests the human code owner automatically.
+
+**Status (2026-11-07):** foundation pushed (`ea6a9b6`); first CI run green on every job, including the native Swift build. Remaining: branch protection, then prove the exit criteria with a no-op PR. Tracked in the M0 issues.
 
 ## M1: Core runtime with a fake agent (~2 weeks)
 Goal: deploy → run → complete → send back, headless, fully event-sourced.
@@ -136,7 +138,7 @@ Goal: the safety core, proven before any real agent can touch it.
 2. Updater with signature verification; staged rollout channel (beta → stable)
 3. Homebrew cask; GitHub Releases with SBOM + artifact attestations
 4. Onboarding: first agent in < 3 min (provider pick → key → first task)
-5. Docs site (from `docs/`), security review, threat-model walkthrough with both reviewers
+5. Docs site (from `docs/`), security review, threat-model walkthrough
 6. Release-candidate soak: 72 h dogfood with ≥ 5 agents across ≥ 3 providers
 
 **Exit:** release checklist (test plan §9) fully checked; zero open P0/P1 bugs.

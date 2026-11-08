@@ -7,7 +7,7 @@
 // the rim, highlights and caustics (docs/07 §4). Everything outside the shape returns
 // transparent, plus a soft shadow.
 //
-// Status: SPIKE S5 prototype. Not yet compiled on a Mac. The maths is mirrored in
+// Status: SPIKE S5 prototype. Compiles in CI (macos-26); visual tuning pending. The maths is mirrored in
 // preview/corral-shape-preview.html and was checked with a numpy render.
 //
 // Blob payload: float array, 4 floats per blob: cx, cy, radius, attach (0…1).

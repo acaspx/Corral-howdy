@@ -1,6 +1,6 @@
 # Corral: Product Brief
 
-Status: Draft v0.1 · Owner: Anton Castro · Reviewer: CJ Pais · Last updated: 2026-11-07
+Status: Draft v0.1 · Owner: Anton Castro · Last updated: 2026-11-07
 
 ## One line
 

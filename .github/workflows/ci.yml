@@ -64,11 +64,9 @@ jobs:
 
   native:
     name: native (CorralNative, Swift)
-    # Needs Xcode 26 / the macOS 26 SDK. Confirm this runner label is available in M0.
+    # Needs Xcode 26 / the macOS 26 SDK (deployment target macOS 26).
     runs-on: macos-26
     needs: lint
-    # The Swift/Metal prototype hasn't been compiled yet (Spike S5). Remove this line once S5 is green.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - run: xcodebuild test -scheme CorralNative -destination 'platform=macOS'

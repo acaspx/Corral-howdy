@@ -1,6 +1,6 @@
 // CorralPanel.swift
 // The borderless, non-activating window that holds the corral at the bottom centre
-// of the screen, just above the Dock. Status: SPIKE S5 prototype. Not yet compiled.
+// of the screen, just above the Dock. Status: SPIKE S5 prototype. Builds in CI.
 
 import AppKit
 import SwiftUI

@@ -45,9 +45,11 @@ Try it now, no build needed: open [`native/CorralNative/preview/corral-shape-pre
 
 **Corral is in the planning stage. There is nothing to install yet.** In the spirit of being upfront, here is where things stand:
 
+- ✅ Foundation in place: Rust workspace, Tauri + React shell, eval runner, CI green on every job
 - ✅ Product brief, system design, security model, build plan, test plan and evals are written (see [Docs](#docs))
 - ✅ The corral's shape and ordering maths are prototyped and checked with renders
-- ⚠️ The Swift and Metal code in `native/` has **not been compiled yet**. Compiling it is the first task of Spike S5
+- ✅ The Swift and Metal corral code in `native/` builds on macOS 26, and its shape and ordering tests pass in CI
+- ⏳ Tuning the glass on real hardware is next (Spike S5)
 - ⏳ The Rust core, adapters and app shell start at milestone M0
 
 ### Known limitations (by design or by circumstance)

@@ -3,7 +3,7 @@
 // State comes from the Rust core (via the CorralNative C ABI); this view only displays it
 // and sends intents back. No policy or lifecycle decisions here (AGENTS.md rule 3).
 //
-// Status: SPIKE S5 prototype. Not yet compiled. Requires macOS 26 (system Liquid Glass).
+// Status: SPIKE S5 prototype. Builds in CI; visual tuning pending. Requires macOS 26 (system Liquid Glass).
 
 import SwiftUI
 

@@ -195,7 +195,7 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - [ ] EV-SAFE gate 100%; full eval suite at or above every target in [05-evals.md](05-evals.md)
 - [ ] Fuzz targets 1 h each, no findings
 - [ ] Performance budgets met on the oldest supported Mac (Apple silicon M1, 8 GB)
-- [ ] Threat model reviewed by both reviewers; every T-row has a passing check
+- [ ] Threat model reviewed by the owner; every T-row has a passing check
 - [ ] Signed, notarized, updater signature verified on a clean machine
 - [ ] SBOM + attestations attached to the release
 - [ ] 72 h dogfood soak, ≥ 5 agents, ≥ 3 providers, no P0/P1

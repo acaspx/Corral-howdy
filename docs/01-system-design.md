@@ -51,7 +51,7 @@ Read first: [00-product-brief.md](00-product-brief.md). Security details: [02-se
 
 | Option | Pros | Cons | Verdict |
 |---|---|---|---|
-| Tauri 2 + React/TS | Matches Anton's React/TS; small binary; Rust core for process control, Keychain, SQLite; capability-based IPC permissions; proven for menu-bar apps (tray + positioner plugin); CJ maintains a production Tauri app (Handy) | WebKit webview quirks; native macOS polish needs bridging | **Chosen** |
+| Tauri 2 + React/TS | Matches Anton's React/TS; small binary; Rust core for process control, Keychain, SQLite; capability-based IPC permissions; proven for menu-bar apps (tray + positioner plugin) and by production apps like Handy | WebKit webview quirks; native macOS polish needs bridging | **Chosen** |
 | Native SwiftUI only | Best macOS feel | Second language for most of the code; React/TS skills unused; no path to other OSes | Used for the glanceable surfaces (corral, cards) |
 | Electron | Fastest prototype | Heavier, larger attack surface, Node in the main process | Rejected |
 

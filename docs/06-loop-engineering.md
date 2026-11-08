@@ -2,7 +2,7 @@
 
 Status: Draft v0.1 · Last updated: 2026-11-07
 
-Corral is built mostly by coding agents (Claude Code, Codex, others) working issue by issue. Humans review: Anton owns product and design, and CJ Pais pair-reviews the repo. The loop has to make good work the easy path and unsafe work impossible to merge.
+Corral is built mostly by coding agents (Claude Code, Codex, others) working issue by issue. Anton Castro owns the project and is the human reviewer of record; other collaborators may be invited to review, but approval rests with the owner. The loop has to make good work the easy path and unsafe work impossible to merge.
 
 ## 1. Roles
 
@@ -11,7 +11,7 @@ Corral is built mostly by coding agents (Claude Code, Codex, others) working iss
 | **Planner** | Anton (+ a planning agent) | Writes and splits issues with acceptance test IDs; keeps docs current | Merges unreviewed code |
 | **Builder agent** | Claude Code / Codex, one per issue | Writes failing tests → implements → runs `just check` → opens PR | Touches unrelated files; edits tests silently; merges |
 | **Reviewer agent** | A *different* agent session from the builder, given only the issue, docs and diff | First-pass review against AGENTS.md + docs; posts findings | Approves its own work; approves protected paths |
-| **Human reviewers** | Anton, CJ | Final review; required on protected paths (CODEOWNERS) | Skip review on protected paths |
+| **Human reviewer** | Anton (owner); invited collaborators optional | Final review; required on protected paths (CODEOWNERS) | Skip review on protected paths |
 | **CI** | GitHub Actions | Runs every gate; posts eval summary | Gets bypassed |
 
 ## 2. The loop
@@ -83,6 +83,6 @@ Builders read, in order: `AGENTS.md` → the issue → linked doc sections → t
 
 ## 7. Starting the loop (first week)
 1. Create the GitHub repo; push this docs set + AGENTS.md + templates + CI skeleton.
-2. Turn on branch protection and CODEOWNERS (add CJ once he's agreed to be a code owner).
+2. Turn on branch protection: require the CI checks and one approval. Because the owner can't approve their own PRs, owner-authored PRs merge with admin bypass; agent-authored PRs get a normal approval.
 3. Planner files M0 issues and the four spike issues.
 4. First builder run: issue "CI skeleton passes on a no-op PR". This proves the loop before any product code.
