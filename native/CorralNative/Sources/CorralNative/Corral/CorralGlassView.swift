@@ -14,6 +14,10 @@ public struct CorralAgentToken: Identifiable, Equatable, Sendable {
     public var monogram: String       // e.g. "Gk", or an SF Symbol name via `symbol`
     public var symbol: String?
     public var status: Status
+
+    public init(id: String, name: String, monogram: String, symbol: String? = nil, status: Status = .available) {
+        self.id = id; self.name = name; self.monogram = monogram; self.symbol = symbol; self.status = status
+    }
 }
 
 public enum CorralIntent: Sendable {

@@ -90,6 +90,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: xcodebuild test -scheme CorralNative -destination 'platform=macOS'
         working-directory: native/CorralNative
+      # The desktop playground (docs/07, Spike S5/S6) must keep compiling against the library.
+      - run: xcodebuild build -scheme CorralPlayground -destination 'platform=macOS'
+        working-directory: native/CorralNative
 
   scope-guard:
     name: scope guard (test changes need a reason)

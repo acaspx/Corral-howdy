@@ -25,7 +25,9 @@ public final class CorralPanel: NSPanel {
         becomesKeyOnlyIfNeeded = true     // clicking a token doesn't steal focus from the user's app
         collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
         apply(level: corralLevel)
-        contentView = NSHostingView(rootView: rootView)
+        let host = NSHostingView(rootView: rootView)
+        host.sizingOptions = []           // `place(canvas:)` owns the frame; SwiftUI must not resize the panel
+        contentView = host
     }
 
     /// Borderless windows can't become key by default. The corral needs keyboard focus for the
