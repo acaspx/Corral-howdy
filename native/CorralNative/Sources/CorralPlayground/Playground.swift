@@ -163,6 +163,7 @@ final class PlaygroundDelegate: NSObject, NSApplicationDelegate {
     private let model: PlaygroundModel
     private var panel: CorralPanel?
     private var controls: NSWindow?
+    private var observers: [NSObjectProtocol] = []   // kept so the observers live as long as the app
 
     init(agentCount: Int) {
         model = PlaygroundModel(agentCount: agentCount)
@@ -192,10 +193,15 @@ final class PlaygroundDelegate: NSObject, NSApplicationDelegate {
         self.controls = controls
 
         // Closing the control window quits the playground (the corral panel has no close button).
-        _ = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: controls,
-                                                   queue: .main) { _ in
+        observers.append(NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification,
+                                                                object: controls, queue: .main) { _ in
             MainActor.assumeIsolated { NSApp.terminate(nil) }
-        }
+        })
+        // Displays plugged in, unplugged or rearranged: put the corral back at the bottom centre.
+        observers.append(NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.resizePanel(for: self?.model.shown.map(\.id) ?? []) }
+        })
         NSApp.activate()
     }
 
