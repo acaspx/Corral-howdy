@@ -4,7 +4,8 @@
 //! corral-evals --suite gate [--scenarios DIR]... [--report out.json] [--baseline base.json]
 //! ```
 //! Without `--scenarios`, loads `evals/scenarios/` and `evals/safety/` (whichever exist).
-//! Exit code 0 when the gate passes, 1 when it fails, 2 on usage or input errors.
+//! Exit code 0 when the gate passes, 1 when it fails, 2 on usage or input errors
+//! (including a `--baseline` file that is missing or unreadable).
 
 use corral_evals::{Report, Suite, build_report, load_all, markdown_summary, run};
 use std::path::PathBuf;
@@ -74,24 +75,19 @@ fn main() -> ExitCode {
         }
     };
 
+    // A baseline that was asked for but can't be read is an error, never "no baseline":
+    // checks fail closed (AGENTS.md). Callers with no baseline omit the flag instead.
     let baseline: Option<Report> = match &args.baseline {
-        Some(path) if path.exists() => match std::fs::read_to_string(path)
+        Some(path) => match std::fs::read_to_string(path)
             .map_err(|e| e.to_string())
             .and_then(|t| serde_json::from_str(&t).map_err(|e| e.to_string()))
         {
             Ok(b) => Some(b),
             Err(e) => {
-                eprintln!("{}: unreadable baseline: {e}", path.display());
+                eprintln!("{}: baseline can't be read: {e}", path.display());
                 return ExitCode::from(2);
             }
         },
-        Some(path) => {
-            eprintln!(
-                "note: baseline {} not found; comparing against nothing",
-                path.display()
-            );
-            None
-        }
         None => None,
     };
 
