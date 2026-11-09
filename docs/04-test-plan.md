@@ -1,6 +1,6 @@
 # Corral: Test Plan (Test-Driven Development)
 
-Status: Draft v0.1 · Last updated: 2026-11-08
+Status: Draft v0.1 · Last updated: 2026-11-09
 
 ## 1. The TDD contract
 1. Every issue lists **acceptance tests by ID** before work starts (see the issue template).
@@ -20,7 +20,7 @@ Status: Draft v0.1 · Last updated: 2026-11-08
 | Contract | Shared `adapter_contract!` macro | Every adapter must pass the same suite | Every PR (cassettes) |
 | Integration (Rust) | nextest + temp SQLite + `FakeAdapter` scenarios | Supervisor + store + policy + tools together | Every PR |
 | Component visual | Storybook + snapshot tests | Every component state from fixture event streams | Every PR |
-| E2E | Per Spike S2 (default plan: Playwright against the frontend with a mocked IPC bridge, plus a thin native smoke layer) | User journeys J1–J12 | Every PR (mocked) / nightly (native) |
+| E2E | Per Spike S2 (default plan: Playwright against the frontend with a mocked IPC bridge, plus a thin native smoke layer) | User journeys J0–J12 | Every PR (mocked) / nightly (native) |
 | Live provider smoke | Real keys in a protected GitHub environment, $1 cap | One short task per provider | Nightly + before release |
 | Fuzz | `cargo-fuzz` | Manifest parser, policy matcher, path canonicalizer, event decoder | Nightly 30 min/target; 1 h before release |
 | Evals | `corral-evals` | Behavior and safety at the system level (see [05-evals.md](05-evals.md)) | Gate suite every PR; full suite nightly |
@@ -192,6 +192,13 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-SETUP-03** All four entry points (menu bar, corral menu, + chip or empty puddle, Settings › Agents) send the same `openSetup` intent
 - **TP-SETUP-04** Launch-only apps (consumer Muse, dots) are labelled "not supervised" and never show approval controls
 
+### Walking skeleton (before M2)
+- **TP-SKEL-01** The xAI key is read from the Keychain at request time; with no key, deploy is refused with "Add your xAI key" and nothing is sent
+- **TP-SKEL-02** Skeleton requests carry no tool definitions and provider-side tools are off (checked on cassette request bodies); if the model still emits a tool call, the run ends `Failed{tools_not_enabled}` and nothing executes
+- **TP-SKEL-03** Deploying from a drop emits `run.queued` then `run.started`, and the drop shows the working ring within 1 s of `run.started` (cassette replay)
+- **TP-SKEL-04** While a run is going, the hover card's elapsed time and spend come from core projections and update at least once a second
+- **TP-SKEL-05** On completion the result card shows the answer as agent text (labelled, length-capped, control and bidi characters stripped); Send back returns the drop to idle and closes the session; a failed run shows Retry
+
 ### Bridge (Spike S1, then M4)
 - **TP-BRIDGE-01** A roster snapshot sent from Rust over the C ABI renders the same drop IDs in the same order in Swift
 - **TP-BRIDGE-02** A Swift intent (open agent, deploy, summon prompt bar) arrives in Rust as a typed intent, never a raw string
@@ -243,6 +250,7 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **FZ-06** Logo import (PNG/PDF/SVG decoder and SVG sanitizer)
 
 ## 6. End-to-end journeys
+- **J0** Walking skeleton: add an xAI key → click Grok's drop → type a question → Deploy → the ring turns and the hover card shows elapsed time and spend → the result card shows the answer → Send back (cassette in CI, live once by the owner with a $0.25 cap)
 - **J1** First launch → add xAI key → create agent (with a logo) → deploy → watch its trace column and hover card → completed → send back
 - **J2** Deploy three agents at once ("Deploy selected"); all three trace columns update independently
 - **J3** Checkpoint: approve, deny with note, edit args, allow-for-run
