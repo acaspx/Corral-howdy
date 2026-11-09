@@ -1,6 +1,6 @@
 # Corral: Test Plan (Test-Driven Development)
 
-Status: Draft v0.1 · Last updated: 2026-11-07
+Status: Draft v0.1 · Last updated: 2026-11-08
 
 ## 1. The TDD contract
 1. Every issue lists **acceptance tests by ID** before work starts (see the issue template).
@@ -20,7 +20,7 @@ Status: Draft v0.1 · Last updated: 2026-11-07
 | Contract | Shared `adapter_contract!` macro | Every adapter must pass the same suite | Every PR (cassettes) |
 | Integration (Rust) | nextest + temp SQLite + `FakeAdapter` scenarios | Supervisor + store + policy + tools together | Every PR |
 | Component visual | Storybook + snapshot tests | Every component state from fixture event streams | Every PR |
-| E2E | Per Spike S2 (default plan: Playwright against the frontend with a mocked IPC bridge, plus a thin native smoke layer) | User journeys J1–J11 | Every PR (mocked) / nightly (native) |
+| E2E | Per Spike S2 (default plan: Playwright against the frontend with a mocked IPC bridge, plus a thin native smoke layer) | User journeys J1–J12 | Every PR (mocked) / nightly (native) |
 | Live provider smoke | Real keys in a protected GitHub environment, $1 cap | One short task per provider | Nightly + before release |
 | Fuzz | `cargo-fuzz` | Manifest parser, policy matcher, path canonicalizer, event decoder | Nightly 30 min/target; 1 h before release |
 | Evals | `corral-evals` | Behavior and safety at the system level (see [05-evals.md](05-evals.md)) | Gate suite every PR; full suite nightly |
@@ -125,6 +125,7 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-IPC-02** Approve requires the checkpoint's nonce; replaying it fails
 - **TP-IPC-03** CSP blocks remote scripts; agent-produced markdown is sanitized (no raw HTML, no `javascript:` links)
 - **TP-IPC-04** No webview ever navigates to a remote URL
+- **TP-IPC-05** The main window's capability lists only the permissions the current UI uses; a call outside it (e.g. creating a tray icon) is refused
 
 ### Corral surface (Swift)
 - **TP-SHAPE-01** Shape grammar: 0 empty, 1 circle, 2 dumbbell, 3–8 polygon, capped at an octagon
@@ -172,17 +173,37 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-HOVER-07** Keyboard and VoiceOver: Space on a focused drop opens the card pinned, focus moves to the first button, Esc closes
 - **TP-HOVER-08** The approval box renders only core checkpoint fields; agent text can't appear inside it; bidi and control characters are stripped; internationalized domains show as punycode
 - **TP-HOVER-09** High-risk Approve is disabled until the card is pinned and any truncated detail is expanded
+- **TP-HOVER-10** The done card shows the run's result: the agent's summary in its own labelled, length-capped box (agent text, T20), and outputs, pages read and approvals from core projections only. A follow-up stays in the same session; Send back closes it and offers Undo
 - **TP-TRACE-01** (Rust) `plan_view` builds subtasks from `plan.updated` events, falling back to top-level spans when no plan is published
 - **TP-TRACE-02** At most 3 columns; extra runs collapse into "+N more running"; needs-you columns sort first
 - **TP-TRACE-03** Each column's wire ends at its agent's drop (or the hidden bead) after a shape morph or a usage reorder
 - **TP-TRACE-04** Advancing a subtask moves the stack; finishing and Send back fold the column into the drop
 - **TP-TRACE-05** Clicking a task card opens that run in the trace viewer; clicking the stack fans it out
 - **TP-TRACE-06** Nothing running → no trace tree, and the corral idles at zero frames
+- **TP-PLAY-01** The desktop playground builds in CI against the current `CorralNative` library
+- **TP-PLAY-02** The playground clamps `--agents` to 0–12 and puts the corral back at bottom center when displays change
+
+### Main window: setup and results (M4)
+- **TP-COMPARE-01** One prompt sent to several agents shows an "N results ready · Compare" chip once at least two have finished
+- **TP-COMPARE-02** Continue with one agent keeps its session and sends the others back; their results stay in History
+- **TP-COMPARE-03** An agent still waiting on a checkpoint shows its request, never an Approve button; Review opens its pinned hover card
+- **TP-SETUP-01** The API key field sends the key straight to the core, which stores it in the Keychain and returns only a key reference; the UI never receives the key back (T6)
+- **TP-SETUP-02** Test connection is a core command; the UI shows only the core's result
+- **TP-SETUP-03** All four entry points (menu bar, corral menu, + chip or empty puddle, Settings › Agents) send the same `openSetup` intent
+- **TP-SETUP-04** Launch-only apps (consumer Muse, dots) are labelled "not supervised" and never show approval controls
+
+### Bridge (Spike S1, then M4)
+- **TP-BRIDGE-01** A roster snapshot sent from Rust over the C ABI renders the same drop IDs in the same order in Swift
+- **TP-BRIDGE-02** A Swift intent (open agent, deploy, summon prompt bar) arrives in Rust as a typed intent, never a raw string
+- **TP-BRIDGE-03** Bad input from Rust (duplicate IDs, more than 8 shown, oversized names, control characters) is deduped, bounded and sanitized; Swift never traps
 
 ### Desktop shell (Tauri)
 - **TP-SHELL-01** Closing the last window keeps Corral running (agents keep working)
 - **TP-SHELL-02** Quit from the menu really quits
 - **TP-SHELL-03** CSP sets `object-src`, `base-uri`, `form-action` and `frame-ancestors` to `'none'`
+- **TP-SHELL-04** Command-Q and Quit Corral exit the app
+- **TP-SHELL-05** Logging out or shutting down is never blocked by Corral
+- **TP-SHELL-06** Clicking the Dock icon (Reopen) shows the hidden main window
 
 ### Build loop integrity (CI scripts and eval runner)
 - **TP-CI-01..02** Editing an inline `#[cfg(test)]` assertion fails the scope guard until explained under "Test changes"
@@ -196,6 +217,13 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-EVAL-04** Scenarios load recursively from `evals/scenarios/` and `evals/safety/`; IDs are unique across both
 - **TP-EVAL-05** A missing scenario folder or an empty suite is an error, never a vacuous pass
 - **TP-EVAL-06** A scenario that disappears from the baseline is a regression, whatever its status
+- **TP-EVAL-07** `--baseline` pointing at a missing file exits 2 with a clear message and writes no report
+- **TP-EVAL-08** No `--baseline` flag runs without a baseline (unchanged)
+- **TP-EVAL-09** Once the `FakeAdapter` exists, a safety scenario that reports `pending` fails the gate
+- **TP-EVAL-10** The gate summary says how many scenarios actually ran ("4 of 4 executed")
+- **TP-CI-14** A PR that changes files outside its linked issue's Allowed paths fails, listing them
+- **TP-CI-15** Tests and fixtures under an allowed path, and additions to this test plan, pass the fence
+- **TP-CI-16** No linked issue, or no Allowed paths section, fails closed; the fence is read from the issue, never the PR body
 
 ### Voice
 - **TP-VOICE-01** Push-to-talk start/stop; transcript lands in the prompt bar unsent
@@ -226,6 +254,7 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **J9** Corral morph: start with 3 agents (triangle) → deploy one (the shape stays a triangle, its ring turns) → add an agent (square) → remove one (triangle) → send the working one back (still a triangle; its column folds away)
 - **J10** Usage order + shown set: deploy the rank-4 agent repeatedly until it outranks #1 → with the corral idle, it glides to top-left → add a 9th agent → chooser appears → uncheck one → the corral stays an octagon with the chosen 8
 - **J11** Hover approval: an agent hits a `comms.send` checkpoint → its drop pulses and its wire turns maroon → hover → the card shows the exact destination and message → Deny with a note → the agent continues → next checkpoint → Approve → the column advances
+- **J12** Same task, three agents: deploy one prompt to three agents → "3 results ready · Compare" → continue with one → the other two fold back into the corral and their results are in History
 
 ## 7. Performance budgets
 | Metric | Budget |
