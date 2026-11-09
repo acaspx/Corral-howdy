@@ -50,7 +50,7 @@ No agent can send, post, buy, delete or run a command without asking. Each one g
 - ✅ Docs: product brief, system design, security model, build plan, test plan, evals
 - ✅ Rust workspace, Tauri + React shell, eval runner, hardened CI
 - ✅ Swift + Metal corral builds on macOS 26; shape and ordering tests pass in CI
-- ⏳ Next: the Swift ↔ Rust bridge (Spike S1), glass tuning on real hardware (S5), and the core runtime with a fake agent (M1)
+- ⏳ Next: a **walking skeleton**, one real agent (Grok) working live on the desktop through every layer, then tools, approvals and the full corral UI
 
 What's next, in order, and the tests that define "done": [build plan › Next up](docs/03-build-plan.md#next-up-november-2026).
 
