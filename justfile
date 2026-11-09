@@ -42,7 +42,7 @@ dev:
 
 # Swift tests for the corral surface (macOS 26 + Xcode 26).
 native-test:
-    cd native/CorralNative && xcodebuild test -scheme CorralNative -destination 'platform=macOS'
+    cd native/CorralNative && xcodebuild test -scheme CorralNative-Package -destination 'platform=macOS'
 
 # UI components with fixture event streams (lands in M4).
 storybook:

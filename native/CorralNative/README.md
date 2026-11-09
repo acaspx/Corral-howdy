@@ -18,7 +18,7 @@ The macOS-only Swift layer of Corral: the liquid-glass corral surface with agent
 
 Build and test with Xcode or `xcodebuild` (SwiftPM's command-line build doesn't compile Metal):
 ```
-xcodebuild test -scheme CorralNative -destination 'platform=macOS'
+xcodebuild test -scheme CorralNative-Package -destination 'platform=macOS'
 ```
 
 ## Try it on your desktop
