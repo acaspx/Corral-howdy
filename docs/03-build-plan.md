@@ -1,6 +1,6 @@
 # Corral: Build Plan
 
-Status: Draft v0.1 · Last updated: 2026-11-07
+Status: Draft v0.1 · Last updated: 2026-11-08
 How work flows through agents and reviewers: [06-loop-engineering.md](06-loop-engineering.md). What "done" means for tests: [04-test-plan.md](04-test-plan.md).
 
 ## How to read this plan
@@ -8,6 +8,39 @@ How work flows through agents and reviewers: [06-loop-engineering.md](06-loop-en
 - Each milestone breaks into **issues** small enough for one agent to finish in one loop (target: ≤ ~400 changed lines excluding tests and fixtures).
 - **Spikes** are time-boxed investigations that end in a written finding plus an ADR update. No production code is merged from a spike.
 - Durations are rough calendar estimates for an agent-built loop with one human reviewer (the owner). Review bandwidth, not typing speed, will be the bottleneck. Re-plan after M2 using real loop metrics.
+
+## Next up (November 2026)
+
+Re-planned 2026-11-08. Work top to bottom; a step is done when its tests pass, not when the code looks right. Test IDs are in [04-test-plan.md](04-test-plan.md).
+
+### 1. Close out M0 (this week)
+| Step | Tracked in | Done when |
+|---|---|---|
+| Finish the `main` ruleset: require a pull request, require the six CI jobs (lint, test, eval gate, native, scope guard, security), keep force pushes and deletion blocked, empty bypass list ([06 §7](06-loop-engineering.md)) | Owner, in Settings | A direct push to `main` is refused, and a PR with a red check can't merge |
+| Merge the desktop playground | `spike/corral-playground` PR | TP-PLAY-01..02 |
+| Eval runner fails closed on a missing `--baseline` | Issue | TP-EVAL-07..08 |
+| CI keeps runs on `main` instead of cancelling them | Issue | Two quick merges both finish |
+| Quit, logout and Dock reopen behave | Issue | TP-SHELL-04..06 |
+| Narrow the main window's `core:default` permissions | Issue | TP-IPC-05 |
+| Prove the M0 exit | No-op PR | All jobs green in < 10 min; a PR touching a protected path requests the code owner |
+
+### 2. Spikes, alongside M1
+| Spike | Issue | Done when |
+|---|---|---|
+| **S1** Tauri ↔ Swift bridge and process model (first: M4 depends on it) | #3 | TP-BRIDGE-01..03 in a toy branch; ADR-001 confirmed or amended |
+| **S5** Glass on real hardware, with the playground | #7 | Screenshots at 0–8 agents over light, dark and busy wallpapers; TP-GLASS-05 checked in Activity Monitor; plan A or B chosen |
+| **S6** Hover card, trace tree, logos in SwiftUI | #12 | Its listed TP-HOVER, TP-TRACE and TP-LOGO tests in a prototype |
+| **S2** UI test harness | #4 | Before M4 |
+| **S4** ACP client | #6 | Before M5 |
+
+### 3. M1: core runtime with a fake agent
+Event types (#8) → run lifecycle (#9) → event store (#10) → `FakeAdapter` → pending safety scenarios fail the gate (TP-EVAL-09..10). Exit criteria are under M1 below.
+
+### 4. Design to spec, before M4
+Turn the setup and core-loop designs into docs/07 and docs/01 text: setup flow, prompt bar, the done card with its result, and Compare. Tests: TP-SETUP-01..04, TP-HOVER-10, TP-COMPARE-01..03, journey J12.
+
+### Not now
+More providers (M5), voice (M6), sync (M9). Nothing here starts until M1 is green.
 
 ## Critical path
 
@@ -49,7 +82,7 @@ Goal: a repo where agents can work safely from day one.
 
 **Exit:** a no-op PR passes all CI jobs in < 10 min; a PR touching a protected path requests the human code owner automatically.
 
-**Status (2026-11-07):** foundation pushed (`ea6a9b6`); first CI run green on every job, including the native Swift build. Remaining: branch protection, then prove the exit criteria with a no-op PR. Tracked in the M0 issues.
+**Status (2026-11-08):** CI hardened (pinned actions, fail-closed checks, base-commit baselines, test-change guard) and green. Remaining: finish the `main` ruleset, the four small M0 fixes, then prove the exit with a no-op PR. See [Next up](#next-up-november-2026).
 
 ## M1: Core runtime with a fake agent (~2 weeks)
 Goal: deploy → run → complete → send back, headless, fully event-sourced.
