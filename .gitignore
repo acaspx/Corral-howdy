@@ -12,6 +12,7 @@ native/CorralNative/.build/
 native/CorralNative/.swiftpm/
 *.xcuserstate
 DerivedData/
+*.profraw
 # Eval reports (baselines are committed)
 evals/reports/*
 !evals/reports/baselines/

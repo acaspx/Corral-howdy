@@ -12,12 +12,15 @@ let package = Package(
     platforms: [.macOS(.v26)],   // Corral requires macOS 26 so system Liquid Glass is always available (ADR-011)
     products: [
         .library(name: "CorralNative", type: .static, targets: ["CorralNative"]),
+        // Try the corral on your own desktop with fake agents (no Rust core). See README.md.
+        .executable(name: "CorralPlayground", targets: ["CorralPlayground"]),
     ],
     targets: [
         .target(
             name: "CorralNative",
             resources: [.process("Corral/CorralGlass.metal")]
         ),
+        .executableTarget(name: "CorralPlayground", dependencies: ["CorralNative"]),
         .testTarget(name: "CorralNativeTests", dependencies: ["CorralNative"]),
     ]
 )
