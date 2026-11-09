@@ -1,6 +1,6 @@
 # Corral: Build Plan
 
-Status: Draft v0.1 · Last updated: 2026-11-08
+Status: Draft v0.1 · Last updated: 2026-11-09
 How work flows through agents and reviewers: [06-loop-engineering.md](06-loop-engineering.md). What "done" means for tests: [04-test-plan.md](04-test-plan.md).
 
 ## How to read this plan
@@ -11,36 +11,53 @@ How work flows through agents and reviewers: [06-loop-engineering.md](06-loop-en
 
 ## Next up (November 2026)
 
-Re-planned 2026-11-08. Work top to bottom; a step is done when its tests pass, not when the code looks right. Test IDs are in [04-test-plan.md](04-test-plan.md).
+Re-planned 2026-11-09 around a **walking skeleton**: one real agent working live on the desktop, through every layer, before any layer is finished. It surfaces the hard problems (the bridge, streaming, live updates) while they're still cheap to fix. Work top to bottom; a step is done when its tests pass, not when the code looks right. Test IDs are in [04-test-plan.md](04-test-plan.md).
 
-### 1. Close out M0 (this week)
+### 1. Finish M0 (this week)
 | Step | Tracked in | Done when |
 |---|---|---|
-| Finish the `main` ruleset: require a pull request, require the six CI jobs (lint, test, eval gate, native, scope guard, security), keep force pushes and deletion blocked, empty bypass list ([06 §7](06-loop-engineering.md)) | Owner, in Settings | A direct push to `main` is refused, and a PR with a red check can't merge |
-| Merge the desktop playground | `spike/corral-playground` PR | TP-PLAY-01..02 |
-| Eval runner fails closed on a missing `--baseline` | Issue | TP-EVAL-07..08 |
+| ✅ `main` ruleset: pull request, six required CI jobs, squash only, no force push or deletion, empty bypass list | Settings | Done 2026-11-08 |
+| ✅ Desktop playground | #17 | Merged |
+| Eval runner fails closed on a missing `--baseline` | Issue + PR | TP-EVAL-07..08 |
 | CI keeps runs on `main` instead of cancelling them | Issue | Two quick merges both finish |
 | Quit, logout and Dock reopen behave | Issue | TP-SHELL-04..06 |
 | Narrow the main window's `core:default` permissions | Issue | TP-IPC-05 |
-| Prove the M0 exit | No-op PR | All jobs green in < 10 min; a PR touching a protected path requests the code owner |
+| Prove the M0 exit | The PRs above | All jobs green in < 10 min; a PR touching a protected path requests the code owner |
 
-### 2. Spikes, alongside M1
-| Spike | Issue | Done when |
+### 2. Walking skeleton: Grok, live on the desktop (about 4 weeks)
+Goal: add an xAI key, click Grok's drop, ask a question, watch the ring turn and the hover card count time and spend, read the answer, send Grok back. Journey **J0**.
+
+**Safety while the policy engine doesn't exist yet:** the skeleton agent gets **no tools at all**. Requests carry no tool definitions and provider-side tools are off, so there's nothing to approve and nothing can act on your behalf. The key comes from the Keychain at request time, and every run has a hard spend cap. Tools and checkpoints arrive with M2.
+
+| Slice | Builds on | Done when |
 |---|---|---|
-| **S1** Tauri ↔ Swift bridge and process model (first: M4 depends on it) | #3 | TP-BRIDGE-01..03 in a toy branch; ADR-001 confirmed or amended |
-| **S5** Glass on real hardware, with the playground | #7 | Screenshots at 0–8 agents over light, dark and busy wallpapers; TP-GLASS-05 checked in Activity Monitor; plan A or B chosen |
-| **S6** Hover card, trace tree, logos in SwiftUI | #12 | Its listed TP-HOVER, TP-TRACE and TP-LOGO tests in a prototype |
+| **SK-1** Runs and events: event types (#8), lifecycle (#9), event store (#10), supervisor with cancel (M1 items 1–3 and 5) | M0 | TP-LIFE-\*, TP-STORE-\* |
+| **SK-2** Bridge: Spike S1 (#3), then the real roster and run snapshots streaming to Swift, intents back | S1 | TP-BRIDGE-01..03 |
+| **SK-3** Keychain and a minimal "add your xAI key" form in the main window (M3 item 1) | SK-1 | TP-SEC-01..02, TP-SETUP-01, TP-SKEL-01 |
+| **SK-4** Grok, text only: streaming `openai_responses` client, no tools sent, provider tools off, cassettes for CI (M3 items 2 and 5, minus tools) | SK-1 | TP-ADP-01, 03, 04, 05; TP-SKEL-02 |
+| **SK-5** Hard spend cap per run: the cap half of the budget meter (M2 item, protected path) | SK-4 | TP-BUD-01, TP-BUD-05 |
+| **SK-6** Corral on real events: deploy from a drop with a prompt field, the working ring, hover card (working, done, error), result card, Send back | SK-2, SK-4 | TP-SKEL-03..05 |
+
+**Exit:** J0 green in CI against a cassette, and the owner runs it once live with a $0.25 cap. Spikes S1 and S5 run during SK-1.
+
+### 3. Then grow the skeleton
+1. **Rest of M1:** `FakeAdapter`, Recall-all, crash recovery; pending safety scenarios fail the gate (TP-EVAL-09..10)
+2. **M2:** tools, the policy engine and checkpoints; approvals appear in the hover card
+3. **Rest of M3:** Grok's tools through the gate, nightly live smoke
+4. **M4:** the full corral UI: setup flow, prompt bar, trace tree, Compare
+5. **M5:** Claude Code and other CLI agents over ACP, Claude and Muse Spark APIs, OpenAI Agents
+
+### Alongside
+| Work | Issue | When |
+|---|---|---|
+| **S5** Glass on real hardware, with the playground: screenshots at 0–8 agents over light, dark and busy wallpapers; TP-GLASS-05 in Activity Monitor | #7 | During SK-1 |
+| **S6** Hover card, trace tree, logos in SwiftUI | #12 | Before SK-6 |
 | **S2** UI test harness | #4 | Before M4 |
 | **S4** ACP client | #6 | Before M5 |
-
-### 3. M1: core runtime with a fake agent
-Event types (#8) → run lifecycle (#9) → event store (#10) → `FakeAdapter` → pending safety scenarios fail the gate (TP-EVAL-09..10). Exit criteria are under M1 below.
-
-### 4. Design to spec, before M4
-Turn the setup and core-loop designs into docs/07 and docs/01 text: setup flow, prompt bar, the done card with its result, and Compare. Tests: TP-SETUP-01..04, TP-HOVER-10, TP-COMPARE-01..03, journey J12.
+| Design to spec: setup flow, prompt bar, done card, Compare into docs/07 and docs/01 (TP-SETUP-01..04, TP-HOVER-10, TP-COMPARE-01..03, J12) | Design issue | Before M4 |
 
 ### Not now
-More providers (M5), voice (M6), sync (M9). Nothing here starts until M1 is green.
+Voice (M6), native extras (M7), sync (M9), and any provider beyond Grok until J0 is green.
 
 ## Critical path
 
