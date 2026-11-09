@@ -17,9 +17,11 @@ on:
 permissions:
   contents: read
 
+# PRs: a new push cancels the PR's older run. Pushes to main: one group per commit, so no run is
+# ever cancelled or replaced while queued, and every commit on main gets a complete result.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
   run:
