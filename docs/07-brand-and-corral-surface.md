@@ -1,6 +1,6 @@
 # Corral: Brand and the Liquid-Glass Corral Surface
 
-Status: Draft v0.1 · Last updated: 2026-11-07
+Status: Draft v0.1 · Last updated: 2026-11-09
 Prototype code: `native/CorralNative/Sources/CorralNative/Corral/` · Interactive design preview: `native/CorralNative/preview/corral-shape-preview.html` (open it; `?n=6` sets the agent count, `?hover=0` opens the first card). It shows logos, hover cards with buttons, the trace tree, usage ranking and the 8-agent chooser
 
 ---
@@ -103,7 +103,7 @@ The prototype code is wired for plan A, and plan C's helper is kept in `CorralPa
 | Hover a drop (120 ms intent delay) | Its hover card opens above it (§8.2). It stays open while the pointer is on the drop or the card, and closes 260 ms after leaving |
 | Click a drop, or focus it and press Space | Pins the hover card. For an idle agent the card opens on **New task** |
 | ⌘-click drops | Multi-select (accent ring); the prompt bar offers "Deploy selected" |
-| Double-click the corral background, or the summon hotkey | Prompt bar slides up from the corral (text + mic) |
+| Double-click the corral background, or the summon hotkey | Prompt bar appears above the corral (text + mic), with no animation (§7) |
 | Drag a drop upward | Shortcut for "New task": the prompt bar opens attached to that agent. The drop stays in the corral |
 | Click a task card in the trace tree | Opens that run in the trace viewer (main window) |
 | Click a subtask stack | Fans the stack out into a list of every subtask with its status |
@@ -111,18 +111,44 @@ The prototype code is wired for plan A, and plan C's helper is kept in `CorralPa
 
 ## 7. Motion
 
-| Event | Motion |
-|---|---|
-| Task starts | The prompt pill rises out of the drop along its wire, and the task card and subtask stack unfold above it (spring, 0.45 s). The working ring starts turning |
-| Subtask advances | The top subtask card slides down behind the stack and the next one settles on top |
-| Needs you | The ring turns maroon and pulses slowly (1.2 s), a "!" badge appears, and the column's wire turns maroon |
-| Task done | The ring completes and fades, and the card shows Done. **Send back** folds the column down into the drop |
-| Hover card | Rises 8 pt and fades in (140 ms); the other trace columns fade to 28% while it's open |
-| Agent added / removed | The drop grows from a bead at the shape's center / shrinks away; the others spring to the new polygon |
-| Shape change | Spring, response ≈ 0.45 s, light damping, so the liquid overshoots a little |
-| Usage reorder | Drops glide around the ring to their new slots, shortest arc, only while the corral is idle |
+The corral is glanced at all day, so motion has to earn its place: it shows a **state change** or keeps **spatial continuity** (where did that drop go?). Anything you trigger many times a day, or from the keyboard, doesn't animate. Values follow the motion standards in [`.claude/skills/review-animations/STANDARDS.md`](../.claude/skills/review-animations/STANDARDS.md): UI stays under 300 ms, enters and exits use a strong ease-out, nothing grows from nothing, and only the liquid uses springs.
 
-**Reduce Motion:** positions crossfade with no springs; the working ring becomes a static arc showing progress; the caustic drift is frozen. **Reduce Transparency:** same geometry, opaque frosted fill; translucent cards become paper. **Increase Contrast:** stronger rim, tint and wire color.
+### 7.1 The liquid (springs)
+| Moment | Motion | Reduce Motion |
+|---|---|---|
+| Shape change (agent added or removed) | Drops spring to the new polygon: `motion.liquid`, polar paths so drops travel around the ring, never across the hollow center | Positions snap; joining and leaving drops fade (`motion.fade`) |
+| Agent added | The drop grows from a bead (20% size) between the ring and the pivot and attaches to its neighbors; its logo fades in over the last 40% of the growth | Fades in at full size |
+| Agent removed or hidden | The drop detaches and **pinches off in place**: no travel. Its logo fades out first (`motion.exit`), then the glass shrinks away | Fades out |
+| Usage reorder | Drops glide around the ring along the shortest arc (`motion.liquid`), only while the corral is idle (§3.1) | Snaps, while idle |
+| Press a drop | Scales to 0.96 (`motion.press`), back on release. No motion on hover: hover opens a card instead | No scale |
+
+### 7.2 Cards and status (curves, under 300 ms)
+| Moment | Motion | Reduce Motion |
+|---|---|---|
+| Hover card opens | After the 120 ms intent delay: opacity 0→1, scale 0.97→1 and 8 pt rise, anchored at its bottom edge over the drop (`motion.enter`). The other trace columns fade to 28% | Opacity only |
+| Hover card closes | Opacity only (`motion.exit`), after the 260 ms grace | Same |
+| Moving to another drop with a card open | No second intent delay. The card **retargets** to the new drop with a short spring (`motion.retarget`) and its content crossfades (`motion.swap`) | Content swaps; card jumps |
+| Card content changes state (working → needs you → done) | Crossfade with a 2 pt blur so the two states read as one change (`motion.swap`) | Crossfade without blur |
+| Task starts | The trace column builds up from the drop: wire draws upward (trim 0→1), then prompt pill, task card and subtask stack enter in that order, 50 ms apart, each rising 8 pt (`motion.enter`). The working ring fades in (`motion.fade`) | Column fades in as one |
+| Subtask advances | The finished card fades and lifts 6 pt (`motion.exit`); the next card rises from its peek position (`motion.retarget`). Interruptible: a fast run of steps retargets, it never queues | Text swaps in place |
+| Done, Send back, Recall-all | The column folds down into its drop: cards drop 8 pt and fade, top first, 30 ms apart (`motion.exit`); the drop settles from 0.97 to 1 as they land | Column fades out |
+| Done or error badge | Pops in from 0.9 with opacity (`motion.enter`) | Fades in |
+
+### 7.3 Continuous motion (the only motion that runs on its own)
+| Moment | Motion | Reduce Motion |
+|---|---|---|
+| Working | A coral arc turns at a constant speed (`motion.spin`, linear). It runs as a Core Animation rotation on its own layer, so the glass shader doesn't redraw every frame | Static arc showing plan progress (TP-LOGO-04) |
+| Needs you | The ring turns maroon and pulses (scale 1→1.06 and back, `motion.pulse`) **three times**, then stays steady with the "!" badge. It pulses again only when a new checkpoint opens: attention without nagging | No pulse; badge and steady maroon ring |
+| Caustics | Drift only while something else is moving; frozen at rest so an idle corral draws nothing (§2, principle 3) | Frozen |
+
+### 7.4 Never animated
+- **The prompt bar.** It's summoned by hotkey many times a day, so it appears and disappears instantly, like a command palette
+- **Typing, the transcript, and selection** (⌘-click rings appear instantly)
+- **Numbers that tick:** elapsed time, spend, step counts. They change in place in tabular figures, so they don't jitter
+- **Approve, Deny and Edit buttons.** They ignore input for 300 ms after a card appears (§8.2); they don't fade or move during that time, so their position is never in doubt
+- **Anything in the approval box.** It's the one place you must read exactly; it never moves while you decide
+
+**Reduce Transparency:** same geometry, opaque frosted fill; translucent cards become paper. **Increase Contrast:** stronger rim, tint and wire color.
 
 ## 8. Logos, hover cards and the trace tree
 
@@ -211,6 +237,15 @@ Checkpoints also raise an actionable macOS notification (§9 of the system desig
 | Type | New York (serif) for card headlines; SF Pro for UI; SF Pro Rounded for fallback monograms |
 | Logo | 46% of drop diameter, above the glass |
 | Status glyphs | "!" badge (needs you), `checkmark` (done), `exclamationmark.triangle.fill` (error) |
+| `motion.liquid` | Spring, response 0.45 s, damping ratio 0.87 (about 0.1 bounce): stiffness 190, damping 24 at mass 1 |
+| `motion.retarget` | Spring, response 0.25 s, no bounce |
+| `motion.enter` | 180 ms, ease-out `cubic-bezier(0.23, 1, 0.32, 1)` |
+| `motion.exit` | 120 ms, same ease-out |
+| `motion.swap` | 160 ms crossfade, 2 pt blur at the midpoint |
+| `motion.press` | 120 ms in, 160 ms out, ease-out, scale 0.96 |
+| `motion.fade` | 150 ms opacity, ease-out (Reduce Motion's stand-in for movement) |
+| `motion.spin` | One turn per 2.4 s, linear |
+| `motion.pulse` | 1.2 s per pulse, ease-in-out, 3 pulses |
 
 These live in `CorralMetrics` and the shader parameters. Spike S5 turns them into a shared token file used by both Swift and React.
 
