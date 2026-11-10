@@ -74,13 +74,46 @@ mod tests {
 
     #[test]
     fn tp_shell_01_closing_the_last_window_keeps_corral_running() {
-        // Window close / Cmd-W asks to exit with no code: keep running in the menu bar.
-        assert!(should_keep_running(None));
+        // The window hides instead of closing, so the app keeps running in the menu bar.
+        assert_eq!(
+            decide(ShellEvent::MainWindowCloseRequested),
+            ShellAction::HideMainWindow
+        );
     }
 
     #[test]
     fn tp_shell_02_quit_from_the_menu_really_quits() {
-        assert!(!should_keep_running(Some(0)));
+        // The tray's Quit calls `app.exit(0)`, which arrives as an exit request.
+        assert_eq!(decide(ShellEvent::ExitRequested), ShellAction::AllowExit);
+    }
+
+    #[test]
+    fn tp_shell_04_command_q_quits() {
+        // Command-Q and Quit in the app menu also end in an exit request (or a direct terminate).
+        assert_eq!(decide(ShellEvent::ExitRequested), ShellAction::AllowExit);
+    }
+
+    #[test]
+    fn tp_shell_05_logout_and_shutdown_are_never_blocked() {
+        // The shell has no way to say "prevent" for any exit request.
+        assert_ne!(decide(ShellEvent::ExitRequested), ShellAction::Nothing);
+        assert_eq!(decide(ShellEvent::ExitRequested), ShellAction::AllowExit);
+    }
+
+    #[test]
+    fn tp_shell_06_dock_click_reopens_the_hidden_window() {
+        assert_eq!(
+            decide(ShellEvent::Reopen {
+                has_visible_windows: false
+            }),
+            ShellAction::ShowMainWindow
+        );
+        assert_eq!(
+            decide(ShellEvent::Reopen {
+                has_visible_windows: true
+            }),
+            ShellAction::Nothing
+        );
     }
 
     #[test]
