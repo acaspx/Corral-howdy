@@ -180,6 +180,11 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-TRACE-04** Advancing a subtask moves the stack; finishing and Send back fold the column into the drop
 - **TP-TRACE-05** Clicking a task card opens that run in the trace viewer; clicking the stack fans it out
 - **TP-TRACE-06** Nothing running → no trace tree, and the corral idles at zero frames
+- **TP-MOTION-01** With Reduce Motion on, every moment in 07 §7 uses its Reduce Motion column: no springs, no scale or travel, fades only (snapshot per moment)
+- **TP-MOTION-02** A working drop's turning ring doesn't keep the glass `TimelineView` running: with only status animations active, the morph timeline is paused (idle-frames budget, 04 §7)
+- **TP-MOTION-03** Needs-you pulses exactly three times per new checkpoint, then holds steady
+- **TP-MOTION-04** The prompt bar, selection rings, ticking numbers and the approval box have no transitions
+- **TP-MOTION-05** A removed drop pinches off in place: its center never travels more than 2 pt while it shrinks
 - **TP-PLAY-01** The desktop playground builds in CI against the current `CorralNative` library
 - **TP-PLAY-02** The playground clamps `--agents` to 0–12 and puts the corral back at bottom center when displays change
 
