@@ -1,0 +1,11 @@
+{
+  "run_id": "run-0001",
+  "seq": 5,
+  "ts": 1762761601250,
+  "span_id": "span-0005",
+  "parent_span_id": "span-0004",
+  "kind": "model.delta",
+  "payload": {
+    "text": "Here are three venues"
+  }
+}

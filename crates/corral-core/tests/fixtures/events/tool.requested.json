@@ -1,0 +1,17 @@
+{
+  "run_id": "run-0001",
+  "seq": 7,
+  "ts": 1762761601750,
+  "span_id": "span-0007",
+  "parent_span_id": "span-0002",
+  "kind": "tool.requested",
+  "payload": {
+    "tool_call_id": "call-0001",
+    "tool": "email.send",
+    "action_class": "comms.send",
+    "args": {
+      "subject": "January availability",
+      "to": "events@example.test"
+    }
+  }
+}

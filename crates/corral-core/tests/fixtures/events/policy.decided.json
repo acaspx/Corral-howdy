@@ -1,0 +1,16 @@
+{
+  "run_id": "run-0001",
+  "seq": 8,
+  "ts": 1762761602000,
+  "span_id": "span-0008",
+  "parent_span_id": "span-0007",
+  "kind": "policy.decided",
+  "payload": {
+    "tool_call_id": "call-0001",
+    "decision": {
+      "outcome": "ask",
+      "risk": "high",
+      "reason": "comms.send is ask (high) in the default profile"
+    }
+  }
+}

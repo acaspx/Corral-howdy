@@ -1,0 +1,10 @@
+{
+  "run_id": "run-0001",
+  "seq": 2,
+  "ts": 1762761600500,
+  "span_id": "span-0002",
+  "kind": "run.started",
+  "payload": {
+    "adapter": "openai_responses"
+  }
+}

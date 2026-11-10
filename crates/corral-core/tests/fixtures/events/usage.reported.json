@@ -1,0 +1,13 @@
+{
+  "run_id": "run-0001",
+  "seq": 13,
+  "ts": 1762761603250,
+  "span_id": "span-0013",
+  "parent_span_id": "span-0004",
+  "kind": "usage.reported",
+  "payload": {
+    "input_tokens": 1200,
+    "output_tokens": 340,
+    "cost_micro_usd": 4100
+  }
+}

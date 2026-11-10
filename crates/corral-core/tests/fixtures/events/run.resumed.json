@@ -1,0 +1,8 @@
+{
+  "run_id": "run-0001",
+  "seq": 16,
+  "ts": 1762761604000,
+  "span_id": "span-0016",
+  "kind": "run.resumed",
+  "payload": {}
+}
