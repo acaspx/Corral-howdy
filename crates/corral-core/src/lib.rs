@@ -8,3 +8,4 @@ pub mod clock;
 pub mod domain;
 pub mod event;
 pub mod ids;
+pub mod lifecycle;
