@@ -6,15 +6,56 @@
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{Manager, RunEvent, WindowEvent};
+use tauri::{AppHandle, Manager, RunEvent, WindowEvent};
 
 const MENU_SHOW: &str = "show";
 const MENU_QUIT: &str = "quit";
 
-/// Corral supervises running agents, so it keeps running when its last window closes: closing the
-/// main window hides it, and only an explicit Quit (which exits with a code) ends the app.
-fn should_keep_running(exit_code: Option<i32>) -> bool {
-    exit_code.is_none()
+/// App-level events the shell reacts to, kept free of Tauri types so the decisions can be tested.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ShellEvent {
+    /// The user closed the main window (red button or Command-W).
+    MainWindowCloseRequested,
+    /// The app is about to exit: Quit in the menu bar or app menu, Command-Q, logout or shutdown.
+    ExitRequested,
+    /// The Dock icon was clicked while the app was running (macOS "reopen"). Only macOS sends
+    /// it; the tests still cover it on every platform.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    Reopen { has_visible_windows: bool },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ShellAction {
+    HideMainWindow,
+    AllowExit,
+    ShowMainWindow,
+    Nothing,
+}
+
+/// Corral supervises running agents, so closing its window must not quit it: the window hides and
+/// the menu-bar icon stays. Because the window is hidden rather than destroyed, the app never runs
+/// out of windows, so every exit request is a real quit and is always allowed. Preventing exits
+/// here would risk blocking Command-Q, logout and shutdown.
+fn decide(event: ShellEvent) -> ShellAction {
+    match event {
+        ShellEvent::MainWindowCloseRequested => ShellAction::HideMainWindow,
+        ShellEvent::ExitRequested => ShellAction::AllowExit,
+        ShellEvent::Reopen {
+            has_visible_windows: false,
+        } => ShellAction::ShowMainWindow,
+        ShellEvent::Reopen {
+            has_visible_windows: true,
+        } => ShellAction::Nothing,
+    }
+}
+
+fn show_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        // Best effort: if the window can't be shown, the tray stays usable and nothing is lost.
+        // There is no safer fallback to report to.
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
 }
 
 /// Builds and runs the app.
@@ -35,14 +76,7 @@ pub fn run() {
                 .tooltip("Corral")
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
-                    MENU_SHOW => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            // Best effort: if the window can't be shown, the tray stays usable and
-                            // nothing is lost. There is no safer fallback to report to.
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
-                    }
+                    MENU_SHOW => show_main_window(app),
                     MENU_QUIT => app.exit(0),
                     _ => {}
                 })
@@ -50,7 +84,9 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
+            if let WindowEvent::CloseRequested { api, .. } = event
+                && decide(ShellEvent::MainWindowCloseRequested) == ShellAction::HideMainWindow
+            {
                 api.prevent_close();
                 // Best effort: closing is already prevented, so a failed hide leaves the window up.
                 let _ = window.hide();
@@ -59,13 +95,27 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("Corral failed to start");
 
-    app.run(|_app, event| {
-        if let RunEvent::ExitRequested { code, api, .. } = event
-            && should_keep_running(code)
-        {
-            api.prevent_exit();
-        }
-    });
+    app.run(
+        |#[cfg_attr(not(target_os = "macos"), allow(unused_variables))] app, event| match event {
+            // Nothing to do: `decide` always allows a real exit (see its doc comment).
+            RunEvent::ExitRequested { .. } => {
+                debug_assert_eq!(decide(ShellEvent::ExitRequested), ShellAction::AllowExit);
+            }
+            #[cfg(target_os = "macos")]
+            RunEvent::Reopen {
+                has_visible_windows,
+                ..
+            } => {
+                if decide(ShellEvent::Reopen {
+                    has_visible_windows,
+                }) == ShellAction::ShowMainWindow
+                {
+                    show_main_window(app);
+                }
+            }
+            _ => {}
+        },
+    );
 }
 
 #[cfg(test)]
