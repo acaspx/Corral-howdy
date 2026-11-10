@@ -105,13 +105,11 @@ pub fn run() {
             RunEvent::Reopen {
                 has_visible_windows,
                 ..
-            } => {
-                if decide(ShellEvent::Reopen {
-                    has_visible_windows,
-                }) == ShellAction::ShowMainWindow
-                {
-                    show_main_window(app);
-                }
+            } if decide(ShellEvent::Reopen {
+                has_visible_windows,
+            }) == ShellAction::ShowMainWindow =>
+            {
+                show_main_window(app);
             }
             _ => {}
         },
