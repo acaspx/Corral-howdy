@@ -9,14 +9,20 @@
 //!   forged, the store reopens **read-only** and [`Store::integrity`] says where, so the app can
 //!   show a banner. History stays readable.
 //! - Reads load a run's events in one ordered query (AGENTS.md: no N+1).
+//! - [`Store::fail_orphaned_runs`] is the launch-time crash recovery: runs left unfinished by a
+//!   crash or force-quit end with `run.failed { app_restarted }` (system design §8).
+//! - [`Store`] is the supervisor's [`EventLog`].
 //!
 //! Not here yet: projections (TP-STORE-02), blob offload over 64 KB (TP-STORE-03) and the
 //! Keychain-MACed head hash that catches a rewrite of a whole run or a truncated tail
 //! (TP-STORE-06).
 
-use corral_core::event::{Event, EventError};
-use corral_core::ids::RunId;
-use rusqlite::{Connection, OpenFlags, OptionalExtension, TransactionBehavior, params};
+use corral_core::event::{Event, EventBody, EventError, EventKind, FailureReason, RunFailed};
+use corral_core::ids::{RunId, SpanId};
+use corral_core::supervisor::{EventLog, LogError};
+use rusqlite::{
+    Connection, OpenFlags, OptionalExtension, Transaction, TransactionBehavior, params,
+};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
@@ -191,23 +197,55 @@ impl Store {
             });
         }
 
-        let hash = chain_hash(&prev_hash, &event.to_json()?);
-        tx.execute(
-            &format!("INSERT INTO events ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"),
-            params![
-                event.run_id.as_str(),
-                to_db(event.seq, "seq")?,
-                to_db(event.ts, "ts")?,
-                event.kind().as_str(),
-                event.span_id.as_str(),
-                event.parent_span_id.as_ref().map(|s| s.as_str()),
-                payload_json(event)?,
-                prev_hash,
-                hash,
-            ],
-        )?;
+        let hash = insert(&tx, event, &prev_hash)?;
         tx.commit()?;
         Ok(hash)
+    }
+
+    /// Launch-time crash recovery. Every run whose last event isn't an ending (`run.completed`,
+    /// `run.failed`, `run.cancelled`, `session.closed`) was cut off by a crash or force-quit: it
+    /// gets `run.failed { app_restarted }` at time `now_ms`. Returns those runs, sorted.
+    /// Idempotent. One query finds the runs; the new events go in one transaction.
+    pub fn fail_orphaned_runs(&self, now_ms: u64) -> Result<Vec<RunId>, StoreError> {
+        if self.is_read_only() {
+            return Err(StoreError::ReadOnly);
+        }
+        let mut conn = self.lock()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let tails: Vec<(String, i64, String, String, String)> = {
+            let mut stmt = tx.prepare(
+                "SELECT e.run_id, e.seq, e.kind, e.span_id, e.hash FROM events e
+                 JOIN (SELECT run_id, MAX(seq) AS last FROM events GROUP BY run_id) t
+                   ON e.run_id = t.run_id AND e.seq = t.last
+                 ORDER BY e.run_id",
+            )?;
+            let rows = stmt.query_map([], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+            })?;
+            rows.collect::<Result<_, _>>()?
+        };
+
+        let mut failed = Vec::new();
+        for (run_id, seq, kind, span_id, hash) in tails {
+            if is_ending(kind.parse::<EventKind>()?) {
+                continue;
+            }
+            let event = Event {
+                run_id: RunId::from(run_id.as_str()),
+                seq: from_db(seq, "seq")? + 1,
+                ts: now_ms,
+                span_id: SpanId::from(span_id.as_str()),
+                parent_span_id: None,
+                body: EventBody::RunFailed(RunFailed {
+                    reason: FailureReason::AppRestarted,
+                    message: "Corral quit before this run finished.".into(),
+                }),
+            };
+            insert(&tx, &event, &hash)?;
+            failed.push(event.run_id);
+        }
+        tx.commit()?;
+        Ok(failed)
     }
 
     /// Every event of `run_id`, in `seq` order, in one query. Empty if the run doesn't exist.
@@ -236,6 +274,60 @@ fn configure(conn: &Connection) -> Result<(), StoreError> {
     // An audit log: durable on every commit, even across a power cut.
     conn.pragma_update(None, "synchronous", "FULL")?;
     Ok(())
+}
+
+/// Inserts `event` chained from `prev_hash` and returns its hash. Caller checked `seq`.
+fn insert(tx: &Transaction<'_>, event: &Event, prev_hash: &str) -> Result<String, StoreError> {
+    let hash = chain_hash(prev_hash, &event.to_json()?);
+    tx.execute(
+        &format!("INSERT INTO events ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"),
+        params![
+            event.run_id.as_str(),
+            to_db(event.seq, "seq")?,
+            to_db(event.ts, "ts")?,
+            event.kind().as_str(),
+            event.span_id.as_str(),
+            event.parent_span_id.as_ref().map(|s| s.as_str()),
+            payload_json(event)?,
+            prev_hash,
+            hash,
+        ],
+    )?;
+    Ok(hash)
+}
+
+/// Whether a run whose last event is `kind` has ended (nothing left to recover).
+fn is_ending(kind: EventKind) -> bool {
+    match kind {
+        EventKind::RunCompleted
+        | EventKind::RunFailed
+        | EventKind::RunCancelled
+        | EventKind::SessionClosed => true,
+        EventKind::RunQueued
+        | EventKind::RunStarted
+        | EventKind::PlanUpdated
+        | EventKind::ModelRequest
+        | EventKind::ModelDelta
+        | EventKind::ModelResponse
+        | EventKind::ToolRequested
+        | EventKind::PolicyDecided
+        | EventKind::CheckpointOpened
+        | EventKind::CheckpointResolved
+        | EventKind::ToolStarted
+        | EventKind::ToolResult
+        | EventKind::UsageReported
+        | EventKind::BudgetWarned
+        | EventKind::RunPaused
+        | EventKind::RunResumed => false,
+    }
+}
+
+impl EventLog for Store {
+    fn append(&self, event: &Event) -> Result<(), LogError> {
+        Store::append(self, event)
+            .map(|_hash| ())
+            .map_err(|e| LogError(e.to_string()))
+    }
 }
 
 /// Checks every run's chain in one ordered pass. Returns the first break, if any.
