@@ -389,6 +389,11 @@ version = "0.0.1"
 [[package]]
 name = "corral-core"
 version = "0.0.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "corral-desktop"

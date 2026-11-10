@@ -1,0 +1,16 @@
+{
+  "run_id": "run-0001",
+  "seq": 9,
+  "ts": 1762761602250,
+  "span_id": "span-0009",
+  "parent_span_id": "span-0007",
+  "kind": "checkpoint.opened",
+  "payload": {
+    "checkpoint_id": "cp-0001",
+    "tool_call_id": "call-0001",
+    "action_class": "comms.send",
+    "risk": "high",
+    "title": "Send an email",
+    "detail": "To: events@example.test\nSubject: January availability"
+  }
+}

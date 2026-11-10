@@ -1,0 +1,12 @@
+{
+  "run_id": "run-0001",
+  "seq": 1,
+  "ts": 1762761600250,
+  "span_id": "span-0001",
+  "kind": "run.queued",
+  "payload": {
+    "agent_id": "grok",
+    "session_id": "session-0001",
+    "prompt": "Find three venues in Oakland for a 40-person meetup in January."
+  }
+}

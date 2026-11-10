@@ -1,0 +1,10 @@
+{
+  "run_id": "run-0001",
+  "seq": 19,
+  "ts": 1762761604750,
+  "span_id": "span-0019",
+  "kind": "run.cancelled",
+  "payload": {
+    "by": "recall_all"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "run_id": "run-0001",
+  "seq": 18,
+  "ts": 1762761604500,
+  "span_id": "span-0018",
+  "kind": "run.failed",
+  "payload": {
+    "reason": "tools_not_enabled",
+    "message": "The model asked for a tool, but this agent has no tools yet."
+  }
+}

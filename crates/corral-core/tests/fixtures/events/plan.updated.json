@@ -1,0 +1,24 @@
+{
+  "run_id": "run-0001",
+  "seq": 3,
+  "ts": 1762761600750,
+  "span_id": "span-0003",
+  "parent_span_id": "span-0002",
+  "kind": "plan.updated",
+  "payload": {
+    "steps": [
+      {
+        "title": "Search for venues",
+        "status": "done"
+      },
+      {
+        "title": "Compare prices",
+        "status": "in_progress"
+      },
+      {
+        "title": "Write the summary",
+        "status": "pending"
+      }
+    ]
+  }
+}

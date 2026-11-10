@@ -1,0 +1,15 @@
+{
+  "run_id": "run-0001",
+  "seq": 10,
+  "ts": 1762761602500,
+  "span_id": "span-0010",
+  "parent_span_id": "span-0007",
+  "kind": "checkpoint.resolved",
+  "payload": {
+    "checkpoint_id": "cp-0001",
+    "resolution": {
+      "outcome": "denied",
+      "note": "Don't email anyone yet."
+    }
+  }
+}

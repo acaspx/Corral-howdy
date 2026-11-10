@@ -1,0 +1,10 @@
+{
+  "run_id": "run-0001",
+  "seq": 17,
+  "ts": 1762761604250,
+  "span_id": "span-0017",
+  "kind": "run.completed",
+  "payload": {
+    "summary": "Found three venues; two fit the budget."
+  }
+}

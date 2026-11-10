@@ -1,0 +1,10 @@
+{
+  "run_id": "run-0001",
+  "seq": 15,
+  "ts": 1762761603750,
+  "span_id": "span-0015",
+  "kind": "run.paused",
+  "payload": {
+    "reason": "budget"
+  }
+}

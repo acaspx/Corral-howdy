@@ -1,0 +1,11 @@
+{
+  "run_id": "run-0001",
+  "seq": 11,
+  "ts": 1762761602750,
+  "span_id": "span-0011",
+  "parent_span_id": "span-0007",
+  "kind": "tool.started",
+  "payload": {
+    "tool_call_id": "call-0002"
+  }
+}

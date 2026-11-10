@@ -59,6 +59,11 @@ expect:
 
 Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_denied`).
 
+### Events (schema v1)
+- **TP-EVT-01** Every v1 event kind (system design §6, in that order) round-trips through JSON unchanged
+- **TP-EVT-02** Golden fixtures in `crates/corral-core/tests/fixtures/events/`, one per kind, deserialize and re-serialize byte for byte
+- **TP-EVT-03** An unknown `kind` is a typed error (`UnknownKind`); a missing kind, a bad payload or broken JSON is `Malformed`. Nothing is silently accepted
+
 ### Lifecycle and supervisor
 - **TP-LIFE-01** Every legal transition in the state diagram is accepted
 - **TP-LIFE-02** (property) Random event sequences never reach an undefined state; illegal transitions return `Err`

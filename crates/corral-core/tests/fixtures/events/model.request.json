@@ -1,0 +1,12 @@
+{
+  "run_id": "run-0001",
+  "seq": 4,
+  "ts": 1762761601000,
+  "span_id": "span-0004",
+  "parent_span_id": "span-0002",
+  "kind": "model.request",
+  "payload": {
+    "provider": "xai",
+    "model": "example-model"
+  }
+}

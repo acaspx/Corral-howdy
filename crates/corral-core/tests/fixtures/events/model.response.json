@@ -1,0 +1,12 @@
+{
+  "run_id": "run-0001",
+  "seq": 6,
+  "ts": 1762761601500,
+  "span_id": "span-0006",
+  "parent_span_id": "span-0004",
+  "kind": "model.response",
+  "payload": {
+    "text": "Here are three venues that fit 40 people.",
+    "finish_reason": "stop"
+  }
+}
