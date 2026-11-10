@@ -12,10 +12,14 @@ publish.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+# The supervisor: one task per run, timers for the 2-second force-drop.
+tokio = { version = "1", features = ["rt", "sync", "time", "macros"] }
 
 [dev-dependencies]
 # TP-LIFE-02 property tests. No fork or timeout features: tests stay in-process.
 proptest = { version = "1", default-features = false, features = ["std"] }
+# Paused time, so the 2-second force-drop is tested exactly without waiting.
+tokio = { version = "1", features = ["rt", "sync", "time", "macros", "test-util"] }
 
 [lints]
 workspace = true
