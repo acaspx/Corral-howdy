@@ -9,3 +9,4 @@ pub mod domain;
 pub mod event;
 pub mod ids;
 pub mod lifecycle;
+pub mod supervisor;
