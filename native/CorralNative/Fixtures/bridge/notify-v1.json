@@ -1,0 +1,9 @@
+{
+  "v": 1,
+  "checkpoint": "cp-1",
+  "nonce": "n-1",
+  "agent": "scout",
+  "title": "Scout needs you",
+  "body": "Send the weekly summary email to 3 people?",
+  "actions": ["approve", "deny", "open"]
+}

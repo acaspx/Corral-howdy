@@ -257,6 +257,19 @@ mod tests {
         "../../../../native/CorralNative/Fixtures/bridge/intent-summon-prompt-bar-v1.json"
     );
 
+    const NOTIFY: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/notify-v1.json");
+    const AUTH: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/authenticate-v1.json");
+    const NOTE_ACTION: &str = include_str!(
+        "../../../../native/CorralNative/Fixtures/bridge/intent-notification-action-v1.json"
+    );
+    const NOTE_FAILED: &str = include_str!(
+        "../../../../native/CorralNative/Fixtures/bridge/intent-notification-failed-v1.json"
+    );
+    const AUTH_RESULT: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/intent-auth-result-v1.json");
+
     fn json(bytes: &[u8]) -> Value {
         serde_json::from_slice(bytes).unwrap()
     }
@@ -361,5 +374,75 @@ mod tests {
         assert_eq!(Status::check(4), Err(Status::Rejected));
         assert_eq!(Status::check(5), Err(Status::NullArgument));
         assert_eq!(Status::check(42), Err(Status::Unknown(42)));
+    }
+
+    // TP-BRIDGE-04: checkpoint notifications and Touch ID (ADR-001).
+
+    #[test]
+    fn tp_bridge_04_checkpoint_notification_matches_the_fixture_swift_decodes() {
+        let n = NotificationRequest::new(
+            CheckpointId::from("cp-1"),
+            "n-1",
+            AgentId::from("scout"),
+            "Scout needs you",
+            "Send the weekly summary email to 3 people?",
+            vec![Offer::Approve, Offer::Deny, Offer::Open],
+        );
+        assert_eq!(json(&n.to_bytes().unwrap()), json(NOTIFY.as_bytes()));
+    }
+
+    #[test]
+    fn tp_bridge_04_touch_id_request_matches_the_fixture_swift_decodes() {
+        let a = AuthRequest::new("auth-1", "approve Scout spending $4.00");
+        assert_eq!(json(&a.to_bytes().unwrap()), json(AUTH.as_bytes()));
+    }
+
+    #[test]
+    fn tp_bridge_04_notification_and_touch_id_results_arrive_typed() {
+        assert_eq!(
+            decode_intent(NOTE_ACTION.as_bytes()).unwrap(),
+            Intent::NotificationAction {
+                checkpoint: CheckpointId::from("cp-1"),
+                nonce: "n-1".into(),
+                action: NoteAction::Approve,
+            }
+        );
+        assert_eq!(
+            decode_intent(NOTE_FAILED.as_bytes()).unwrap(),
+            Intent::NotificationFailed {
+                checkpoint: CheckpointId::from("cp-1"),
+                reason: NoteFailure::NotAuthorized,
+            }
+        );
+        assert_eq!(
+            decode_intent(AUTH_RESULT.as_bytes()).unwrap(),
+            Intent::AuthResult {
+                request: "auth-1".into(),
+                outcome: AuthOutcome::Ok,
+            }
+        );
+    }
+
+    #[test]
+    fn tp_bridge_04_bad_checkpoint_intents_are_refused() {
+        let refused = |s: &str| decode_intent(s.as_bytes()).is_err();
+        assert!(refused(
+            r#"{"v":1,"intent":{"kind":"notificationAction","checkpoint":"cp","nonce":"n","action":"approveAll"}}"#
+        ));
+        assert!(refused(
+            r#"{"v":1,"intent":{"kind":"notificationAction","checkpoint":"","nonce":"n","action":"approve"}}"#
+        ));
+        assert!(refused(
+            r#"{"v":1,"intent":{"kind":"notificationAction","checkpoint":"cp","nonce":"n n","action":"approve"}}"#
+        ));
+        assert!(refused(
+            r#"{"v":1,"intent":{"kind":"notificationAction","checkpoint":"cp","action":"approve"}}"#
+        ));
+        assert!(refused(
+            r#"{"v":1,"intent":{"kind":"authResult","request":"a","outcome":"probably"}}"#
+        ));
+        assert!(refused(
+            r#"{"v":1,"intent":{"kind":"authResult","request":"a","outcome":"ok","by":"x"}}"#
+        ));
     }
 }

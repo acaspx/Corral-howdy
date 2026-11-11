@@ -209,10 +209,11 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-SKEL-04** While a run is going, the hover card's elapsed time and spend come from core projections and update at least once a second
 - **TP-SKEL-05** On completion the result card shows the answer as agent text (labelled, length-capped, control and bidi characters stripped); Send back returns the drop to idle and closes the session; a failed run shows Retry
 
-### Bridge (Spike S1, then M4)
+### Bridge (ADR-001; Spike S1, SK-2)
 - **TP-BRIDGE-01** A roster snapshot sent from Rust over the C ABI renders the same drop IDs in the same order in Swift
 - **TP-BRIDGE-02** A Swift intent (open agent, deploy, summon prompt bar) arrives in Rust as a typed intent, never a raw string
 - **TP-BRIDGE-03** Bad input from Rust (duplicate IDs, more than 8 shown, oversized names, control characters) is deduped, bounded and sanitized; Swift never traps
+- **TP-BRIDGE-04** Checkpoint notifications and Touch ID cross the bridge as typed payloads: Swift shows only the buttons Rust sends (no inline Approve unless offered), every click returns the checkpoint's nonce, and a Touch ID result returns as a typed outcome (ADR-001)
 
 ### Desktop shell (Tauri)
 - **TP-SHELL-01** Closing the last window keeps Corral running (agents keep working)
