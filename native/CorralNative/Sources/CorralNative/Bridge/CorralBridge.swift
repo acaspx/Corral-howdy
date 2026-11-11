@@ -121,6 +121,7 @@ enum CorralBridge {
         // They carry only Sendable values and hop to the main thread before emitting.
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound]) { @Sendable granted, error in
+            NSLog("CorralNative: notifications authorized=%@", granted ? "yes" : "no")
             guard granted, error == nil else {
                 CorralBridge.onMain { CorralBridge.emitNotificationFailed(request.checkpoint, .notAuthorized) }
                 return
@@ -132,8 +133,18 @@ enum CorralBridge {
             content.categoryIdentifier = CorralNotificationRequest.categoryID(for: request.actions)
             content.userInfo = ["checkpoint": request.checkpoint, "nonce": request.nonce]
             let note = UNNotificationRequest(identifier: "corral.checkpoint.\(request.checkpoint)", content: content, trigger: nil)
+            // What macOS will do with it: alertStyle 0 none, 1 banner (hides after a few seconds),
+            // 2 alert (stays until answered). Settings 2 = enabled.
+            UNUserNotificationCenter.current().getNotificationSettings { @Sendable settings in
+                NSLog("CorralNative: notification settings alertStyle=%ld alerts=%ld notificationCenter=%ld",
+                      settings.alertStyle.rawValue, settings.alertSetting.rawValue,
+                      settings.notificationCenterSetting.rawValue)
+            }
             UNUserNotificationCenter.current().add(note) { @Sendable error in
-                guard let error else { return }
+                guard let error else {
+                    NSLog("CorralNative: notification %@ handed to macOS", request.checkpoint)
+                    return
+                }
                 NSLog("CorralNative: notification failed (%@)", String(describing: error))
                 CorralBridge.onMain { CorralBridge.emitNotificationFailed(request.checkpoint, .failed) }
             }
@@ -311,12 +322,15 @@ final class CorralNotificationDelegate: NSObject, UNUserNotificationCenterDelega
     /// Show checkpoint notifications even while Corral is the active app.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
                                             willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .list, .sound]
+        NSLog("CorralNative: presenting %@ while Corral is frontmost", notification.request.identifier)
+        return [.banner, .list, .sound]
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
                                             didReceive response: UNNotificationResponse) async {
         let info = response.notification.request.content.userInfo
+        NSLog("CorralNative: notification response %@ on %@", response.actionIdentifier,
+              response.notification.request.identifier)
         // Only Corral's own notifications carry these; anything else is ignored.
         guard let checkpoint = info["checkpoint"] as? String, CorralRoster.isValidID(checkpoint),
               let nonce = info["nonce"] as? String, CorralRoster.isValidID(nonce),

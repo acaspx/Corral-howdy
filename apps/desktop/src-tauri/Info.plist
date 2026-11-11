@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Spike S1: checkpoint notifications default to Alerts (they stay until answered) rather
+	     than Banners (gone in a few seconds). Only applies the first time macOS sees the app;
+	     the user can change it in System Settings > Notifications > Corral. -->
+	<key>NSUserNotificationAlertStyle</key>
+	<string>alert</string>
+</dict>
+</plist>
