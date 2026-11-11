@@ -1,5 +1,5 @@
 //! Generates Tauri's context (config, capabilities, icons) at compile time. With the `native`
-//! feature (Spike S1) it also builds the CorralNative Swift package and links it.
+//! feature (ADR-001) it also builds the CorralNative Swift package and links it.
 fn main() {
     #[cfg(feature = "native")]
     link_corral_native();

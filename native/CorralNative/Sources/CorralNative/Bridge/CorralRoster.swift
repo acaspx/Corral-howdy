@@ -1,5 +1,5 @@
 // CorralRoster.swift
-// The wire contract with the Rust core over the C ABI (Spike S1, docs/01 §2): the roster snapshot
+// The wire contract with the Rust core over the C ABI (ADR-001, docs/01 §2): the roster snapshot
 // Rust sends, and the intents Swift sends back. Pure Foundation, so it is unit-tested
 // (Tests/CorralNativeTests/CorralBridgeTests.swift) against the shared Fixtures/bridge files.
 //
@@ -151,7 +151,7 @@ struct AnyKey: CodingKey {
     init?(intValue: Int) { return nil }
 }
 
-private func rejectUnknownKeys(_ decoder: Decoder, allowed: Set<String>) throws {
+func rejectUnknownKeys(_ decoder: Decoder, allowed: Set<String>) throws {
     let c = try decoder.container(keyedBy: AnyKey.self)
     if let extra = c.allKeys.first(where: { !allowed.contains($0.stringValue) }) {
         throw DecodingError.dataCorruptedError(forKey: extra, in: c, debugDescription: "unknown key")

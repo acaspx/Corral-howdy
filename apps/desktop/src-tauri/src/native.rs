@@ -1,12 +1,13 @@
-//! The C ABI into CorralNative (Swift), Spike S1. macOS only, behind the `native` feature.
+//! The C ABI into CorralNative (Swift), ADR-001. macOS only, behind the `native` feature.
 //!
-//! This is the only `unsafe` in the shell. Every block is a call into the five Swift entry points
+//! This is the only `unsafe` in the shell. Every block is a call into the Swift entry points
 //! in `native/CorralNative/Sources/CorralNative/Bridge/CorralBridge.swift`, or a read of bytes Swift
 //! lends to the intent callback. Payloads are JSON (`bridge.rs`), so no Rust or Swift type crosses.
-//! Production use needs the ADR-001 amendment in `docs/adr/001-stack.md` (AGENTS.md: no `unsafe`
-//! without an ADR).
+//! ADR-001 (`docs/adr/001-stack.md`) is the ADR AGENTS.md requires for this `unsafe`.
 
-use crate::bridge::{self, BridgeError, Intent, RosterSnapshot, Status};
+use crate::bridge::{
+    self, AuthRequest, BridgeError, Intent, NotificationRequest, RosterSnapshot, Status,
+};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::OnceLock;
 
@@ -19,8 +20,9 @@ unsafe extern "C" {
     fn corral_native_abi_version() -> u32;
     fn corral_native_start(callback: Option<IntentCallback>) -> i32;
     fn corral_native_set_roster(bytes: *const u8, len: isize) -> i32;
+    fn corral_native_notify(bytes: *const u8, len: isize) -> i32;
+    fn corral_native_authenticate(bytes: *const u8, len: isize) -> i32;
     fn corral_native_stop() -> i32;
-    fn corral_native_probe_open_agent(bytes: *const u8, len: isize) -> i32;
 }
 
 /// Why the corral surface couldn't do what was asked.
@@ -97,14 +99,28 @@ pub fn start(
 /// Replaces the roster the corral shows. Main thread only (Swift refuses otherwise).
 pub fn set_roster(snapshot: &RosterSnapshot) -> Result<(), NativeError> {
     let bytes = snapshot.to_bytes()?;
-    set_roster_bytes(&bytes)
-}
-
-/// Sends raw bytes as a roster. Public so the spike can prove Swift refuses bad input.
-pub fn set_roster_bytes(bytes: &[u8]) -> Result<(), NativeError> {
     let len = isize::try_from(bytes.len()).map_err(|_| Status::Rejected)?;
     // SAFETY: `bytes` is valid for `len` bytes for the duration of the call; Swift copies them.
     Status::check(unsafe { corral_native_set_roster(bytes.as_ptr(), len) })?;
+    Ok(())
+}
+
+/// Posts a checkpoint notification. Main thread only, and only from the packaged .app (Swift
+/// refuses in a bare binary). Clicks come back as [`Intent::NotificationAction`].
+pub fn notify(request: &NotificationRequest) -> Result<(), NativeError> {
+    let bytes = request.to_bytes()?;
+    let len = isize::try_from(bytes.len()).map_err(|_| Status::Rejected)?;
+    // SAFETY: `bytes` is valid for `len` bytes for the duration of the call; Swift copies them.
+    Status::check(unsafe { corral_native_notify(bytes.as_ptr(), len) })?;
+    Ok(())
+}
+
+/// Shows a Touch ID prompt. Main thread only. The result comes back as [`Intent::AuthResult`].
+pub fn authenticate(request: &AuthRequest) -> Result<(), NativeError> {
+    let bytes = request.to_bytes()?;
+    let len = isize::try_from(bytes.len()).map_err(|_| Status::Rejected)?;
+    // SAFETY: `bytes` is valid for `len` bytes for the duration of the call; Swift copies them.
+    Status::check(unsafe { corral_native_authenticate(bytes.as_ptr(), len) })?;
     Ok(())
 }
 
@@ -112,13 +128,5 @@ pub fn set_roster_bytes(bytes: &[u8]) -> Result<(), NativeError> {
 pub fn stop() -> Result<(), NativeError> {
     // SAFETY: no arguments.
     Status::check(unsafe { corral_native_stop() })?;
-    Ok(())
-}
-
-/// Spike probe: asks Swift to emit `openAgent` for `id` through the tap path.
-pub fn probe_open_agent(id: &str) -> Result<(), NativeError> {
-    let len = isize::try_from(id.len()).map_err(|_| Status::Rejected)?;
-    // SAFETY: `id` is valid for `len` bytes for the duration of the call; Swift copies them.
-    Status::check(unsafe { corral_native_probe_open_agent(id.as_ptr(), len) })?;
     Ok(())
 }

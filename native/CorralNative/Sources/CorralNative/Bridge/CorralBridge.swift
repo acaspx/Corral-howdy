@@ -1,9 +1,12 @@
 // CorralBridge.swift
-// The narrow C ABI between the Rust core and CorralNative (Spike S1, docs/01 §2).
+// The narrow C ABI between the Rust core and CorralNative (ADR-001, docs/01 §2).
 //
 //   Rust → Swift   corral_native_abi_version, corral_native_start, corral_native_set_roster,
-//                  corral_native_stop, corral_native_probe_open_agent (spike probe)
+//                  corral_native_notify, corral_native_authenticate, corral_native_stop
 //   Swift → Rust   one callback: (pointer, length) of a JSON intent (Fixtures/bridge/intent-*-v1.json)
+//
+// Notifications and Touch ID need a real app bundle: UNUserNotificationCenter refuses to work
+// for a bare executable, so they only work from the packaged Corral.app.
 //
 // Rules for every entry point:
 //   - Main thread only. Called from any other thread it returns `notMainThread` and does nothing;
@@ -14,7 +17,9 @@
 //   - Swift reports what the user did. It never decides anything (AGENTS.md rule 3).
 
 import AppKit
+import LocalAuthentication
 import SwiftUI
+import UserNotifications
 
 /// `void (*)(const uint8_t *bytes, intptr_t len)`
 public typealias CorralIntentCallback = @convention(c) (UnsafePointer<UInt8>?, Int) -> Void
@@ -31,7 +36,7 @@ public enum CorralBridgeStatus: Int32, Error, Sendable {
 }
 
 /// Bump when any signature or payload above changes. Rust refuses to start on a mismatch.
-public let corralNativeABIVersion: UInt32 = 1
+public let corralNativeABIVersion: UInt32 = 2
 
 @MainActor
 final class CorralBridgeModel: ObservableObject {
@@ -54,6 +59,9 @@ enum CorralBridge {
     static var callback: CorralIntentCallback?
     static let model = CorralBridgeModel()
     private static var screenObserver: NSObjectProtocol?
+    private static let notificationDelegate = CorralNotificationDelegate()
+    /// The Touch ID prompt that's up, if any. A second request is refused rather than queued.
+    private static var authContext: LAContext?
 
     static func start(_ callback: CorralIntentCallback) -> CorralBridgeStatus {
         guard panel == nil else { return .alreadyStarted }
@@ -67,7 +75,121 @@ enum CorralBridge {
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { CorralBridge.place() }
         }
+        // The delegate is set at launch so a click on a notification that launched the app is seen.
+        // UNUserNotificationCenter traps in a bare executable, so it's only touched inside a .app.
+        if inAppBundle {
+            let center = UNUserNotificationCenter.current()
+            center.delegate = notificationDelegate
+            center.setNotificationCategories(Set(CorralNotificationRequest.allCategoryActionSets.map(category)))
+        }
         return .ok
+    }
+
+    /// UNUserNotificationCenter traps outside a real .app on disk. An Info.plist embedded in a
+    /// bare binary (Tauri does that in dev) gives a bundle identifier but isn't enough.
+    static var inAppBundle: Bool {
+        Bundle.main.bundleURL.pathExtension == "app" && Bundle.main.bundleIdentifier != nil
+    }
+
+    private static func category(_ actions: [CorralNotificationRequest.Action]) -> UNNotificationCategory {
+        let buttons = actions.map { action -> UNNotificationAction in
+            switch action {
+            // Approve from a notification still needs the Mac unlocked; Rust adds Touch ID on top
+            // for critical risks, and never offers inline Approve for high or critical.
+            case .approve: UNNotificationAction(identifier: "corral.approve", title: "Approve", options: [.authenticationRequired])
+            case .deny: UNNotificationAction(identifier: "corral.deny", title: "Deny", options: [.destructive])
+            case .open: UNNotificationAction(identifier: "corral.open", title: "Open", options: [.foreground])
+            }
+        }
+        return UNNotificationCategory(identifier: CorralNotificationRequest.categoryID(for: actions),
+                                      actions: buttons, intentIdentifiers: [], options: [.customDismissAction])
+    }
+
+    static func notify(_ data: Data) -> CorralBridgeStatus {
+        guard panel != nil else { return .notStarted }
+        guard inAppBundle else { return .rejected }
+        let request: CorralNotificationRequest
+        switch CorralNotificationRequest.decode(data) {
+        case .failure(let error):
+            NSLog("CorralNative: notification rejected (%@)", String(describing: error))
+            return .rejected
+        case .success(let r): request = r
+        }
+        // Completion-handler APIs. The closures are explicitly @Sendable: without that, Swift 6
+        // infers them main-actor isolated and traps when the system calls them on its own queue.
+        // They carry only Sendable values and hop to the main thread before emitting.
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { @Sendable granted, error in
+            guard granted, error == nil else {
+                CorralBridge.onMain { CorralBridge.emitNotificationFailed(request.checkpoint, .notAuthorized) }
+                return
+            }
+            let content = UNMutableNotificationContent()
+            content.title = request.title
+            content.body = request.body
+            content.sound = .default
+            content.categoryIdentifier = CorralNotificationRequest.categoryID(for: request.actions)
+            content.userInfo = ["checkpoint": request.checkpoint, "nonce": request.nonce]
+            let note = UNNotificationRequest(identifier: "corral.checkpoint.\(request.checkpoint)", content: content, trigger: nil)
+            UNUserNotificationCenter.current().add(note) { @Sendable error in
+                guard let error else { return }
+                NSLog("CorralNative: notification failed (%@)", String(describing: error))
+                CorralBridge.onMain { CorralBridge.emitNotificationFailed(request.checkpoint, .failed) }
+            }
+        }
+        return .ok
+    }
+
+    static func authenticate(_ data: Data) -> CorralBridgeStatus {
+        guard panel != nil else { return .notStarted }
+        guard authContext == nil else { return .rejected }
+        let request: CorralAuthRequest
+        switch CorralAuthRequest.decode(data) {
+        case .failure(let error):
+            NSLog("CorralNative: Touch ID request rejected (%@)", String(describing: error))
+            return .rejected
+        case .success(let r): request = r
+        }
+        let context = LAContext()
+        context.localizedFallbackTitle = ""          // Touch ID only: no "Enter Password" button
+        var error: NSError?
+        // Touch ID only: a critical approval needs the finger, not the login password. Without
+        // Touch ID, Rust is told `unavailable` and decides the fallback (ADR-001 open question).
+        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
+            emit(data: CorralIntentWire.encodeAuthResult(request: request.request, outcome: .unavailable))
+            return .ok
+        }
+        authContext = context                        // kept alive until the reply
+        context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: request.reason) { @Sendable success, error in
+            let outcome = success ? CorralAuthOutcome.ok : CorralBridge.outcome(for: error)
+            CorralBridge.onMain {
+                CorralBridge.authContext = nil
+                CorralBridge.emit(data: CorralIntentWire.encodeAuthResult(request: request.request, outcome: outcome))
+            }
+        }
+        return .ok
+    }
+
+    nonisolated static func outcome(for error: (any Error)?) -> CorralAuthOutcome {
+        guard let error = error as? LAError else { return .failed }
+        switch error.code {
+        case .userCancel, .systemCancel, .appCancel, .userFallback: return .cancelled
+        case .biometryNotAvailable, .biometryNotEnrolled, .passcodeNotSet: return .unavailable
+        default: return .failed
+        }
+    }
+
+    /// Runs `work` on the main thread from a system callback on any queue.
+    nonisolated static func onMain(_ work: @escaping @MainActor @Sendable () -> Void) {
+        DispatchQueue.main.async { MainActor.assumeIsolated { work() } }
+    }
+
+    static func emitNotificationAction(checkpoint: String, nonce: String, action: CorralNotificationResponse) {
+        emit(data: CorralIntentWire.encodeNotificationAction(checkpoint: checkpoint, nonce: nonce, action: action))
+    }
+
+    static func emitNotificationFailed(_ checkpoint: String, _ reason: CorralNotificationFailure) {
+        emit(data: CorralIntentWire.encodeNotificationFailed(checkpoint: checkpoint, reason: reason))
     }
 
     static func setRoster(_ data: Data) -> CorralBridgeStatus {
@@ -94,18 +216,12 @@ enum CorralBridge {
         return .ok
     }
 
-    /// Spike probe: emits `openAgent` for an agent that is in the corral, through the same path a
-    /// tap uses, so a script can check the round trip without a click. Not for production.
-    static func probeOpenAgent(_ data: Data) -> CorralBridgeStatus {
-        guard panel != nil else { return .notStarted }
-        guard let id = String(data: data, encoding: .utf8),
-              model.agents.contains(where: { $0.id == id }) else { return .rejected }
-        emit(.openAgent(id: id))
-        return .ok
+    static func emit(_ intent: CorralIntent) {
+        emit(data: CorralIntentWire.encode(intent))
     }
 
-    static func emit(_ intent: CorralIntent) {
-        guard let callback, let data = CorralIntentWire.encode(intent) else { return }
+    static func emit(data: Data?) {
+        guard let callback, let data else { return }
         data.withUnsafeBytes { raw in
             callback(raw.bindMemory(to: UInt8.self).baseAddress, raw.count)
         }
@@ -144,17 +260,49 @@ public func corral_native_set_roster(_ bytes: UnsafePointer<UInt8>?, _ count: In
     }
 }
 
+@_cdecl("corral_native_notify")
+public func corral_native_notify(_ bytes: UnsafePointer<UInt8>?, _ count: Int) -> Int32 {
+    guard Thread.isMainThread else { return CorralBridgeStatus.notMainThread.rawValue }
+    switch borrowed(bytes, count, limit: CorralNotificationRequest.maxBytes) {
+    case .failure(let status): return status.rawValue
+    case .success(let data): return MainActor.assumeIsolated { CorralBridge.notify(data).rawValue }
+    }
+}
+
+@_cdecl("corral_native_authenticate")
+public func corral_native_authenticate(_ bytes: UnsafePointer<UInt8>?, _ count: Int) -> Int32 {
+    guard Thread.isMainThread else { return CorralBridgeStatus.notMainThread.rawValue }
+    switch borrowed(bytes, count, limit: CorralAuthRequest.maxBytes) {
+    case .failure(let status): return status.rawValue
+    case .success(let data): return MainActor.assumeIsolated { CorralBridge.authenticate(data).rawValue }
+    }
+}
+
 @_cdecl("corral_native_stop")
 public func corral_native_stop() -> Int32 {
     guard Thread.isMainThread else { return CorralBridgeStatus.notMainThread.rawValue }
     return MainActor.assumeIsolated { CorralBridge.stop().rawValue }
 }
 
-@_cdecl("corral_native_probe_open_agent")
-public func corral_native_probe_open_agent(_ bytes: UnsafePointer<UInt8>?, _ count: Int) -> Int32 {
-    guard Thread.isMainThread else { return CorralBridgeStatus.notMainThread.rawValue }
-    switch borrowed(bytes, count, limit: CorralRoster.maxIDLength * 4) {
-    case .failure(let status): return status.rawValue
-    case .success(let data): return MainActor.assumeIsolated { CorralBridge.probeOpenAgent(data).rawValue }
+// MARK: Notification responses
+
+/// Receives the user's click on a Corral notification and reports it to Rust. Holds no state.
+final class CorralNotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+    /// Show checkpoint notifications even while Corral is the active app.
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                            willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+        [.banner, .list, .sound]
+    }
+
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                            didReceive response: UNNotificationResponse) async {
+        let info = response.notification.request.content.userInfo
+        // Only Corral's own notifications carry these; anything else is ignored.
+        guard let checkpoint = info["checkpoint"] as? String, CorralRoster.isValidID(checkpoint),
+              let nonce = info["nonce"] as? String, CorralRoster.isValidID(nonce),
+              let action = CorralNotificationResponse.action(for: response.actionIdentifier) else { return }
+        await MainActor.run {
+            CorralBridge.emitNotificationAction(checkpoint: checkpoint, nonce: nonce, action: action)
+        }
     }
 }

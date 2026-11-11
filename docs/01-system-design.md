@@ -304,7 +304,7 @@ corral/
 
 | ADR | Decision | Status |
 |---|---|---|
-| 001 | Tauri 2 + React/TS + Rust core + Swift native package; C ABI with versioned JSON; core in-process for v1 | Proposed, S1 findings in [adr/001-stack.md](adr/001-stack.md) |
+| 001 | Tauri 2 + React/TS + Rust core + Swift native package; C ABI with versioned JSON; core in-process for v1 | **Accepted** 2026-11-10 ([adr/001-stack.md](adr/001-stack.md)) |
 | 002 | Event-sourced, hash-chained run log; all views are projections | Proposed |
 | 003 | Policy in Rust core, pure and deny-by-default; adapters can't bypass the gate | Proposed |
 | 004 | Native API runner is the primary adapter | Proposed |
