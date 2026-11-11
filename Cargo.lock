@@ -418,9 +418,13 @@ dependencies = [
 name = "corral-desktop"
 version = "0.0.1"
 dependencies = [
+ "corral-core",
+ "serde",
  "serde_json",
+ "swift-rs",
  "tauri",
  "tauri-build",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

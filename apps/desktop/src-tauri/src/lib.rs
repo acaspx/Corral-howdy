@@ -4,6 +4,16 @@
 //! Lifecycle, policy and budget decisions live in `corral-core` / `corral-policy`. The liquid-glass
 //! corral itself is native Swift (`native/CorralNative`), linked in after Spike S1.
 
+// Spike S1: the C ABI into CorralNative. `bridge` is pure and tested everywhere; `native` (FFI)
+// and the spike driver only build on macOS with `--features native`.
+#[cfg(any(test, all(target_os = "macos", feature = "native")))]
+mod bridge;
+#[cfg(all(target_os = "macos", feature = "native"))]
+#[allow(unsafe_code)] // the C ABI; see the module docs and docs/adr/001-stack.md
+mod native;
+#[cfg(all(target_os = "macos", feature = "native"))]
+mod spike_s1;
+
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager, RunEvent, WindowEvent};
@@ -81,6 +91,9 @@ pub fn run() {
                     _ => {}
                 })
                 .build(app)?;
+
+            #[cfg(all(target_os = "macos", feature = "native"))]
+            spike_s1::start(app.handle())?;
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -100,6 +113,12 @@ pub fn run() {
             // Nothing to do: `decide` always allows a real exit (see its doc comment).
             RunEvent::ExitRequested { .. } => {
                 debug_assert_eq!(decide(ShellEvent::ExitRequested), ShellAction::AllowExit);
+            }
+            #[cfg(all(target_os = "macos", feature = "native"))]
+            RunEvent::Exit => {
+                if let Err(e) = native::stop() {
+                    println!("corral-bridge: stop: {e}");
+                }
             }
             #[cfg(target_os = "macos")]
             RunEvent::Reopen {
