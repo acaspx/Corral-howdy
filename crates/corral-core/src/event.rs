@@ -549,6 +549,9 @@ pub enum FailureReason {
     Adapter,
     /// A bug in Corral.
     Internal,
+    /// Corral quit or crashed while the run was going; marked on the next launch. Runs aren't
+    /// resumed in v1 (system design §8).
+    AppRestarted,
 }
 
 /// `run.cancelled`.

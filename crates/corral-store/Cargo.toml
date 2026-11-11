@@ -16,5 +16,9 @@ serde_json.workspace = true
 sha2 = "0.10"
 thiserror.workspace = true
 
+[dev-dependencies]
+# The supervisor integration test runs on a tokio runtime.
+tokio = { version = "1", features = ["rt", "macros"] }
+
 [lints]
 workspace = true
