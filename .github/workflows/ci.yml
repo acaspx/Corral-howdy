@@ -95,6 +95,19 @@ jobs:
       # The desktop playground (docs/07, Spike S5/S6) must keep compiling against the library.
       - run: xcodebuild build -scheme CorralPlayground -destination 'platform=macOS'
         working-directory: native/CorralNative
+      # The Tauri shell with CorralNative linked (ADR-001). The default build never compiles the
+      # macOS-only FFI module, so lint and test it here, with the Rust side of the bridge contract
+      # (TP-BRIDGE-01..04) running against the same fixtures as the Swift tests above.
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      # The Tauri shell embeds the built frontend.
+      - run: pnpm -r build
+      - run: cargo clippy -p corral-desktop --features native --all-targets -- -D warnings
+      - run: cargo test -p corral-desktop --features native
 
   scope-guard:
     name: scope guard (test changes need a reason)

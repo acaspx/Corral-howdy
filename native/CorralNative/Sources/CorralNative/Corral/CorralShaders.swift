@@ -1,5 +1,5 @@
 // CorralShaders.swift
-// Finds the compiled corral shader without ever trapping (Spike S1 finding).
+// Finds the compiled corral shader without ever trapping (ADR-001, pitfall 1).
 //
 // `ShaderLibrary.bundle(.module)` goes through SwiftPM's generated `Bundle.module`, which calls
 // fatalError when the resource bundle isn't where SwiftPM expects it. Linked into the Tauri app,
@@ -28,6 +28,7 @@ enum CorralShaders {
                 return .bundle(bundle)
             }
         }
+        NSLog("CorralNative: no compiled shader found; drawing plain glass")
         return nil
     }
 }

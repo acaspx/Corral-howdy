@@ -13,12 +13,12 @@ name = "corral_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [features]
-# Spike S1: link CorralNative (Swift) and show the corral from Rust. macOS + Xcode 26 only.
+# Link CorralNative (Swift) and show the corral (ADR-001). macOS + Xcode 26 only.
 native = ["dep:swift-rs"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
-# Builds the CorralNative Swift package and links it with the Swift runtime (Spike S1).
+# Builds the CorralNative Swift package and links it with the Swift runtime (ADR-001).
 swift-rs = { version = "1.0.7", features = ["build"], optional = true }
 
 [dependencies]
@@ -29,7 +29,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 
 # The workspace lints, except `unsafe_code` is `deny` instead of `forbid`, so the one FFI module
-# (`src/native.rs`) can allow it. Spike S1; production needs the ADR-001 amendment.
+# (`src/native.rs`) can allow it. ADR-001 is the ADR that allows it.
 [lints.rust]
 unsafe_code = "deny"
 missing_docs = "warn"

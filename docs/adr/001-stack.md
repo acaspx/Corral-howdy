@@ -1,8 +1,8 @@
 # ADR-001: Stack, the Swift bridge and the process model
 
-Status: **Proposed, with Spike S1 findings** (owner to accept) · Issue #3 · 2026-11-10
-Spike code: branch `spike/s1-bridge` (not merged; spikes aren't). Supersedes the "confirm after
-Spike S1" note in [01-system-design.md §2](../01-system-design.md).
+Status: **Accepted** 2026-11-10 · Issue #3 · Spike S1
+Spike code: `spike/s1-bridge` (step 1 merged in #40; SK-2a turned it into product code and added
+step 2). Supersedes the "confirm after Spike S1" note in [01-system-design.md §2](../01-system-design.md).
 
 ## Decision
 
@@ -122,12 +122,15 @@ Developer ID credentials are configured (Keychain or CI secrets only, never the 
 - **Touch ID unavailable** (no sensor, none enrolled, lockout): Swift reports `unavailable`. The
   policy engine must choose the fallback, probably the login password via
   `.deviceOwnerAuthentication` with a stronger confirmation. Decide in M2 (TP-POL-09).
-- **CI for the native build:** add a macOS job that builds with `--features native` and runs the
-  bridge contract tests on both sides (SK-2).
+- ~~**CI for the native build**~~: done in SK-2a. The `native` CI job lints and tests the shell
+  with `--features native`, next to the Swift contract tests.
 
 ## SK-2: from spike to product
 
-Port in reviewed PRs, tests first: the fixtures and Swift tests; `CorralRoster` and the wire
-types; `CorralShaders`; the C entry points; `bridge.rs` and `native.rs`; the feature flag; the
-desktop crate's lint table. Drop the spike driver and the probe entry point. Then stream real
-roster and run snapshots from the supervisor.
+- **SK-2a (done):** the checkpoint notification and Touch ID payloads (TP-BRIDGE-04), the spike
+  driver and probe entry point removed, the shell shows an empty corral with `--features native`,
+  and the CI job above.
+- **SK-2b:** stream the supervisor's roster and run snapshots to the corral, and hand intents to
+  `corral-core`, which decides.
+- **Packaging (with SK-6 or the first signed build):** compile the metallib in a
+  `beforeBundleCommand` and ship it through `bundle.resources` (pitfall 2).
