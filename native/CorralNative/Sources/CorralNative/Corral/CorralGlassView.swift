@@ -145,7 +145,7 @@ public struct CorralGlassView: View {
             ZStack(alignment: .topLeading) {
                 if reduceTransparency {
                     solidFallback(target.canvas, pivot: target.pivot)
-                } else {
+                } else if let shaders = CorralShaders.library {
                     // macOS 26: the system Liquid Glass material supplies real refraction of whatever
                     // is behind the corral. The Metal pass carves it into drops + bridges and adds
                     // rim, highlights and caustics. How the two layers compose is Spike S5's job;
@@ -155,7 +155,7 @@ public struct CorralGlassView: View {
                         .glassEffect(.regular, in: .rect)
                         .frame(width: target.canvas.width, height: target.canvas.height)
                         .layerEffect(
-                            ShaderLibrary.bundle(.module).corralGlass(
+                            shaders.corralGlass(
                                 .float2(target.canvas),
                                 .float(t),
                                 .floatArray(payload.values),
@@ -165,6 +165,8 @@ public struct CorralGlassView: View {
                             ),
                             maxSampleOffset: CGSize(width: 20, height: 20)
                         )
+                } else {
+                    plainGlass(target.canvas, pivot: target.pivot)
                 }
                 ForEach(morph.blobs.filter { b in agents.contains { $0.id == b.id } }) { blob in
                     if let agent = agents.first(where: { $0.id == blob.id }) {
@@ -220,6 +222,20 @@ public struct CorralGlassView: View {
                     Image(systemName: "hand.raised.fill").font(.caption2).padding(4)
                 }
             }
+    }
+
+    private func plainGlass(_ canvas: CGSize, pivot: CGPoint) -> some View {
+        // No compiled shader found (CorralShaders): plain system glass drops, no bridges.
+        ZStack(alignment: .topLeading) {
+            ForEach(morph.blobs) { b in
+                Circle()
+                    .fill(.clear)
+                    .glassEffect(.regular, in: .circle)
+                    .frame(width: b.radius * 2, height: b.radius * 2)
+                    .position(x: pivot.x + b.offset.x, y: pivot.y + b.offset.y)
+            }
+        }
+        .frame(width: canvas.width, height: canvas.height)
     }
 
     private func solidFallback(_ canvas: CGSize, pivot: CGPoint) -> some View {

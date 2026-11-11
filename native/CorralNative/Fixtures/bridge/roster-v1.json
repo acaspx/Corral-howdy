@@ -1,0 +1,9 @@
+{
+  "v": 1,
+  "agents": [
+    { "id": "scout", "name": "Scout", "monogram": "Sc", "status": "available" },
+    { "id": "ranger", "name": "Ranger", "monogram": "Rg", "status": "working" },
+    { "id": "drover", "name": "Drover", "monogram": "Dv", "status": "needsYou" }
+  ],
+  "hidden": 0
+}
