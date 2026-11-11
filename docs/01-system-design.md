@@ -60,7 +60,7 @@ Read first: [00-product-brief.md](00-product-brief.md). Security details: [02-se
 - **React (webviews)** owns deep work: trace viewer, agent and policy editors, spend, settings.
 - **Rust core** owns every decision. Swift and React only display state and send intents back.
 
-Swift is linked through `swift-rs` behind a narrow C ABI. **Spike S1** confirms the bridge and the widget packaging. **Spike S5** compiles and tunes the corral shader. See [07-brand-and-corral-surface.md](07-brand-and-corral-surface.md).
+Swift is linked through `swift-rs` behind a narrow C ABI carrying versioned JSON. **Spike S1** (done 2026-11-10) confirmed the bridge, notifications and Touch ID, and found the widget packaging feasible; the findings and the process-model decision are in [adr/001-stack.md](adr/001-stack.md). **Spike S5** compiles and tunes the corral shader. See [07-brand-and-corral-surface.md](07-brand-and-corral-surface.md).
 
 ## 3. Domain model
 
@@ -304,7 +304,7 @@ corral/
 
 | ADR | Decision | Status |
 |---|---|---|
-| 001 | Tauri 2 + React/TS + Rust core + Swift native package | Proposed (confirm after Spike S1) |
+| 001 | Tauri 2 + React/TS + Rust core + Swift native package; C ABI with versioned JSON; core in-process for v1 | Proposed, S1 findings in [adr/001-stack.md](adr/001-stack.md) |
 | 002 | Event-sourced, hash-chained run log; all views are projections | Proposed |
 | 003 | Policy in Rust core, pure and deny-by-default; adapters can't bypass the gate | Proposed |
 | 004 | Native API runner is the primary adapter | Proposed |
