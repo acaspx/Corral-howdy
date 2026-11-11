@@ -18,6 +18,7 @@ enum CorralShaders {
     static func find(in main: Bundle = .main) -> ShaderLibrary? {
         // 1. A metallib copied into the app's Resources (the packaged .app), or next to a dev binary.
         if let url = main.url(forResource: "CorralGlass", withExtension: "metallib") {
+            NSLog("CorralNative: shader from %@", url.path)
             return ShaderLibrary(url: url)
         }
         // 2. SwiftPM's resource bundle, compiled by Xcode (xcodebuild products, the playground).
@@ -25,9 +26,11 @@ enum CorralShaders {
         for base in bases.compactMap({ $0 }) {
             if let bundle = Bundle(url: base.appendingPathComponent(resourceBundleName)),
                bundle.url(forResource: "default", withExtension: "metallib") != nil {
+                NSLog("CorralNative: shader from %@", bundle.bundlePath)
                 return .bundle(bundle)
             }
         }
+        NSLog("CorralNative: no compiled shader found; drawing plain glass")
         return nil
     }
 }

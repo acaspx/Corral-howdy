@@ -1,12 +1,14 @@
 //! The C ABI into CorralNative (Swift), Spike S1. macOS only, behind the `native` feature.
 //!
-//! This is the only `unsafe` in the shell. Every block is a call into the five Swift entry points
+//! This is the only `unsafe` in the shell. Every block is a call into the Swift entry points
 //! in `native/CorralNative/Sources/CorralNative/Bridge/CorralBridge.swift`, or a read of bytes Swift
 //! lends to the intent callback. Payloads are JSON (`bridge.rs`), so no Rust or Swift type crosses.
 //! Production use needs the ADR-001 amendment in `docs/adr/001-stack.md` (AGENTS.md: no `unsafe`
 //! without an ADR).
 
-use crate::bridge::{self, BridgeError, Intent, RosterSnapshot, Status};
+use crate::bridge::{
+    self, AuthRequest, BridgeError, Intent, NotificationRequest, RosterSnapshot, Status,
+};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::OnceLock;
 
@@ -19,6 +21,8 @@ unsafe extern "C" {
     fn corral_native_abi_version() -> u32;
     fn corral_native_start(callback: Option<IntentCallback>) -> i32;
     fn corral_native_set_roster(bytes: *const u8, len: isize) -> i32;
+    fn corral_native_notify(bytes: *const u8, len: isize) -> i32;
+    fn corral_native_authenticate(bytes: *const u8, len: isize) -> i32;
     fn corral_native_stop() -> i32;
     fn corral_native_probe_open_agent(bytes: *const u8, len: isize) -> i32;
 }
@@ -105,6 +109,29 @@ pub fn set_roster_bytes(bytes: &[u8]) -> Result<(), NativeError> {
     let len = isize::try_from(bytes.len()).map_err(|_| Status::Rejected)?;
     // SAFETY: `bytes` is valid for `len` bytes for the duration of the call; Swift copies them.
     Status::check(unsafe { corral_native_set_roster(bytes.as_ptr(), len) })?;
+    Ok(())
+}
+
+/// Posts a checkpoint notification. Main thread only, and only from the packaged .app (Swift
+/// refuses in a bare binary). Clicks come back as [`Intent::NotificationAction`].
+pub fn notify(request: &NotificationRequest) -> Result<(), NativeError> {
+    notify_bytes(&request.to_bytes()?)
+}
+
+/// Sends raw bytes as a notification request. Public so the spike can prove Swift refuses bad input.
+pub fn notify_bytes(bytes: &[u8]) -> Result<(), NativeError> {
+    let len = isize::try_from(bytes.len()).map_err(|_| Status::Rejected)?;
+    // SAFETY: `bytes` is valid for `len` bytes for the duration of the call; Swift copies them.
+    Status::check(unsafe { corral_native_notify(bytes.as_ptr(), len) })?;
+    Ok(())
+}
+
+/// Shows a Touch ID prompt. Main thread only. The result comes back as [`Intent::AuthResult`].
+pub fn authenticate(request: &AuthRequest) -> Result<(), NativeError> {
+    let bytes = request.to_bytes()?;
+    let len = isize::try_from(bytes.len()).map_err(|_| Status::Rejected)?;
+    // SAFETY: `bytes` is valid for `len` bytes for the duration of the call; Swift copies them.
+    Status::check(unsafe { corral_native_authenticate(bytes.as_ptr(), len) })?;
     Ok(())
 }
 

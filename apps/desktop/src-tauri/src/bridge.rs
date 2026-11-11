@@ -7,11 +7,11 @@
 // Without `native` only the tests use this module, and they don't touch every variant.
 #![cfg_attr(not(feature = "native"), allow(dead_code))]
 
-use corral_core::ids::AgentId;
+use corral_core::ids::{AgentId, CheckpointId};
 use serde::{Deserialize, Serialize};
 
 /// Must equal `corralNativeABIVersion` in `CorralBridge.swift`.
-pub const ABI_VERSION: u32 = 1;
+pub const ABI_VERSION: u32 = 2;
 /// Version of the JSON payloads below.
 pub const WIRE_VERSION: u32 = 1;
 /// The corral never shows more than an octagon (docs/07 §3).
@@ -77,6 +77,83 @@ impl RosterSnapshot {
     }
 }
 
+/// A checkpoint notification for Swift to post (`notify-v1.json`). Rust chooses the buttons:
+/// high and critical risks get no inline Approve (docs/01 "Notifications"); Swift only draws them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct NotificationRequest {
+    v: u32,
+    checkpoint: CheckpointId,
+    nonce: String,
+    agent: AgentId,
+    title: String,
+    body: String,
+    actions: Vec<Offer>,
+}
+
+/// A button on a checkpoint notification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Offer {
+    /// Approve inline (low and medium risk only).
+    Approve,
+    /// Deny inline.
+    Deny,
+    /// Open the agent's hover card.
+    Open,
+}
+
+impl NotificationRequest {
+    /// A notification for `checkpoint`; `nonce` is its single-use approval nonce (T18).
+    pub fn new(
+        checkpoint: CheckpointId,
+        nonce: impl Into<String>,
+        agent: AgentId,
+        title: impl Into<String>,
+        body: impl Into<String>,
+        actions: Vec<Offer>,
+    ) -> Self {
+        Self {
+            v: WIRE_VERSION,
+            checkpoint,
+            nonce: nonce.into(),
+            agent,
+            title: title.into(),
+            body: body.into(),
+            actions,
+        }
+    }
+
+    /// The JSON bytes passed to `corral_native_notify`.
+    pub fn to_bytes(&self) -> Result<Vec<u8>, BridgeError> {
+        serde_json::to_vec(self).map_err(BridgeError::Encode)
+    }
+}
+
+/// A Touch ID prompt for Swift to show (`authenticate-v1.json`). The answer comes back as
+/// [`Intent::AuthResult`] with the same `request`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AuthRequest {
+    v: u32,
+    request: String,
+    reason: String,
+}
+
+impl AuthRequest {
+    /// `reason` completes macOS's sentence "Corral is trying to …".
+    pub fn new(request: impl Into<String>, reason: impl Into<String>) -> Self {
+        Self {
+            v: WIRE_VERSION,
+            request: request.into(),
+            reason: reason.into(),
+        }
+    }
+
+    /// The JSON bytes passed to `corral_native_authenticate`.
+    pub fn to_bytes(&self) -> Result<Vec<u8>, BridgeError> {
+        serde_json::to_vec(self).map_err(BridgeError::Encode)
+    }
+}
+
 /// What the user did in the corral, as reported by Swift. Typed, never a raw string (TP-BRIDGE-02).
 /// Swift only reports; Rust decides what happens (AGENTS.md rule 3).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,6 +164,68 @@ pub enum Intent {
     Deploy(Vec<AgentId>),
     /// The user asked for the prompt bar.
     SummonPromptBar,
+    /// The user clicked a button on (or dismissed) a checkpoint notification. Rust checks the
+    /// nonce and the risk before anything is approved.
+    NotificationAction {
+        /// The checkpoint the notification was for.
+        checkpoint: CheckpointId,
+        /// The nonce it carried; must match the checkpoint's current one.
+        nonce: String,
+        /// What the user clicked.
+        action: NoteAction,
+    },
+    /// A checkpoint notification couldn't be shown; fall back to the hover card.
+    NotificationFailed {
+        /// The checkpoint it was for.
+        checkpoint: CheckpointId,
+        /// Why.
+        reason: NoteFailure,
+    },
+    /// The answer to an [`AuthRequest`].
+    AuthResult {
+        /// The request it answers.
+        request: String,
+        /// What happened.
+        outcome: AuthOutcome,
+    },
+}
+
+/// A click on a checkpoint notification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NoteAction {
+    /// The inline Approve button.
+    Approve,
+    /// The inline Deny button.
+    Deny,
+    /// Open, or a click on the notification itself.
+    Open,
+    /// Dismissed without choosing.
+    Dismiss,
+}
+
+/// Why a checkpoint notification wasn't shown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NoteFailure {
+    /// The user hasn't allowed Corral's notifications.
+    NotAuthorized,
+    /// macOS refused it.
+    Failed,
+}
+
+/// The result of a Touch ID prompt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AuthOutcome {
+    /// Authenticated.
+    Ok,
+    /// Cancelled by the user or the system.
+    Cancelled,
+    /// Didn't match.
+    Failed,
+    /// No Touch ID on this Mac, or none enrolled.
+    Unavailable,
 }
 
 #[derive(Deserialize)]
@@ -99,9 +238,26 @@ struct IntentEnvelope {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
 enum IntentWire {
-    OpenAgent { id: String },
-    Deploy { ids: Vec<String> },
+    OpenAgent {
+        id: String,
+    },
+    Deploy {
+        ids: Vec<String>,
+    },
     SummonPromptBar,
+    NotificationAction {
+        checkpoint: String,
+        nonce: String,
+        action: NoteAction,
+    },
+    NotificationFailed {
+        checkpoint: String,
+        reason: NoteFailure,
+    },
+    AuthResult {
+        request: String,
+        outcome: AuthOutcome,
+    },
 }
 
 /// Why something crossing the bridge was refused.
@@ -119,8 +275,8 @@ pub enum BridgeError {
     /// A payload version this build doesn't speak.
     #[error("intent wire version {0}; this build speaks {WIRE_VERSION}")]
     Version(u32),
-    /// An agent ID that is empty, too long or has control characters.
-    #[error("invalid agent id")]
+    /// An ID that is empty, too long or has control characters.
+    #[error("invalid id")]
     BadId,
     /// A deploy with no agents or more than [`MAX_SHOWN`].
     #[error("deploy names {0} agents; expected 1 to {MAX_SHOWN}")]
@@ -155,15 +311,37 @@ pub fn decode_intent(bytes: &[u8]) -> Result<Intent, BridgeError> {
             Ok(Intent::Deploy(agents))
         }
         IntentWire::SummonPromptBar => Ok(Intent::SummonPromptBar),
+        IntentWire::NotificationAction {
+            checkpoint,
+            nonce,
+            action,
+        } => Ok(Intent::NotificationAction {
+            checkpoint: CheckpointId::from(ident(checkpoint)?),
+            nonce: ident(nonce)?,
+            action,
+        }),
+        IntentWire::NotificationFailed { checkpoint, reason } => Ok(Intent::NotificationFailed {
+            checkpoint: CheckpointId::from(ident(checkpoint)?),
+            reason,
+        }),
+        IntentWire::AuthResult { request, outcome } => Ok(Intent::AuthResult {
+            request: ident(request)?,
+            outcome,
+        }),
     }
 }
 
 fn agent_id(id: String) -> Result<AgentId, BridgeError> {
+    ident(id).map(AgentId::from)
+}
+
+/// An ID from Swift: non-empty, at most [`MAX_ID_LEN`] characters, no whitespace or controls.
+fn ident(id: String) -> Result<String, BridgeError> {
     let valid = !id.is_empty()
         && id.chars().count() <= MAX_ID_LEN
         && !id.chars().any(|c| c.is_control() || c.is_whitespace());
     if valid {
-        Ok(AgentId::from(id))
+        Ok(id)
     } else {
         Err(BridgeError::BadId)
     }
@@ -256,6 +434,19 @@ mod tests {
     const PROMPT: &str = include_str!(
         "../../../../native/CorralNative/Fixtures/bridge/intent-summon-prompt-bar-v1.json"
     );
+
+    const NOTIFY: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/notify-v1.json");
+    const AUTH: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/authenticate-v1.json");
+    const NOTE_ACTION: &str = include_str!(
+        "../../../../native/CorralNative/Fixtures/bridge/intent-notification-action-v1.json"
+    );
+    const NOTE_FAILED: &str = include_str!(
+        "../../../../native/CorralNative/Fixtures/bridge/intent-notification-failed-v1.json"
+    );
+    const AUTH_RESULT: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/intent-auth-result-v1.json");
 
     fn json(bytes: &[u8]) -> Value {
         serde_json::from_slice(bytes).unwrap()
@@ -350,6 +541,74 @@ mod tests {
             decode_intent(s.as_bytes()).unwrap(),
             Intent::Deploy(vec![AgentId::from("a"), AgentId::from("b")])
         );
+    }
+
+    #[test]
+    fn checkpoint_notification_matches_the_fixture_swift_decodes() {
+        let n = NotificationRequest::new(
+            CheckpointId::from("cp-1"),
+            "n-1",
+            AgentId::from("scout"),
+            "Scout needs you",
+            "Send the weekly summary email to 3 people?",
+            vec![Offer::Approve, Offer::Deny, Offer::Open],
+        );
+        assert_eq!(json(&n.to_bytes().unwrap()), json(NOTIFY.as_bytes()));
+    }
+
+    #[test]
+    fn touch_id_request_matches_the_fixture_swift_decodes() {
+        let a = AuthRequest::new("auth-1", "approve Scout spending $4.00");
+        assert_eq!(json(&a.to_bytes().unwrap()), json(AUTH.as_bytes()));
+    }
+
+    #[test]
+    fn tp_bridge_02_notification_and_touch_id_results_arrive_typed() {
+        assert_eq!(
+            decode_intent(NOTE_ACTION.as_bytes()).unwrap(),
+            Intent::NotificationAction {
+                checkpoint: CheckpointId::from("cp-1"),
+                nonce: "n-1".into(),
+                action: NoteAction::Approve,
+            }
+        );
+        assert_eq!(
+            decode_intent(NOTE_FAILED.as_bytes()).unwrap(),
+            Intent::NotificationFailed {
+                checkpoint: CheckpointId::from("cp-1"),
+                reason: NoteFailure::NotAuthorized,
+            }
+        );
+        assert_eq!(
+            decode_intent(AUTH_RESULT.as_bytes()).unwrap(),
+            Intent::AuthResult {
+                request: "auth-1".into(),
+                outcome: AuthOutcome::Ok,
+            }
+        );
+    }
+
+    #[test]
+    fn tp_bridge_02_bad_checkpoint_intents_are_refused() {
+        let refused = |s: &str| decode_intent(s.as_bytes()).is_err();
+        assert!(refused(
+            r#"{"v":1,"intent":{"kind":"notificationAction","checkpoint":"cp","nonce":"n","action":"approveAll"}}"#
+        ));
+        assert!(refused(
+            r#"{"v":1,"intent":{"kind":"notificationAction","checkpoint":"","nonce":"n","action":"approve"}}"#
+        ));
+        assert!(refused(
+            r#"{"v":1,"intent":{"kind":"notificationAction","checkpoint":"cp","nonce":"n n","action":"approve"}}"#
+        ));
+        assert!(refused(
+            r#"{"v":1,"intent":{"kind":"notificationAction","checkpoint":"cp","action":"approve"}}"#
+        ));
+        assert!(refused(
+            r#"{"v":1,"intent":{"kind":"authResult","request":"a","outcome":"probably"}}"#
+        ));
+        assert!(refused(
+            r#"{"v":1,"intent":{"kind":"authResult","request":"a","outcome":"ok","by":"x"}}"#
+        ));
     }
 
     #[test]

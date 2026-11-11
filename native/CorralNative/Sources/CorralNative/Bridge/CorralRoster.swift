@@ -151,7 +151,7 @@ struct AnyKey: CodingKey {
     init?(intValue: Int) { return nil }
 }
 
-private func rejectUnknownKeys(_ decoder: Decoder, allowed: Set<String>) throws {
+func rejectUnknownKeys(_ decoder: Decoder, allowed: Set<String>) throws {
     let c = try decoder.container(keyedBy: AnyKey.self)
     if let extra = c.allKeys.first(where: { !allowed.contains($0.stringValue) }) {
         throw DecodingError.dataCorruptedError(forKey: extra, in: c, debugDescription: "unknown key")
