@@ -27,9 +27,15 @@ fn card(id: &str, name: &str, monogram: &str) -> AgentCard {
 #[test]
 fn tp_view_06_each_provider_brings_one_agent() {
     assert_eq!(agent_for(Provider::Xai), card("grok", "Grok", "G"));
-    assert_eq!(agent_for(Provider::Anthropic), card("claude", "Claude", "C"));
+    assert_eq!(
+        agent_for(Provider::Anthropic),
+        card("claude", "Claude", "C")
+    );
     assert_eq!(agent_for(Provider::OpenAi), card("gpt", "GPT", "GP"));
-    assert_eq!(agent_for(Provider::Meta), card("muse-spark", "Muse Spark", "MS"));
+    assert_eq!(
+        agent_for(Provider::Meta),
+        card("muse-spark", "Muse Spark", "MS")
+    );
     for provider in Provider::ALL {
         assert_eq!(provider_of(&agent_for(provider).id), Some(provider));
     }
