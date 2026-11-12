@@ -4,6 +4,7 @@
 //! (`docs/03-build-plan.md`), each piece starting from the failing acceptance tests named in its
 //! issue (`AGENTS.md`).
 
+pub mod budget;
 pub mod clock;
 pub mod corral_view;
 pub mod domain;

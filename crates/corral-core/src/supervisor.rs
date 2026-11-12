@@ -12,16 +12,24 @@
 //!   `force_drop_after` (2 s by default) is dropped: its future is aborted, which closes HTTP
 //!   streams and runs the adapter's cleanup. Either way the run ends with `run.cancelled`.
 //!
-//! The supervisor never decides policy or budgets; those arrive with M2. Runs here are
-//! independent: follow-up runs in a session ("prompt again") are wired up with the session
-//! layer.
+//! - **The hard spend cap** (SK-5): each run's sink holds a [`RunBudget`] with the per-run cap
+//!   from [`BudgetConfig`]. A driver asks [`EventSink::request_model`] before every model
+//!   request; the budget meter ([`crate::budget`]) decides, and only an admitted request is logged
+//!   as `model.request`. A refusal fails the run with `budget_hard_cap`. `usage.reported` events
+//!   are counted against the cap as they're logged.
+//!
+//! The supervisor itself decides nothing about policy or budgets; it routes requests to the
+//! meter. Runs here are independent: follow-up runs in a session ("prompt again") are wired up
+//! with the session layer.
 //!
 //! The [`EventLog`] is called from async tasks. The SQLite store is fast enough for M1; if it
 //! ever blocks noticeably, the call moves to `spawn_blocking`.
 
+use crate::budget::{Admission, BudgetConfig, BudgetError, RequestEstimate, RunBudget};
 use crate::clock::Clock;
 use crate::event::{
-    CancelledBy, Event, EventBody, FailureReason, RunCancelled, RunFailed, RunQueued, RunStarted,
+    CancelledBy, Event, EventBody, FailureReason, ModelRequest, RunCancelled, RunFailed, RunQueued,
+    RunStarted,
 };
 use crate::ids::{AgentId, RunId, SessionId, SpanId};
 use crate::lifecycle::{Lifecycle, LifecycleError, Phase, next};
@@ -125,6 +133,10 @@ pub enum SupervisorError {
     /// No active or queued run has this ID.
     #[error("no active or queued run {0}")]
     UnknownRun(RunId),
+    /// The budget meter refused a model request (the run has failed), or a `model.request` was
+    /// emitted without going through it.
+    #[error(transparent)]
+    Budget(#[from] BudgetError),
     /// Internal state was poisoned by a panic.
     #[error("the supervisor's state is poisoned")]
     Poisoned,
@@ -157,13 +169,15 @@ pub struct RecallReport {
     pub forced: usize,
 }
 
-/// One run's log state: its lifecycle and next seq. Shared by its sink and the supervisor.
+/// One run's log state: its lifecycle, next seq and spend. Shared by its sink and the
+/// supervisor.
 #[derive(Debug)]
 struct RunLog {
     run_id: RunId,
     span_id: SpanId,
     state: Lifecycle,
     next_seq: u64,
+    budget: RunBudget,
 }
 
 /// Emits a run's events: assigns `seq` and `ts`, enforces the lifecycle, appends to the log.
@@ -176,21 +190,70 @@ pub struct EventSink {
 
 impl EventSink {
     /// Emits `body` as the run's next event. Refused (and not logged) if the lifecycle doesn't
-    /// allow it now.
+    /// allow it now. `model.request` is refused here: it goes through [`Self::request_model`].
     pub fn emit(&self, body: EventBody) -> Result<(), SupervisorError> {
+        if let EventBody::ModelRequest(_) = &body {
+            return Err(BudgetError::NotAdmitted.into());
+        }
         let mut run = self.run.lock().map_err(|_| SupervisorError::Poisoned)?;
-        let event = Event {
+        self.append(&mut run, body)
+    }
+
+    /// Asks the budget meter to admit a model request, before anything is sent. Admitted: logs
+    /// `model.request` and returns the output limit the request must carry. Refused: fails the
+    /// run with `budget_hard_cap` and returns the refusal; send nothing.
+    pub fn request_model(
+        &self,
+        request: ModelRequest,
+        estimate: &RequestEstimate,
+    ) -> Result<Admission, SupervisorError> {
+        let mut run = self.run.lock().map_err(|_| SupervisorError::Poisoned)?;
+        let event = self.event(&run, EventBody::ModelRequest(request));
+        // A run that can't log a request now (cancelled, finished) is refused as such, not
+        // charged.
+        next(&run.state, &event)?;
+        let admission = match run.budget.admit(estimate) {
+            Ok(admission) => admission,
+            Err(refusal) => {
+                self.append(
+                    &mut run,
+                    EventBody::RunFailed(RunFailed {
+                        reason: FailureReason::BudgetHardCap,
+                        message: refusal.to_string(),
+                    }),
+                )?;
+                return Err(refusal.into());
+            }
+        };
+        if let Err(e) = self.append(&mut run, event.body) {
+            // Not logged, so not sent: give the reservation back.
+            run.budget.release_last();
+            return Err(e);
+        }
+        Ok(admission)
+    }
+
+    fn event(&self, run: &RunLog, body: EventBody) -> Event {
+        Event {
             run_id: run.run_id.clone(),
             seq: run.next_seq,
             ts: self.clock.now_ms(),
             span_id: run.span_id.clone(),
             parent_span_id: None,
             body,
-        };
+        }
+    }
+
+    /// Checks `body` against the lifecycle, logs it, and counts reported usage against the cap.
+    fn append(&self, run: &mut RunLog, body: EventBody) -> Result<(), SupervisorError> {
+        let event = self.event(run, body);
         let state = next(&run.state, &event)?;
         self.log.append(&event)?;
         run.state = state;
         run.next_seq += 1;
+        if let EventBody::UsageReported(usage) = &event.body {
+            run.budget.reconcile(usage);
+        }
         Ok(())
     }
 
@@ -233,6 +296,7 @@ struct State {
 
 struct Inner {
     config: SupervisorConfig,
+    budget: BudgetConfig,
     driver: Arc<dyn RunDriver>,
     log: Arc<dyn EventLog>,
     clock: Arc<dyn Clock>,
@@ -246,15 +310,28 @@ struct Inner {
 pub struct Supervisor(Arc<Inner>);
 
 impl Supervisor {
-    /// A supervisor that runs `driver` and logs to `log`, with time from `clock`.
+    /// A supervisor that runs `driver` and logs to `log`, with time from `clock`, and the
+    /// default budget ([`BudgetConfig::default`]: $1 per run).
     pub fn new(
         config: SupervisorConfig,
         driver: Arc<dyn RunDriver>,
         log: Arc<dyn EventLog>,
         clock: Arc<dyn Clock>,
     ) -> Self {
+        Self::with_budget(config, BudgetConfig::default(), driver, log, clock)
+    }
+
+    /// [`Self::new`] with these budget settings.
+    pub fn with_budget(
+        config: SupervisorConfig,
+        budget: BudgetConfig,
+        driver: Arc<dyn RunDriver>,
+        log: Arc<dyn EventLog>,
+        clock: Arc<dyn Clock>,
+    ) -> Self {
         Self(Arc::new(Inner {
             config,
+            budget,
             driver,
             log,
             clock,
@@ -275,6 +352,7 @@ impl Supervisor {
                 span_id: SpanId::from(format!("{}:invoke_agent", request.run_id).as_str()),
                 state: Lifecycle::idle(),
                 next_seq: 1,
+                budget: RunBudget::new(self.0.budget.per_run_cap_micro_usd),
             })),
             log: self.0.log.clone(),
             clock: self.0.clock.clone(),
