@@ -32,7 +32,7 @@ Goal: add an xAI key, click Grok's drop, ask a question, watch the ring turn and
 | Slice | Builds on | Done when |
 |---|---|---|
 | **SK-1** Runs and events: event types (#8), lifecycle (#9), event store (#10), supervisor with cancel (M1 items 1–3 and 5) | M0 | TP-LIFE-\*, TP-STORE-\* |
-| **SK-2** Bridge: Spike S1 (#3), then the real roster and run snapshots streaming to Swift, intents back | S1 | TP-BRIDGE-01..03 |
+| **SK-2** Bridge: Spike S1 (#3), then the real roster and run snapshots streaming to Swift, intents back | S1 | TP-BRIDGE-01..04, TP-VIEW-01..05 |
 | **SK-3** Keychain and a minimal "add your xAI key" form in the main window (M3 item 1) | SK-1 | TP-SEC-01..02, TP-SETUP-01, TP-SKEL-01 |
 | **SK-4** Grok, text only: streaming `openai_responses` client, no tools sent, provider tools off, cassettes for CI (M3 items 2 and 5, minus tools) | SK-1 | TP-ADP-01, 03, 04, 05; TP-SKEL-02 |
 | **SK-5** Hard spend cap per run: the cap half of the budget meter (M2 item, protected path) | SK-4 | TP-BUD-01, TP-BUD-05 |

@@ -42,6 +42,9 @@ pub enum NativeError {
     /// The payload couldn't be built.
     #[error(transparent)]
     Bridge(#[from] BridgeError),
+    /// State shared with the corral was poisoned by a panic.
+    #[error("the corral's state is poisoned")]
+    Poisoned,
     /// The intent handler was already installed by an earlier `start`.
     #[error("the intent handler is already installed")]
     HandlerInstalled,

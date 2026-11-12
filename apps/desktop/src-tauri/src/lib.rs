@@ -12,7 +12,7 @@ pub mod bridge;
 #[allow(unsafe_code)] // the C ABI; see the module docs and docs/adr/001-stack.md
 pub mod native;
 #[cfg(all(target_os = "macos", feature = "native"))]
-mod surface;
+pub mod surface;
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
@@ -92,8 +92,10 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            // The corral, empty until agents can be added (SK-3, SK-4). SK-6 hands the feed's
+            // `watch` to the supervisor so every logged event updates it.
             #[cfg(all(target_os = "macos", feature = "native"))]
-            surface::start()?;
+            app.manage(surface::start(app.handle(), Vec::new())?);
             Ok(())
         })
         .on_window_event(|window, event| {

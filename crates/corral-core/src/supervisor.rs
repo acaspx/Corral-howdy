@@ -42,6 +42,30 @@ pub trait EventLog: Send + Sync + 'static {
     fn append(&self, event: &Event) -> Result<(), LogError>;
 }
 
+/// An [`EventLog`] that tells an observer about each event after the inner log accepts it, so
+/// projections such as the corral view (SK-2b) follow the log exactly. An event the inner log
+/// refuses reaches no observer. The observer runs on the appending task, in `seq` order for each
+/// run, and must return quickly: hand slow work elsewhere.
+pub struct WatchedLog<F> {
+    inner: Arc<dyn EventLog>,
+    observer: F,
+}
+
+impl<F: Fn(&Event) + Send + Sync + 'static> WatchedLog<F> {
+    /// Wraps `inner`; `observer` sees every event it accepts.
+    pub fn new(inner: Arc<dyn EventLog>, observer: F) -> Self {
+        Self { inner, observer }
+    }
+}
+
+impl<F: Fn(&Event) + Send + Sync + 'static> EventLog for WatchedLog<F> {
+    fn append(&self, event: &Event) -> Result<(), LogError> {
+        self.inner.append(event)?;
+        (self.observer)(event);
+        Ok(())
+    }
+}
+
 /// An [`EventLog`] failure, with the log's own message.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("event log: {0}")]

@@ -4,6 +4,7 @@
 //! `native/CorralNative/Fixtures/bridge` are tested from both sides (TP-BRIDGE-01..04), so a change
 //! on one side fails the other's tests. The FFI itself lives in `native.rs`.
 
+use corral_core::corral_view::{CorralView, DropState};
 use corral_core::ids::{AgentId, CheckpointId};
 use serde::{Deserialize, Serialize};
 
@@ -71,6 +72,39 @@ impl RosterSnapshot {
     /// The JSON bytes passed to `corral_native_set_roster`.
     pub fn to_bytes(&self) -> Result<Vec<u8>, BridgeError> {
         serde_json::to_vec(self).map_err(BridgeError::Encode)
+    }
+}
+
+impl From<&CorralView> for RosterSnapshot {
+    /// The roster for the core's view (SK-2b). The core already chose the shown set and its
+    /// order; this only translates it to the wire.
+    fn from(view: &CorralView) -> Self {
+        let agents: Vec<RosterAgent> = view
+            .drops
+            .iter()
+            .map(|drop| RosterAgent {
+                id: drop.agent.id.clone(),
+                name: drop.agent.name.clone(),
+                monogram: drop.agent.monogram.clone(),
+                status: DropStatus::from(drop.state),
+            })
+            .collect();
+        let extra = agents.len().saturating_sub(MAX_SHOWN);
+        let mut snapshot = Self::ranked(agents);
+        snapshot.hidden = u32::try_from(view.hidden.saturating_add(extra)).unwrap_or(u32::MAX);
+        snapshot
+    }
+}
+
+impl From<DropState> for DropStatus {
+    fn from(state: DropState) -> Self {
+        match state {
+            DropState::Available => Self::Available,
+            DropState::Working => Self::Working,
+            DropState::NeedsYou => Self::NeedsYou,
+            DropState::Done => Self::Done,
+            DropState::Error => Self::Error,
+        }
     }
 }
 

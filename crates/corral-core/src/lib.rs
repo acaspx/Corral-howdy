@@ -5,6 +5,7 @@
 //! issue (`AGENTS.md`).
 
 pub mod clock;
+pub mod corral_view;
 pub mod domain;
 pub mod event;
 pub mod ids;
