@@ -429,8 +429,10 @@ dependencies = [
 name = "corral-desktop"
 version = "0.0.1"
 dependencies = [
+ "corral-adapters",
  "corral-core",
  "corral-secrets",
+ "corral-store",
  "serde",
  "serde_json",
  "swift-rs",

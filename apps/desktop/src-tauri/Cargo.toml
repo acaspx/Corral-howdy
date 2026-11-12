@@ -25,6 +25,9 @@ swift-rs = { version = "1.0.7", features = ["build"], optional = true }
 tauri = { version = "2", features = ["tray-icon"] }
 corral-core = { path = "../../../crates/corral-core" }
 corral-secrets = { path = "../../../crates/corral-secrets" }
+# Grok over xAI and the event store, for the walking skeleton's corral (SK-6).
+corral-adapters = { path = "../../../crates/corral-adapters" }
+corral-store = { path = "../../../crates/corral-store" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
