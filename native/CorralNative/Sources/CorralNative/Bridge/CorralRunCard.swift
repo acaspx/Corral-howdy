@@ -36,6 +36,20 @@ public struct CorralRunCard: Equatable, Sendable {
     /// The buttons, in order. Unknown ones are dropped, never guessed at.
     public var actions: [Action]
 
+    /// A card as the core would send it, for previews and the playground.
+    public init(status: Status, prompt: String, elapsedMs: Int, spend: String,
+                answer: String? = nil, error: String? = nil, actions: [Action]) {
+        self.status = status
+        self.prompt = prompt
+        promptTruncated = false
+        self.elapsedMs = elapsedMs
+        self.spend = spend
+        self.answer = answer
+        answerTruncated = false
+        self.error = error
+        self.actions = actions
+    }
+
     /// A card from the wire, or nil for a status this build doesn't know.
     init?(_ wire: Wire) {
         guard let status = Status(rawValue: wire.status) else { return nil }
