@@ -46,3 +46,5 @@ todo = "warn"
 
 [dev-dependencies]
 serde_json = { workspace = true }
+# Async tests for the key check (tests/connect.rs).
+tokio = { version = "1", features = ["macros", "rt"] }

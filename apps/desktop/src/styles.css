@@ -21,4 +21,10 @@ h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: -0.01em; }
 .key-form label { font-size: 13px; }
 .key-form input { flex: 1 1 260px; font: inherit; font-size: 13px; padding: 6px 8px; border-radius: 8px; border: 1px solid color-mix(in srgb, CanvasText 25%, transparent); background: Canvas; color: CanvasText; }
 .key-form button { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 8px; }
+.key-form select { font: inherit; font-size: 13px; padding: 5px 8px; border-radius: 8px; }
+.key-empty, .key-notice { font-size: 13px; margin: 12px 0 0; opacity: 0.8; }
+.key-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 8px; }
+.key-list li { display: flex; gap: 10px; align-items: baseline; font-size: 13px; }
+.key-name { font-weight: 600; }
+.key-detail { flex: 1; opacity: 0.75; }
 .key-error { color: light-dark(#b3261e, #ff8a80); font-size: 13px; margin: 10px 0 0; }

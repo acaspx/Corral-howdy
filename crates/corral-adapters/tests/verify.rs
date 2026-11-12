@@ -8,9 +8,12 @@ use std::sync::Mutex;
 
 const KEY: &str = "sk-ant-api03-Q7v2LmN9pRt4sWx8yZa3bCd5"; // gitleaks:allow (made-up test key)
 
+/// Each request: the URL and its headers.
+type Seen = Vec<(String, Vec<(String, String)>)>;
+
 struct FakeProbe {
     answer: Result<u16, String>,
-    seen: Mutex<Vec<(String, Vec<(String, String)>)>>,
+    seen: Mutex<Seen>,
 }
 
 impl FakeProbe {
@@ -21,7 +24,7 @@ impl FakeProbe {
         }
     }
 
-    fn seen(&self) -> Vec<(String, Vec<(String, String)>)> {
+    fn seen(&self) -> Seen {
         self.seen.lock().expect("lock").clone()
     }
 }

@@ -147,6 +147,24 @@ pub trait SecretStore: Send + Sync {
     fn delete(&self, provider: Provider) -> Result<(), SecretError>;
 }
 
+/// The provider a key most likely belongs to, from its prefix (TP-SETUP-05): `xai-` is xAI,
+/// `sk-ant-` is Anthropic, `sk-proj-`, `sk-svcacct-` and older `sk-` keys are OpenAI. Anything
+/// else is `None`, so the user is asked rather than guessed for. A suggestion only: the provider's
+/// own check decides whether the key works.
+pub fn identify(key: &str) -> Option<Provider> {
+    let key = key.trim();
+    let rest_after = |prefix: &str| key.strip_prefix(prefix).filter(|rest| !rest.is_empty());
+    if rest_after("xai-").is_some() {
+        Some(Provider::Xai)
+    } else if key.starts_with("sk-ant-") {
+        rest_after("sk-ant-").map(|_| Provider::Anthropic)
+    } else if rest_after("sk-").is_some() {
+        Some(Provider::OpenAi)
+    } else {
+        None
+    }
+}
+
 /// Whether a provider has a key, as Settings shows it (TP-SEC-02).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]

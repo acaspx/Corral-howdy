@@ -204,6 +204,7 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-SETUP-01** The API key field sends the key straight to the core, which stores it in the Keychain and returns only a key reference; the UI never receives the key back (T6)
 - **TP-SETUP-02** Test connection is a core command; the UI shows only the core's result
 - **TP-SETUP-03** All four entry points (menu bar, corral menu, + chip or empty puddle, Settings › Agents) send the same `openSetup` intent
+- **TP-SETUP-05** One key field takes any provider's key: the core suggests the provider from the key's prefix (`xai-`, `sk-ant-`, `sk-proj-`/`sk-`), asks when the key doesn't say, and the user can change it; the provider's check (TP-SETUP-02) has the last word, and a refused or unchecked key is never stored
 - **TP-SETUP-04** Launch-only apps (consumer Muse, dots) are labelled "not supervised" and never show approval controls
 
 ### Walking skeleton (before M2)

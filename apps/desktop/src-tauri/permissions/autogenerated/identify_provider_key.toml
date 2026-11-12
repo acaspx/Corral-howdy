@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-identify-provider-key"
+description = "Enables the identify_provider_key command without any pre-configured scope."
+commands.allow = ["identify_provider_key"]
+
+[[permission]]
+identifier = "deny-identify-provider-key"
+description = "Denies the identify_provider_key command without any pre-configured scope."
+commands.deny = ["identify_provider_key"]

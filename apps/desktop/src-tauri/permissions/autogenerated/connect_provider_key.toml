@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-connect-provider-key"
+description = "Enables the connect_provider_key command without any pre-configured scope."
+commands.allow = ["connect_provider_key"]
+
+[[permission]]
+identifier = "deny-connect-provider-key"
+description = "Denies the connect_provider_key command without any pre-configured scope."
+commands.deny = ["connect_provider_key"]

@@ -1,10 +1,10 @@
-import { ProviderKeyForm } from "./ProviderKeyForm";
+import { KeyIntake } from "./KeyIntake";
 import { keyApi as defaultKeyApi, type KeyApi } from "./keys";
 
 /**
  * The main window: Corral's deep-work surface (traces, agent and policy editors, spend, settings).
  * The corral, hover cards and trace tree are native Swift (docs/07-brand-and-corral-surface.md).
- * Walking skeleton: the xAI key form (SK-3) is the first real screen; the rest arrive in M4.
+ * Walking skeleton: the API key field is the first real screen; the rest arrive in M4.
  */
 const sections = [
   { title: "Traces", body: "Every model call, tool call and checkpoint for each run, in order." },
@@ -28,9 +28,9 @@ export function App({ keyApi = defaultKeyApi }: { keyApi?: KeyApi }) {
           </li>
         ))}
       </ul>
-      <ProviderKeyForm provider="xai" name="xAI" api={keyApi} />
+      <KeyIntake api={keyApi} />
       <p className="status" role="status">
-        Walking skeleton: add your xAI key now; your first agent arrives next.
+        Walking skeleton: Grok answers from the corral once its key is connected; more agents arrive next.
       </p>
     </main>
   );
