@@ -1,0 +1,43 @@
+{
+  "v": 1,
+  "agents": [
+    { "id": "scout", "name": "Scout", "monogram": "Sc", "status": "working" },
+    { "id": "ranger", "name": "Ranger", "monogram": "Rg", "status": "done" },
+    { "id": "drover", "name": "Drover", "monogram": "Dv", "status": "error" }
+  ],
+  "hidden": 0,
+  "cards": [
+    {
+      "id": "scout",
+      "status": "working",
+      "prompt": "What is the capital of France?",
+      "promptTruncated": false,
+      "elapsedMs": 3000,
+      "spend": "$0.00",
+      "answerTruncated": false,
+      "actions": ["stop"]
+    },
+    {
+      "id": "ranger",
+      "status": "done",
+      "prompt": "Say hello.",
+      "promptTruncated": false,
+      "elapsedMs": 1000,
+      "spend": "$0.0004",
+      "answer": "Hello! How can I help?",
+      "answerTruncated": false,
+      "actions": ["sendBack", "newTask"]
+    },
+    {
+      "id": "drover",
+      "status": "error",
+      "prompt": "Say hello.",
+      "promptTruncated": false,
+      "elapsedMs": 2000,
+      "spend": "$0.00",
+      "answerTruncated": false,
+      "error": "Add your xAI key in Settings.",
+      "actions": ["retry", "sendBack"]
+    }
+  ]
+}

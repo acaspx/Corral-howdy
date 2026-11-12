@@ -701,3 +701,224 @@ mod tests {
         }
     }
 }
+
+/// SK-6: tasks from a drop, and run cards (TP-SKEL-03..05).
+#[cfg(test)]
+mod skeleton_tests {
+    use super::*;
+    use corral_core::controls::MAX_PROMPT_BYTES;
+    use corral_core::corral_view::{AgentCard, DropView};
+    use corral_core::event::*;
+    use corral_core::ids::{RunId, SessionId, SpanId};
+    use corral_core::run_card::RunCards;
+    use serde_json::Value;
+
+    const CARDS: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/roster-cards-v1.json");
+    const DEPLOY_TASK: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/intent-deploy-task-v1.json");
+    const STOP: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/intent-stop-v1.json");
+    const SEND_BACK: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/intent-send-back-v1.json");
+    const RETRY: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/intent-retry-v1.json");
+
+    fn json(bytes: &[u8]) -> Value {
+        serde_json::from_slice(bytes).expect("json")
+    }
+
+    fn ev(run: &str, ts: u64, body: EventBody) -> Event {
+        Event {
+            run_id: RunId::from(run),
+            seq: 1,
+            ts,
+            span_id: SpanId::from("span"),
+            parent_span_id: None,
+            body,
+        }
+    }
+
+    fn queued(run: &str, agent: &str, prompt: &str) -> Event {
+        ev(
+            run,
+            0,
+            EventBody::RunQueued(RunQueued {
+                agent_id: AgentId::from(agent),
+                session_id: SessionId::from(format!("s-{run}")),
+                prompt: prompt.into(),
+            }),
+        )
+    }
+
+    fn started(run: &str, ts: u64) -> Event {
+        ev(
+            run,
+            ts,
+            EventBody::RunStarted(RunStarted {
+                adapter: "xai".into(),
+            }),
+        )
+    }
+
+    fn drop(id: &str, name: &str, monogram: &str, state: DropState) -> DropView {
+        DropView {
+            agent: AgentCard {
+                id: AgentId::from(id),
+                name: name.into(),
+                monogram: monogram.into(),
+            },
+            state,
+        }
+    }
+
+    /// Three runs: one working, one done, one failed, as the fixture shows them at t = 4 s.
+    fn three_cards() -> (CorralView, RunCards) {
+        let mut cards = RunCards::default();
+        let events = [
+            queued("r1", "scout", "What is the capital of France?"),
+            started("r1", 1_000),
+            queued("r2", "ranger", "Say hello."),
+            started("r2", 1_000),
+            ev(
+                "r2",
+                1_500,
+                EventBody::ModelResponse(ModelResponse {
+                    text: "Hello! How can I help?".into(),
+                    finish_reason: None,
+                }),
+            ),
+            ev(
+                "r2",
+                1_600,
+                EventBody::UsageReported(UsageReported {
+                    input_tokens: 12,
+                    output_tokens: 47,
+                    cost_micro_usd: 306,
+                }),
+            ),
+            ev(
+                "r2",
+                2_000,
+                EventBody::RunCompleted(RunCompleted { summary: None }),
+            ),
+            queued("r3", "drover", "Say hello."),
+            started("r3", 1_000),
+            ev(
+                "r3",
+                3_000,
+                EventBody::RunFailed(RunFailed {
+                    reason: FailureReason::Provider,
+                    message: "Add your xAI key in Settings.".into(),
+                }),
+            ),
+        ];
+        for e in &events {
+            cards.observe(e).expect("legal");
+        }
+        let view = CorralView {
+            drops: vec![
+                drop("scout", "Scout", "Sc", DropState::Working),
+                drop("ranger", "Ranger", "Rg", DropState::Done),
+                drop("drover", "Drover", "Dv", DropState::Error),
+            ],
+            hidden: 0,
+        };
+        (view, cards)
+    }
+
+    #[test]
+    fn tp_skel_04_the_roster_carries_each_drops_card_as_the_fixture_swift_decodes() {
+        let (view, cards) = three_cards();
+        let sent = RosterSnapshot::with_cards(&view, &cards, 4_000)
+            .to_bytes()
+            .expect("encode");
+        assert_eq!(json(&sent), json(CARDS.as_bytes()));
+    }
+
+    #[test]
+    fn tp_skel_04_cards_go_only_with_shown_drops() {
+        let (mut view, cards) = three_cards();
+        view.drops.truncate(1);
+        let v = json(
+            &RosterSnapshot::with_cards(&view, &cards, 4_000)
+                .to_bytes()
+                .expect("encode"),
+        );
+        let ids: Vec<&str> = v["cards"]
+            .as_array()
+            .expect("cards")
+            .iter()
+            .map(|c| c["id"].as_str().expect("id"))
+            .collect();
+        assert_eq!(ids, ["scout"]);
+    }
+
+    #[test]
+    fn tp_skel_04_a_roster_with_no_cards_is_still_roster_v1() {
+        let view = CorralView {
+            drops: vec![drop("scout", "Scout", "Sc", DropState::Available)],
+            hidden: 0,
+        };
+        let v = json(
+            &RosterSnapshot::with_cards(&view, &RunCards::default(), 0)
+                .to_bytes()
+                .expect("encode"),
+        );
+        assert!(v.get("cards").is_none(), "{v}");
+    }
+
+    #[test]
+    fn tp_skel_03_tasks_stop_send_back_and_retry_arrive_typed() {
+        assert_eq!(
+            decode_intent(DEPLOY_TASK.as_bytes()).expect("deployTask"),
+            Intent::DeployTask {
+                agent: AgentId::from("scout"),
+                prompt: "What is the capital of France?".into(),
+            }
+        );
+        assert_eq!(
+            decode_intent(STOP.as_bytes()).expect("stop"),
+            Intent::Stop(AgentId::from("scout"))
+        );
+        assert_eq!(
+            decode_intent(SEND_BACK.as_bytes()).expect("sendBack"),
+            Intent::SendBack(AgentId::from("scout"))
+        );
+        assert_eq!(
+            decode_intent(RETRY.as_bytes()).expect("retry"),
+            Intent::Retry(AgentId::from("scout"))
+        );
+    }
+
+    #[test]
+    fn tp_skel_03_bad_task_intents_are_refused() {
+        let refused = |s: &str| decode_intent(s.as_bytes()).is_err();
+        assert!(refused(
+            r#"{"v":1,"intent":{"kind":"deployTask","id":"scout"}}"#
+        ));
+        assert!(refused(
+            r#"{"v":1,"intent":{"kind":"deployTask","id":"","prompt":"hi"}}"#
+        ));
+        assert!(refused(
+            r#"{"v":1,"intent":{"kind":"deployTask","id":"scout","prompt":"hi","model":"x"}}"#
+        ));
+        assert!(refused(r#"{"v":1,"intent":{"kind":"stop"}}"#));
+        assert!(refused(
+            r#"{"v":1,"intent":{"kind":"sendBack","id":"a b"}}"#
+        ));
+        let long = "a".repeat(MAX_PROMPT_BYTES + 1);
+        assert!(matches!(
+            decode_intent(
+                format!(
+                    r#"{{"v":1,"intent":{{"kind":"deployTask","id":"scout","prompt":"{long}"}}}}"#
+                )
+                .as_bytes()
+            ),
+            Err(BridgeError::PromptTooLong(_))
+        ));
+    }
+
+    // A full-size prompt, with room for the envelope, fits in one intent.
+    const _: () = assert!(MAX_PROMPT_BYTES + 256 <= MAX_INTENT_BYTES);
+}
