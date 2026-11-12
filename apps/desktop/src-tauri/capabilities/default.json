@@ -1,9 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main-window",
-  "description": "Least privilege for the main window (security model T10). The M0 window calls no Tauri APIs, so it gets none. Add single permissions per feature, never bundles; keep tests/capabilities.rs in step.",
+  "description": "Least privilege for the main window (security model T10). It may read, save and remove provider keys (SK-3) and nothing else. Add single permissions per feature, never bundles; keep tests/capabilities.rs in step.",
   "windows": [
     "main"
   ],
-  "permissions": []
+  "permissions": [
+    "allow-provider-key-status",
+    "allow-save-provider-key",
+    "allow-remove-provider-key"
+  ]
 }

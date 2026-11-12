@@ -24,6 +24,7 @@ swift-rs = { version = "1.0.7", features = ["build"], optional = true }
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
 corral-core = { path = "../../../crates/corral-core" }
+corral-secrets = { path = "../../../crates/corral-secrets" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

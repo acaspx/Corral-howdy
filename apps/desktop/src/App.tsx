@@ -1,7 +1,10 @@
+import { ProviderKeyForm } from "./ProviderKeyForm";
+import { keyApi as defaultKeyApi, type KeyApi } from "./keys";
+
 /**
  * The main window: Corral's deep-work surface (traces, agent and policy editors, spend, settings).
  * The corral, hover cards and trace tree are native Swift (docs/07-brand-and-corral-surface.md).
- * M0 skeleton: real screens arrive in milestone M4.
+ * Walking skeleton: the xAI key form (SK-3) is the first real screen; the rest arrive in M4.
  */
 const sections = [
   { title: "Traces", body: "Every model call, tool call and checkpoint for each run, in order." },
@@ -10,7 +13,7 @@ const sections = [
   { title: "Spend", body: "What each agent has cost, against its limits." },
 ] as const;
 
-export function App() {
+export function App({ keyApi = defaultKeyApi }: { keyApi?: KeyApi }) {
   return (
     <main className="shell">
       <header>
@@ -25,8 +28,9 @@ export function App() {
           </li>
         ))}
       </ul>
+      <ProviderKeyForm provider="xai" name="xAI" api={keyApi} />
       <p className="status" role="status">
-        Skeleton build (milestone M0). Nothing is wired up yet.
+        Walking skeleton: add your xAI key now; your first agent arrives next.
       </p>
     </main>
   );
