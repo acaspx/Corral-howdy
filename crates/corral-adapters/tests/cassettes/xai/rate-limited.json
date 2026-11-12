@@ -1,0 +1,23 @@
+{
+  "description": "429 on every attempt.",
+  "responses": [
+    {
+      "status": 429,
+      "body": [
+        "{\"code\":\"Too many requests\",\"error\":\"You have exceeded your rate limit.\"}"
+      ]
+    },
+    {
+      "status": 429,
+      "body": [
+        "{\"code\":\"Too many requests\",\"error\":\"You have exceeded your rate limit.\"}"
+      ]
+    },
+    {
+      "status": 429,
+      "body": [
+        "{\"code\":\"Too many requests\",\"error\":\"You have exceeded your rate limit.\"}"
+      ]
+    }
+  ]
+}

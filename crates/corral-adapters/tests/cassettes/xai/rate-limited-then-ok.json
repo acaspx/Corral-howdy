@@ -1,0 +1,56 @@
+{
+  "description": "429 with Retry-After, then the same request succeeds.",
+  "responses": [
+    {
+      "status": 429,
+      "retry_after_secs": 2,
+      "body": [
+        "{\"code\":\"Too many requests\",\"error\":\"You have exceeded your rate limit.\"}"
+      ]
+    },
+    {
+      "status": 200,
+      "body": [
+        "event: response.created",
+        "data: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"resp_cassette_0001\",\"object\":\"response\",\"model\":\"grok-test\",\"status\":\"in_progress\",\"output\":[]}}",
+        "",
+        "event: response.in_progress",
+        "data: {\"type\":\"response.in_progress\",\"sequence_number\":1,\"response\":{\"id\":\"resp_cassette_0001\",\"object\":\"response\",\"model\":\"grok-test\",\"status\":\"in_progress\",\"output\":[]}}",
+        "",
+        "event: response.output_item.added",
+        "data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"id\":\"rs_0001\",\"type\":\"reasoning\",\"summary\":[],\"encrypted_content\":\"<redacted>\"}}",
+        "",
+        "event: response.output_item.done",
+        "data: {\"type\":\"response.output_item.done\",\"sequence_number\":3,\"output_index\":0,\"item\":{\"id\":\"rs_0001\",\"type\":\"reasoning\",\"summary\":[],\"encrypted_content\":\"<redacted>\"}}",
+        "",
+        "event: response.output_item.added",
+        "data: {\"type\":\"response.output_item.added\",\"sequence_number\":4,\"output_index\":1,\"item\":{\"id\":\"msg_0001\",\"type\":\"message\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}",
+        "",
+        "event: response.content_part.added",
+        "data: {\"type\":\"response.content_part.added\",\"sequence_number\":5,\"item_id\":\"msg_0001\",\"output_index\":1,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\",\"annotations\":[]}}",
+        "",
+        "event: response.output_text.delta",
+        "data: {\"type\":\"response.output_text.delta\",\"sequence_number\":6,\"item_id\":\"msg_0001\",\"output_index\":1,\"content_index\":0,\"delta\":\"Hello\"}",
+        "",
+        "event: response.output_text.delta",
+        "data: {\"type\":\"response.output_text.delta\",\"sequence_number\":7,\"item_id\":\"msg_0001\",\"output_index\":1,\"content_index\":0,\"delta\":\" from\"}",
+        "",
+        "event: response.output_text.delta",
+        "data: {\"type\":\"response.output_text.delta\",\"sequence_number\":8,\"item_id\":\"msg_0001\",\"output_index\":1,\"content_index\":0,\"delta\":\" Grok.\"}",
+        "",
+        "event: response.output_text.done",
+        "data: {\"type\":\"response.output_text.done\",\"sequence_number\":9,\"item_id\":\"msg_0001\",\"output_index\":1,\"content_index\":0,\"text\":\"Hello from Grok.\"}",
+        "",
+        "event: response.content_part.done",
+        "data: {\"type\":\"response.content_part.done\",\"sequence_number\":10,\"item_id\":\"msg_0001\",\"output_index\":1,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"Hello from Grok.\",\"annotations\":[]}}",
+        "",
+        "event: response.output_item.done",
+        "data: {\"type\":\"response.output_item.done\",\"sequence_number\":11,\"output_index\":1,\"item\":{\"id\":\"msg_0001\",\"type\":\"message\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hello from Grok.\",\"annotations\":[]}]}}",
+        "",
+        "event: response.completed",
+        "data: {\"type\":\"response.completed\",\"sequence_number\":12,\"response\":{\"id\":\"resp_cassette_0001\",\"object\":\"response\",\"model\":\"grok-test\",\"status\":\"completed\",\"output\":[],\"usage\":{\"input_tokens\":12,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":47,\"output_tokens_details\":{\"reasoning_tokens\":40},\"total_tokens\":59,\"num_sources_used\":0,\"num_server_side_tools_used\":0,\"cost_in_usd_ticks\":3060000}}}",
+        ""
+      ]
+    }
+  ]
+}

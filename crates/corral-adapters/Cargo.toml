@@ -9,6 +9,21 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+corral-core = { path = "../corral-core" }
+corral-secrets = { path = "../corral-secrets" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { version = "1", features = ["rt", "sync", "time", "macros"] }
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+bytes = "1"
+# HTTPS to model providers. native-tls is Security.framework on macOS (the system trust store,
+# no bundled crypto); rustls' default provider pulls aws-lc-sys, whose license deny.toml refuses.
+reqwest = { version = "0.13", default-features = false, features = ["native-tls", "json", "stream", "http2"] }
+
+[dev-dependencies]
+# Paused time: backoff and Stop are tested exactly without waiting.
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "time", "macros", "test-util"] }
 
 [lints]
 workspace = true
