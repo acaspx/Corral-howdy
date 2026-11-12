@@ -4,8 +4,10 @@
 //! `native/CorralNative/Fixtures/bridge` are tested from both sides (TP-BRIDGE-01..04), so a change
 //! on one side fails the other's tests. The FFI itself lives in `native.rs`.
 
+use corral_core::controls::MAX_PROMPT_BYTES;
 use corral_core::corral_view::{CorralView, DropState};
 use corral_core::ids::{AgentId, CheckpointId};
+use corral_core::run_card::{CardAction, CardStatus, RunCard, RunCards};
 use serde::{Deserialize, Serialize};
 
 /// Must equal `corralNativeABIVersion` in `CorralBridge.swift`.
@@ -19,12 +21,117 @@ pub const MAX_ID_LEN: usize = 64;
 /// Largest intent payload Rust reads from Swift.
 pub const MAX_INTENT_BYTES: usize = 16 * 1024;
 
-/// A ranked roster snapshot for the corral: what Rust sends (`roster-v1.json`).
+/// A ranked roster snapshot for the corral: what Rust sends (`roster-v1.json`), with each shown
+/// drop's run card when it has one (`roster-cards-v1.json`, SK-6).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RosterSnapshot {
     v: u32,
     agents: Vec<RosterAgent>,
     hidden: u32,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    cards: Vec<CardSnapshot>,
+}
+
+/// What a drop's hover card and result card show, from the core's [`RunCard`]. Text is already
+/// cleaned and capped; Swift bounds it again.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CardSnapshot {
+    /// The drop the card belongs to.
+    pub id: AgentId,
+    /// Where the run stands.
+    pub status: CardStatusWire,
+    /// The task.
+    pub prompt: String,
+    /// Whether the task was cut to fit.
+    pub prompt_truncated: bool,
+    /// Elapsed time, from the core's clock.
+    pub elapsed_ms: u64,
+    /// Spend so far, in dollars.
+    pub spend: String,
+    /// The answer (agent text), once there is one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub answer: Option<String>,
+    /// Whether the answer was cut to fit.
+    pub answer_truncated: bool,
+    /// Why the run failed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    /// The card's buttons, in order.
+    pub actions: Vec<CardActionWire>,
+}
+
+/// A card's status, as Swift's `CorralRunCard.Status`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CardStatusWire {
+    /// Waiting for a slot.
+    Queued,
+    /// Working.
+    Working,
+    /// Waiting on a checkpoint.
+    NeedsYou,
+    /// Finished.
+    Done,
+    /// Failed.
+    Error,
+    /// Stopped.
+    Stopped,
+}
+
+/// A card's button, as Swift's `CorralRunCard.Action`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CardActionWire {
+    /// Stop.
+    Stop,
+    /// Send back.
+    SendBack,
+    /// New task.
+    NewTask,
+    /// Retry.
+    Retry,
+}
+
+impl From<CardStatus> for CardStatusWire {
+    fn from(status: CardStatus) -> Self {
+        match status {
+            CardStatus::Queued => Self::Queued,
+            CardStatus::Working => Self::Working,
+            CardStatus::NeedsYou => Self::NeedsYou,
+            CardStatus::Done => Self::Done,
+            CardStatus::Error => Self::Error,
+            CardStatus::Stopped => Self::Stopped,
+        }
+    }
+}
+
+impl From<CardAction> for CardActionWire {
+    fn from(action: CardAction) -> Self {
+        match action {
+            CardAction::Stop => Self::Stop,
+            CardAction::SendBack => Self::SendBack,
+            CardAction::NewTask => Self::NewTask,
+            CardAction::Retry => Self::Retry,
+        }
+    }
+}
+
+impl From<&RunCard> for CardSnapshot {
+    fn from(card: &RunCard) -> Self {
+        Self {
+            id: card.agent.clone(),
+            status: card.status.into(),
+            prompt: card.prompt.as_str().to_owned(),
+            prompt_truncated: card.prompt.is_truncated(),
+            elapsed_ms: card.elapsed_ms,
+            spend: card.spend.clone(),
+            answer: card.answer.as_ref().map(|a| a.as_str().to_owned()),
+            answer_truncated: card.answer.as_ref().is_some_and(|a| a.is_truncated()),
+            error: card.error.as_ref().map(|e| e.as_str().to_owned()),
+            actions: card.actions.iter().map(|a| (*a).into()).collect(),
+        }
+    }
 }
 
 /// One drop in the corral.
@@ -66,7 +173,20 @@ impl RosterSnapshot {
             v: WIRE_VERSION,
             agents,
             hidden: u32::try_from(hidden).unwrap_or(u32::MAX),
+            cards: Vec::new(),
         }
+    }
+
+    /// The roster for the core's view, with the run card of each shown drop at `now_ms` (SK-6).
+    pub fn with_cards(view: &CorralView, cards: &RunCards, now_ms: u64) -> Self {
+        let mut snapshot = Self::from(view);
+        snapshot.cards = snapshot
+            .agents
+            .iter()
+            .filter_map(|agent| cards.card(&agent.id, now_ms))
+            .map(|card| CardSnapshot::from(&card))
+            .collect();
+        snapshot
     }
 
     /// The JSON bytes passed to `corral_native_set_roster`.
@@ -219,6 +339,19 @@ pub enum Intent {
         /// What happened.
         outcome: AuthOutcome,
     },
+    /// The user gave a drop a task (SK-6). The core checks the prompt.
+    DeployTask {
+        /// The drop.
+        agent: AgentId,
+        /// The task, as typed.
+        prompt: String,
+    },
+    /// Stop on a card.
+    Stop(AgentId),
+    /// Send back on a card.
+    SendBack(AgentId),
+    /// Retry on a card.
+    Retry(AgentId),
 }
 
 /// A click on a checkpoint notification.
@@ -289,6 +422,19 @@ enum IntentWire {
         request: String,
         outcome: AuthOutcome,
     },
+    DeployTask {
+        id: String,
+        prompt: String,
+    },
+    Stop {
+        id: String,
+    },
+    SendBack {
+        id: String,
+    },
+    Retry {
+        id: String,
+    },
 }
 
 /// Why something crossing the bridge was refused.
@@ -312,6 +458,9 @@ pub enum BridgeError {
     /// A deploy with no agents or more than [`MAX_SHOWN`].
     #[error("deploy names {0} agents; expected 1 to {MAX_SHOWN}")]
     BadGroup(usize),
+    /// A task over the core's prompt limit.
+    #[error("task is {0} bytes; the limit is {MAX_PROMPT_BYTES}")]
+    PromptTooLong(usize),
     /// A roster that couldn't be encoded.
     #[error("roster encode failed: {0}")]
     Encode(serde_json::Error),
@@ -359,6 +508,18 @@ pub fn decode_intent(bytes: &[u8]) -> Result<Intent, BridgeError> {
             request: ident(request)?,
             outcome,
         }),
+        IntentWire::DeployTask { id, prompt } => {
+            if prompt.len() > MAX_PROMPT_BYTES {
+                return Err(BridgeError::PromptTooLong(prompt.len()));
+            }
+            Ok(Intent::DeployTask {
+                agent: agent_id(id)?,
+                prompt,
+            })
+        }
+        IntentWire::Stop { id } => Ok(Intent::Stop(agent_id(id)?)),
+        IntentWire::SendBack { id } => Ok(Intent::SendBack(agent_id(id)?)),
+        IntentWire::Retry { id } => Ok(Intent::Retry(agent_id(id)?)),
     }
 }
 

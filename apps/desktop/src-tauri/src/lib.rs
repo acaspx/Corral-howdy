@@ -100,10 +100,10 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // The corral, empty until agents can be added (SK-3, SK-4). SK-6 hands the feed's
-            // `watch` to the supervisor so every logged event updates it.
+            // The corral, wired to the core: Grok's drop deploys through the supervisor, and every
+            // logged event updates the drops and their cards (SK-6).
             #[cfg(all(target_os = "macos", feature = "native"))]
-            app.manage(surface::start(app.handle(), Vec::new())?);
+            app.manage(surface::start(app.handle())?);
             Ok(())
         })
         .on_window_event(|window, event| {

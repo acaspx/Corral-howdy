@@ -84,6 +84,14 @@ final class PlaygroundModel: ObservableObject {
             note("deploy \(ids.joined(separator: ", "))")
         case .summonPromptBar:
             note("summonPromptBar")
+        case .deployTask(let id, let prompt):
+            note("deployTask \(id): \(prompt)")
+        case .stop(let id):
+            note("stop \(id)")
+        case .sendBack(let id):
+            note("sendBack \(id)")
+        case .retry(let id):
+            note("retry \(id)")
         }
     }
 

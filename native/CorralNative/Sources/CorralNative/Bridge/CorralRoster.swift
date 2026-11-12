@@ -11,8 +11,9 @@ import Foundation
 
 public struct CorralRoster: Equatable, Sendable {
     public static let wireVersion = 1
-    /// Largest roster accepted, checked before the bytes are copied or parsed.
-    public static let maxBytes = 64 * 1024
+    /// Largest roster accepted, checked before the bytes are copied or parsed. Room for 8 run
+    /// cards with full-length answers.
+    public static let maxBytes = 256 * 1024
     /// The corral never shows more than an octagon (docs/07 §3).
     public static let maxShown = 8
     public static let maxIDLength = 64
@@ -24,6 +25,8 @@ public struct CorralRoster: Equatable, Sendable {
     public var agents: [CorralAgentToken]
     /// Agents that exist but aren't shown. Spoken by VoiceOver only.
     public var hiddenCount: Int
+    /// Run cards by agent ID, for shown agents only (SK-6, `roster-cards-v1.json`).
+    public var cards: [String: CorralRunCard] = [:]
 
     public enum DecodeError: Error, Equatable, Sendable {
         case empty
@@ -58,7 +61,17 @@ public struct CorralRoster: Equatable, Sendable {
             shown.append(CorralAgentToken(id: agent.id, name: name, monogram: monogram, status: status))
         }
         let hidden = min(max(wire.hidden, 0), maxHidden) + overflow
-        return .success(CorralRoster(agents: shown, hiddenCount: min(hidden, maxHidden)))
+
+        // A card belongs to a shown drop; the first card for each drop wins, and a card with a
+        // status this build doesn't know is dropped (the drop still shows).
+        let shownIDs = Set(shown.map(\.id))
+        var cards: [String: CorralRunCard] = [:]
+        for card in wire.cards ?? [] {
+            guard shownIDs.contains(card.id), cards[card.id] == nil,
+                  let decoded = CorralRunCard(card) else { continue }
+            cards[card.id] = decoded
+        }
+        return .success(CorralRoster(agents: shown, hiddenCount: min(hidden, maxHidden), cards: cards))
     }
 
     static func status(_ s: String) -> CorralAgentToken.Status? {
@@ -91,6 +104,7 @@ public struct CorralRoster: Equatable, Sendable {
         let v: Int
         let agents: [Agent]
         let hidden: Int
+        let cards: [CorralRunCard.Wire]?
 
         struct Agent: Decodable {
             let id: String, name: String, monogram: String, status: String
@@ -105,11 +119,12 @@ public struct CorralRoster: Equatable, Sendable {
         }
 
         init(from decoder: Decoder) throws {
-            try rejectUnknownKeys(decoder, allowed: ["v", "agents", "hidden"])
+            try rejectUnknownKeys(decoder, allowed: ["v", "agents", "hidden", "cards"])
             let c = try decoder.container(keyedBy: AnyKey.self)
             v = try c.decode(Int.self, forKey: AnyKey("v"))
             agents = try c.decode([Agent].self, forKey: AnyKey("agents"))
             hidden = try c.decode(Int.self, forKey: AnyKey("hidden"))
+            cards = try c.decodeIfPresent([CorralRunCard.Wire].self, forKey: AnyKey("cards"))
         }
     }
 }
@@ -126,16 +141,21 @@ public enum CorralIntentWire {
 
     private struct Body: Encodable {
         let kind: String
-        let id: String?
-        let ids: [String]?
+        var id: String? = nil
+        var ids: [String]? = nil
+        var prompt: String? = nil
     }
 
     public static func encode(_ intent: CorralIntent) -> Data? {
         let body: Body
         switch intent {
-        case .openAgent(let id): body = Body(kind: "openAgent", id: id, ids: nil)
-        case .deploy(let ids): body = Body(kind: "deploy", id: nil, ids: ids)
-        case .summonPromptBar: body = Body(kind: "summonPromptBar", id: nil, ids: nil)
+        case .openAgent(let id): body = Body(kind: "openAgent", id: id)
+        case .deploy(let ids): body = Body(kind: "deploy", ids: ids)
+        case .summonPromptBar: body = Body(kind: "summonPromptBar")
+        case .deployTask(let id, let prompt): body = Body(kind: "deployTask", id: id, prompt: prompt)
+        case .stop(let id): body = Body(kind: "stop", id: id)
+        case .sendBack(let id): body = Body(kind: "sendBack", id: id)
+        case .retry(let id): body = Body(kind: "retry", id: id)
         }
         // Encoding plain strings can't fail in practice; if it ever does, the tap is dropped
         // rather than sending Rust something malformed.

@@ -29,7 +29,7 @@ use crate::budget::{Admission, BudgetConfig, BudgetError, RequestEstimate, RunBu
 use crate::clock::Clock;
 use crate::event::{
     CancelledBy, Event, EventBody, FailureReason, ModelRequest, RunCancelled, RunFailed, RunQueued,
-    RunStarted,
+    RunStarted, SessionClosed,
 };
 use crate::ids::{AgentId, RunId, SessionId, SpanId};
 use crate::lifecycle::{Lifecycle, LifecycleError, Phase, next};
@@ -387,6 +387,18 @@ impl Supervisor {
             vec![run_id.clone()]
         };
         self.reap(pending).await.map(|_| ())
+    }
+
+    /// Send back: logs `session.closed` for a run that has ended, returning its agent to the
+    /// corral. Refused (and not logged) while the run is still going.
+    pub fn close_session(&self, run_id: &RunId) -> Result<(), SupervisorError> {
+        let sink = self
+            .lock()?
+            .known
+            .get(run_id)
+            .cloned()
+            .ok_or_else(|| SupervisorError::UnknownRun(run_id.clone()))?;
+        sink.emit(EventBody::SessionClosed(SessionClosed {}))
     }
 
     /// Recall-all: cancels every queued and running run, and drops drivers that don't stop

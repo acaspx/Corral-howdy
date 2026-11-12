@@ -24,6 +24,12 @@ public enum CorralIntent: Sendable {
     case deploy(agentIDs: [String])
     case openAgent(id: String)
     case summonPromptBar
+    /// A task typed into a drop's prompt field (SK-6). Rust checks the prompt.
+    case deployTask(id: String, prompt: String)
+    /// Stop, Send back and Retry on a run card.
+    case stop(id: String)
+    case sendBack(id: String)
+    case retry(id: String)
 }
 
 /// Springs drops between layouts so the shape morphs instead of jumping.
