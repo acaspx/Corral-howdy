@@ -42,6 +42,8 @@ public let corralNativeABIVersion: UInt32 = 2
 final class CorralBridgeModel: ObservableObject {
     @Published var agents: [CorralAgentToken] = []
     @Published var hiddenCount = 0
+    /// Where the corral sits; the user's choice, remembered across launches.
+    @Published var level = CorralLevel.load()
 }
 
 struct CorralBridgeRoot: View {
@@ -59,6 +61,11 @@ struct CorralBridgeRoot: View {
         }, onHoverDrop: { id, inside in
             MainActor.assumeIsolated { CorralBridge.cards?.swiftUIHover(drop: id, inside: inside) }
         })
+        .contextMenu {
+            CorralLevelMenu(current: model.level) { level in
+                MainActor.assumeIsolated { CorralBridge.setLevel(level) }
+            }
+        }
     }
 }
 
@@ -77,7 +84,7 @@ enum CorralBridge {
     static func start(_ callback: CorralIntentCallback) -> CorralBridgeStatus {
         guard panel == nil else { return .alreadyStarted }
         self.callback = callback
-        let panel = CorralPanel(rootView: CorralBridgeRoot(model: model))
+        let panel = CorralPanel(rootView: CorralBridgeRoot(model: model), level: model.level)
         self.panel = panel
         cards = CorralCardController(corralPanel: panel) { intent in
             MainActor.assumeIsolated { CorralBridge.emit(intent) }
@@ -219,6 +226,13 @@ enum CorralBridge {
             cards?.update(agents: roster.agents, cards: roster.cards)
             return .ok
         }
+    }
+
+    /// The user picked where the corral sits.
+    static func setLevel(_ level: CorralLevel) {
+        model.level = level
+        level.save()
+        panel?.apply(level: level)
     }
 
     static func stop() -> CorralBridgeStatus {
