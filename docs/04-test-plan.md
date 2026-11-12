@@ -215,6 +215,13 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-BRIDGE-03** Bad input from Rust (duplicate IDs, more than 8 shown, oversized names, control characters) is deduped, bounded and sanitized; Swift never traps
 - **TP-BRIDGE-04** Checkpoint notifications and Touch ID cross the bridge as typed payloads: Swift shows only the buttons Rust sends (no inline Approve unless offered), every click returns the checkpoint's nonce, and a Touch ID result returns as a typed outcome (ADR-001)
 
+### Corral view (SK-2b, Rust)
+- **TP-VIEW-01** A drop's state follows its agent's runs: queued, running and paused show Working; a checkpoint shows Needs you; then Done, Error, or Available after a cancel
+- **TP-VIEW-02** With several runs, Needs you beats Working beats the latest run's outcome; Send back (`session.closed`) returns the drop to Available; one agent's runs never change another's drop
+- **TP-VIEW-03** A change is reported only when a drop changes (streamed model text never republishes); runs of agents not in the corral change nothing
+- **TP-VIEW-04** The first 8 agents show in the order added and the rest count as hidden; a repeated agent shows once; an event the lifecycle refuses is refused and changes nothing
+- **TP-VIEW-05** `WatchedLog` tells its observer about exactly the events the log accepted, in order; a refused append reaches no observer
+
 ### Desktop shell (Tauri)
 - **TP-SHELL-01** Closing the last window keeps Corral running (agents keep working)
 - **TP-SHELL-02** Quit from the menu really quits
