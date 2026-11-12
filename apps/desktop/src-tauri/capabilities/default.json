@@ -1,13 +1,14 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main-window",
-  "description": "Least privilege for the main window (security model T10). It may read, save and remove provider keys (SK-3) and nothing else. Add single permissions per feature, never bundles; keep tests/capabilities.rs in step.",
+  "description": "Least privilege for the main window (security model T10). It may read, identify, connect (check with the provider, then save) and remove provider keys, and nothing else. Add single permissions per feature, never bundles; keep tests/capabilities.rs in step.",
   "windows": [
     "main"
   ],
   "permissions": [
     "allow-provider-key-status",
-    "allow-save-provider-key",
+    "allow-identify-provider-key",
+    "allow-connect-provider-key",
     "allow-remove-provider-key"
   ]
 }

@@ -4,7 +4,11 @@ import type { KeyApi } from "./keys";
 
 const keyApi: KeyApi = {
   status: async (provider) => ({ provider, configured: false, last4: null }),
-  save: async (provider) => ({ provider, configured: true, last4: "abcd" }),
+  identify: async () => null,
+  connect: async (provider) => ({
+    status: { provider, configured: true, last4: "abcd" },
+    checked: true,
+  }),
   remove: async (provider) => ({ provider, configured: false, last4: null }),
 };
 
@@ -27,8 +31,8 @@ describe("App (walking skeleton)", () => {
     expect(screen.getByRole("status")).toHaveTextContent(/walking skeleton/i);
   });
 
-  it("asks for the xAI key", async () => {
+  it("asks for an API key from any provider", async () => {
     await renderApp();
-    expect(screen.getByRole("heading", { level: 2, name: "xAI API key" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "API keys" })).toBeInTheDocument();
   });
 });

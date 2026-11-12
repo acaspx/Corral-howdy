@@ -5,7 +5,8 @@
 /// window must be granted in `capabilities/`; anything not granted is refused (T10, TP-IPC-05).
 const COMMANDS: &[&str] = &[
     "provider_key_status",
-    "save_provider_key",
+    "identify_provider_key",
+    "connect_provider_key",
     "remove_provider_key",
 ];
 

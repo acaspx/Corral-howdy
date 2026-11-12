@@ -74,9 +74,11 @@ fn show_main_window(app: &AppHandle) {
 pub fn run() {
     let app = tauri::Builder::default()
         .manage(keys::Keys::system())
+        .manage(keys::KeyChecker::system())
         .invoke_handler(tauri::generate_handler![
             keys::provider_key_status,
-            keys::save_provider_key,
+            keys::identify_provider_key,
+            keys::connect_provider_key,
             keys::remove_provider_key,
         ])
         .setup(|app| {
