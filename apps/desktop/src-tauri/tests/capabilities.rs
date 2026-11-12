@@ -1,10 +1,15 @@
 //! TP-IPC-05: the main window's capability grants only what the current UI uses (security model T10).
 //!
-//! The list below is the whole grant. The M0 main window calls no Tauri APIs (the tray and menus are
-//! built in Rust, which capabilities don't gate), so it is empty. Adding a permission means adding
-//! it here and in `capabilities/default.json` in the same PR, with the feature that needs it; both
-//! are reviewed by the code owner. Never add a bundle such as `core:default`.
-const MAIN_WINDOW_PERMISSIONS: &[&str] = &[];
+//! The list below is the whole grant. The main window may read, save and remove provider keys
+//! (SK-3); the tray and menus are built in Rust, which capabilities don't gate. Adding a
+//! permission means adding it here and in `capabilities/default.json` in the same PR, with the
+//! feature that needs it; both are reviewed by the code owner. Never add a bundle such as
+//! `core:default`.
+const MAIN_WINDOW_PERMISSIONS: &[&str] = &[
+    "allow-provider-key-status",
+    "allow-save-provider-key",
+    "allow-remove-provider-key",
+];
 
 fn main_window_capability() -> serde_json::Value {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/capabilities/default.json");
