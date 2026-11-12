@@ -176,7 +176,7 @@ Goal: the safety core, proven before any real agent can touch it.
 
 ## M7: Native extras (~1.5 weeks; after M4)
 (The corral panel, hover cards and trace tree moved into M4.)
-1. Multi-display behavior + "Desktop only" level setting
+1. Multi-display behavior (the level setting shipped early: desktop by default, chosen from the corral's right-click menu)
 2. Polish pass on glass motion against the brand spec
 3. Actionable notifications (Approve / Deny / Open) wired to the nonce-bound IPC
 4. Touch ID for critical checkpoints

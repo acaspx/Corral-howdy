@@ -5,15 +5,44 @@
 import AppKit
 import SwiftUI
 
-public enum CorralLevel: String, Sendable {
-    case floating   // above app windows (default): always reachable for checkpoints
-    case desktop    // sits on the desktop layer, behind app windows, like a desktop object
+/// Where the corral sits among windows (docs/07 §4). The user picks it from the corral's
+/// right-click menu; it's remembered across launches. It's a display preference only, so it
+/// lives here rather than in the core: checkpoints reach the user through notifications and the
+/// card, which floats above apps, whichever level the corral is on.
+public enum CorralLevel: String, CaseIterable, Sendable {
+    /// On the desktop layer, behind app windows, like a desktop object (the default). Show
+    /// Desktop (F11 or the trackpad spread) reveals it.
+    case desktop
+    /// Like a normal window: in front while Corral is active, behind other apps after you switch.
+    case normal
+    /// Above app windows, always.
+    case floating
+
+    public static let defaultsKey = "corral.level"
+
+    /// The menu wording.
+    public var title: String {
+        switch self {
+        case .desktop: "On the desktop"
+        case .normal: "Like other windows"
+        case .floating: "Always on top"
+        }
+    }
+
+    /// The saved choice, or the desktop.
+    public static func load(from defaults: UserDefaults = .standard) -> CorralLevel {
+        defaults.string(forKey: defaultsKey).flatMap(CorralLevel.init(rawValue:)) ?? .desktop
+    }
+
+    public func save(to defaults: UserDefaults = .standard) {
+        defaults.set(rawValue, forKey: Self.defaultsKey)
+    }
 }
 
 @MainActor
 public final class CorralPanel: NSPanel {
 
-    public init<Content: View>(rootView: Content, level corralLevel: CorralLevel = .floating) {
+    public init<Content: View>(rootView: Content, level corralLevel: CorralLevel = .load()) {
         super.init(contentRect: .zero,
                    styleMask: [.borderless, .nonactivatingPanel],
                    backing: .buffered, defer: false)
@@ -44,6 +73,8 @@ public final class CorralPanel: NSPanel {
         switch level {
         case .floating:
             self.level = .floating
+        case .normal:
+            self.level = .normal
         case .desktop:
             self.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
         }

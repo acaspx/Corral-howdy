@@ -92,7 +92,7 @@ The prototype code is wired for plan A, and plan C's helper is kept in `CorralPa
 ## 5. Placement and window behavior
 - A borderless, non-activating `NSPanel` (`CorralPanel.swift`). Clicking a drop never steals focus from the app you're in.
 - Positioned at the **bottom center of the screen's visible frame**, so it never covers the Dock or the menu bar, wherever the user keeps them.
-- **Level setting:** "Float above windows" (default, so checkpoints are always reachable) or "Desktop only" (sits on the desktop layer like a desktop object, and the summon hotkey raises it).
+- **Level setting** (decided 2026-11-12), from the corral's right-click menu and remembered across launches: **"On the desktop"** (the default: the desktop layer, behind app windows, like a desktop object; Show Desktop reveals it, and from M4 the summon hotkey raises it), **"Like other windows"** (in front while Corral is active, behind other apps after you switch), or **"Always on top"**. Checkpoints still reach the user on any level: they raise an actionable notification, and the card floats above app windows. Settings → Corral offers the same choice from M4.
 - Visible on all Spaces and hidden in full-screen apps. Multi-display: follows the display with the menu bar by default, and the user can pin it to a display.
 - The menu-bar icon stays as a fallback entry point (settings, quit, show corral).
 

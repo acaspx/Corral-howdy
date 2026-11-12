@@ -54,7 +54,7 @@ final class PlaygroundModel: ObservableObject {
     /// Every agent, most used first. The corral shows the first eight.
     @Published var agents: [CorralAgentToken] = []
     @Published var log: [String] = []
-    @Published var level: CorralLevel = .floating
+    @Published var level: CorralLevel = .load()
     @Published var hoverSource: CorralHoverSource = .swiftUI
     private var runs: [String: FakeRun] = [:]
     private var created = 0
@@ -218,6 +218,11 @@ struct CorralRoot: View {
             MainActor.assumeIsolated { relay.controller?.swiftUIHover(drop: id, inside: inside) }
         })
         .onChange(of: model.shown.map(\.id)) { _, ids in onShownChange(ids) }
+        .contextMenu {
+            CorralLevelMenu(current: model.level) { level in
+                MainActor.assumeIsolated { model.level = level }
+            }
+        }
     }
 }
 
@@ -238,8 +243,9 @@ struct PlaygroundControls: View {
                 Button("Shuffle") { model.shuffle() }.disabled(model.agents.count < 2)
             }
             Picker("Corral level", selection: $model.level) {
-                Text("Float above windows").tag(CorralLevel.floating)
-                Text("Desktop only").tag(CorralLevel.desktop)
+                ForEach(CorralLevel.allCases, id: \.self) { level in
+                    Text(level.title).tag(level)
+                }
             }
             .pickerStyle(.radioGroup)
             .onChange(of: model.level) { _, level in onLevelChange(level) }
@@ -318,7 +324,10 @@ final class PlaygroundDelegate: NSObject, NSApplicationDelegate {
         controls.isReleasedWhenClosed = false
         controls.contentView = NSHostingView(rootView: PlaygroundControls(
             model: model,
-            onLevelChange: { [weak self] level in self?.panel?.apply(level: level) },
+            onLevelChange: { [weak self] level in
+                level.save()
+                self?.panel?.apply(level: level)
+            },
             onHoverSourceChange: { [weak self] source in self?.relay.controller?.hoverSource = source }
         ))
         controls.center()
