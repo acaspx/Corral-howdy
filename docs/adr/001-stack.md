@@ -130,7 +130,9 @@ Developer ID credentials are configured (Keychain or CI secrets only, never the 
 - **SK-2a (done):** the checkpoint notification and Touch ID payloads (TP-BRIDGE-04), the spike
   driver and probe entry point removed, the shell shows an empty corral with `--features native`,
   and the CI job above.
-- **SK-2b:** stream the supervisor's roster and run snapshots to the corral, and hand intents to
-  `corral-core`, which decides.
+- **SK-2b:** the core's corral view (`corral_core::corral_view`, TP-VIEW-01..05) decides what
+  each drop shows from the event log; `WatchedLog` feeds it every event the store accepts, and
+  the shell sends each change to Swift on the main thread, in order. Intents go to the core with
+  SK-6, which brings the prompt field a deploy needs.
 - **Packaging (with SK-6 or the first signed build):** compile the metallib in a
   `beforeBundleCommand` and ship it through `bundle.resources` (pitfall 2).
