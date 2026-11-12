@@ -1,0 +1,22 @@
+{
+  "description": "The model tries to call a tool although none were offered.",
+  "responses": [
+    {
+      "status": 200,
+      "body": [
+        "event: response.created",
+        "data: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"resp_cassette_0001\",\"object\":\"response\",\"model\":\"grok-test\",\"status\":\"in_progress\",\"output\":[]}}",
+        "",
+        "event: response.in_progress",
+        "data: {\"type\":\"response.in_progress\",\"sequence_number\":1,\"response\":{\"id\":\"resp_cassette_0001\",\"object\":\"response\",\"model\":\"grok-test\",\"status\":\"in_progress\",\"output\":[]}}",
+        "",
+        "event: response.output_item.added",
+        "data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"id\":\"fc_0001\",\"type\":\"function_call\",\"call_id\":\"call_0001\",\"name\":\"send_email\",\"arguments\":\"\",\"status\":\"in_progress\"}}",
+        "",
+        "event: response.function_call_arguments.delta",
+        "data: {\"type\":\"response.function_call_arguments.delta\",\"sequence_number\":3,\"item_id\":\"fc_0001\",\"output_index\":0,\"delta\":\"{\\\"to\\\":\"}",
+        ""
+      ]
+    }
+  ]
+}

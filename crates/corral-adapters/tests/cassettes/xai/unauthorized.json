@@ -1,0 +1,11 @@
+{
+  "description": "The key is wrong.",
+  "responses": [
+    {
+      "status": 401,
+      "body": [
+        "{\"code\":\"Client specified an invalid argument\",\"error\":\"Incorrect API key provided: xa***id. You can obtain an API key from https://console.x.ai.\"}"
+      ]
+    }
+  ]
+}

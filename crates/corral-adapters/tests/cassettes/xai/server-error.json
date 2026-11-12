@@ -1,0 +1,11 @@
+{
+  "description": "xAI has a problem.",
+  "responses": [
+    {
+      "status": 500,
+      "body": [
+        "{\"code\":\"Internal error\",\"error\":\"The service is temporarily unavailable.\"}"
+      ]
+    }
+  ]
+}

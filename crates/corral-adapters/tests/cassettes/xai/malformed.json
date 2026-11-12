@@ -1,0 +1,19 @@
+{
+  "description": "A stream event that isn't JSON.",
+  "responses": [
+    {
+      "status": 200,
+      "body": [
+        "event: response.created",
+        "data: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"resp_cassette_0001\",\"object\":\"response\",\"model\":\"grok-test\",\"status\":\"in_progress\",\"output\":[]}}",
+        "",
+        "event: response.in_progress",
+        "data: {\"type\":\"response.in_progress\",\"sequence_number\":1,\"response\":{\"id\":\"resp_cassette_0001\",\"object\":\"response\",\"model\":\"grok-test\",\"status\":\"in_progress\",\"output\":[]}}",
+        "",
+        "event: response.output_text.delta",
+        "data: {not json",
+        ""
+      ]
+    }
+  ]
+}
