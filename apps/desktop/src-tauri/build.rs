@@ -1,9 +1,22 @@
 //! Generates Tauri's context (config, capabilities, icons) at compile time. With the `native`
 //! feature (ADR-001) it also builds the CorralNative Swift package and links it.
+
+/// The app's own commands. Declaring them makes each one a permission (`allow-<command>`) that a
+/// window must be granted in `capabilities/`; anything not granted is refused (T10, TP-IPC-05).
+const COMMANDS: &[&str] = &[
+    "provider_key_status",
+    "save_provider_key",
+    "remove_provider_key",
+];
+
 fn main() {
     #[cfg(feature = "native")]
     link_corral_native();
-    tauri_build::build()
+    tauri_build::try_build(
+        tauri_build::Attributes::new()
+            .app_manifest(tauri_build::AppManifest::new().commands(COMMANDS)),
+    )
+    .expect("tauri-build failed");
 }
 
 #[cfg(feature = "native")]

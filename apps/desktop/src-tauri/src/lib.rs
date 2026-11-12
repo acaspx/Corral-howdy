@@ -14,6 +14,8 @@ pub mod native;
 #[cfg(all(target_os = "macos", feature = "native"))]
 pub mod surface;
 
+pub mod keys;
+
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager, RunEvent, WindowEvent};
@@ -71,6 +73,12 @@ fn show_main_window(app: &AppHandle) {
 /// Builds and runs the app.
 pub fn run() {
     let app = tauri::Builder::default()
+        .manage(keys::Keys::system())
+        .invoke_handler(tauri::generate_handler![
+            keys::provider_key_status,
+            keys::save_provider_key,
+            keys::remove_provider_key,
+        ])
         .setup(|app| {
             let show = MenuItem::with_id(app, MENU_SHOW, "Show Corral", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, MENU_QUIT, "Quit Corral", true, None::<&str>)?;

@@ -129,6 +129,7 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 ### Secrets and IPC (protected)
 - **TP-SEC-01** After a full eval run, scan the DB, blobs, logs and exported traces for every test key: zero hits
 - **TP-SEC-02** Settings never return more than the last 4 characters of a key
+- **TP-SEC-03** A key is validated as entered (surrounding whitespace trimmed; 8–512 printable ASCII characters, no spaces) and never appears in `Debug` output, error messages or status responses; its bytes are wiped when dropped
 - **TP-IPC-01** Panel window capability set can't call settings or secrets commands
 - **TP-IPC-02** Approve requires the checkpoint's nonce; replaying it fails
 - **TP-IPC-03** CSP blocks remote scripts; agent-produced markdown is sanitized (no raw HTML, no `javascript:` links)

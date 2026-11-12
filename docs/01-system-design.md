@@ -277,7 +277,7 @@ Push-to-talk → on-device transcription → text in the prompt bar (editable be
 
 ## 11. Secrets
 
-API keys go in the macOS Keychain (one item per provider, access-controlled to the signed app). They are never written to SQLite, logs, traces, manifests or sync. They're fetched just in time per request and zeroized after use. Settings show only the last 4 characters. ACP CLI agents receive keys through env vars only if the user maps them, and the mapping is shown in the agent's permission summary.
+API keys go in the macOS Keychain (one item per provider, access-controlled to the signed app; `corral-secrets`, items `corral.<provider>`, account `api-key`). They are never written to SQLite, logs, traces, manifests or sync. They're fetched just in time per request and zeroized after use. Settings show only the last 4 characters: the webview sends a key in through a command it must be granted, and gets back only a status (TP-SETUP-01). ACP CLI agents receive keys through env vars only if the user maps them, and the mapping is shown in the agent's permission summary.
 
 ## 12. Optional sync (v1.1, ADR-006)
 
@@ -294,6 +294,7 @@ corral/
 │  ├─ corral-core/         # domain types, lifecycle, supervisor, budget, otel mapping
 │  ├─ corral-policy/       # pure policy engine + profiles
 │  ├─ corral-store/        # SQLite event store + projections
+│  ├─ corral-secrets/      # provider keys in the Keychain
 │  ├─ corral-adapters/     # trait + native/managed/acp/a2a/fake + provider clients
 │  ├─ corral-tools/        # tool gateway: fs sandbox, MCP client
 │  ├─ corral-voice/        # STT (Handy-derived)

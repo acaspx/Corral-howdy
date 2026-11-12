@@ -14,3 +14,11 @@ h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: -0.01em; }
 .sections h2 { font-size: 15px; margin: 0 0 6px; }
 .sections p { font-size: 13px; margin: 0; opacity: 0.75; }
 .status { margin-top: 32px; font-size: 12px; opacity: 0.6; }
+.key-form { margin-top: 32px; border: 1px solid color-mix(in srgb, var(--glass-tint) 45%, transparent); border-radius: 14px; padding: 16px; }
+.key-form h2 { font-size: 15px; margin: 0 0 4px; }
+.key-status { font-size: 13px; margin: 0 0 12px; opacity: 0.75; }
+.key-form form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.key-form label { font-size: 13px; }
+.key-form input { flex: 1 1 260px; font: inherit; font-size: 13px; padding: 6px 8px; border-radius: 8px; border: 1px solid color-mix(in srgb, CanvasText 25%, transparent); background: Canvas; color: CanvasText; }
+.key-form button { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 8px; }
+.key-error { color: light-dark(#b3261e, #ff8a80); font-size: 13px; margin: 10px 0 0; }
