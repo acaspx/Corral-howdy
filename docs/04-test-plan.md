@@ -93,6 +93,7 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-POL-09** Risk tier → required gesture (click / no-voice / Touch ID)
 - **TP-POL-10** `ToolGateway` refuses execution without a valid `Decision::Allow` token (also enforced at compile time; this test covers the runtime path for dynamic MCP tools)
 - **TP-POL-11** Allow-for-run on a high or critical class covers only the approved destination; a new recipient, domain or path root asks again
+- **TP-POL-12** On a run that has taken in untrusted content (`tainted`), allow-for-run grants on `net.write`, `comms.send`, `net.read.unlisted` and `a2a` don't apply; each action asks and names the untrusted source; taint never clears within the run (T28)
 
 ### Budget
 - **TP-BUD-01** Pre-request estimate blocks a request that would cross the hard cap
@@ -113,6 +114,7 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-ADP-06** The adapter's reported `gating` level matches the tools actually sent to the provider
 - **TP-ADP-07** With default profiles, no provider request includes a vendor-executed side-effecting tool (checked against cassette request bodies)
 - **TP-ADP-08** MCP servers on an agent are never forwarded as vendor-hosted MCP tools; they go through Corral's MCP client
+- **TP-ADP-09** A tool result returned to the model is capped (16 KB of text by default) with a marker saying how much was cut; the full output stays in the trace (T30)
 - **TP-ACP-01..05** ACP: spawn, permission request → checkpoint, deny path, env scrubbing, process-group kill (no orphan processes after cancel)
 - **TP-ACP-06** An ACP agent whose permission mode Corral can't set reports `Partial` gating; a known bypass mode refuses to start
 - **TP-ACP-07** Killing Corral (SIGKILL) leaves no ACP agent processes or their children running
@@ -122,6 +124,7 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-MAN-02** Import shows the permission diff; nothing is added until confirmed
 - **TP-MAN-03** Model ID validated against the provider's model list (cassette)
 - **TP-MAN-04** Launching an MCP server or ACP command asks once per (path, SHA-256); a changed binary asks again
+- **TP-MAN-05** An MCP server's `secrets` are Keychain references only: a literal value is rejected; at launch only the named variables reach that server's environment; the import summary lists them (T29)
 
 ### Secrets and IPC (protected)
 - **TP-SEC-01** After a full eval run, scan the DB, blobs, logs and exported traces for every test key: zero hits

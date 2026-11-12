@@ -146,6 +146,7 @@ pub trait AgentAdapter: Send + Sync {
 
 **Gating rules from Spike S3** ([findings](spikes/S3-provider-approval-hooks.md)): only OpenAI's hosted MCP offers per-call approval for vendor-executed tools; xAI, Anthropic and Meta offer only up-front allowlists. So:
 - **Corral connects MCP servers itself.** MCP always goes through Corral's own MCP client in the `ToolGateway`, never through a vendor-hosted MCP connector.
+- **Tool results are capped** before they reach the model: 16 KB of text by default, per profile. The full output stays in the trace and the model sees a truncation marker (T30).
 - **Read-only vendor tools** (web search) are a deploy-time `provider_tools` permission.
 - **Side-effecting vendor tools** (code execution with network, hosted shells and sandboxes, the hosted browser) are off by default and high-risk to enable.
 - **Adapters report a `gating` level** (`Full` / `Partial` / `PreflightOnly`) in `Capabilities`. A run below the agent profile's minimum (default `Full`) won't start.
@@ -170,6 +171,7 @@ provider_tools = ["web_search"]     # vendor-side; needs policy allow
 [[mcp_servers]]
 name    = "notes"
 command = "/usr/local/bin/notes-mcp"
+secrets = { NOTES_TOKEN = "keychain:notes-mcp" }   # names a Keychain item; never the value (T29)
 
 [policy]
 profile = "researcher"              # see policy profiles below
@@ -184,6 +186,8 @@ The manifest is parsed with a strict schema (unknown keys are an error) and fuzz
 ## 5. Policy engine and checkpoints (ADR-003)
 
 Pure, deterministic, deny-by-default. Input: `(agent policy profile, action, run context)`. Output: `Allow | Ask{risk, reason} | Deny{reason}`.
+
+The run context includes `tainted`, which the core sets the first time a run takes in untrusted content (network reads, provider web search, responses from MCP servers the profile doesn't mark trusted, files read outside the sandbox roots). On a tainted run, allow-for-run grants on the classes that can send data out (`net.write`, `comms.send`, `net.read.unlisted`, `a2a`) don't apply: each action asks again. This breaks the "lethal trifecta" of private data, untrusted content and a way out within one run (T28).
 
 **Action classes** (every adapter maps its actions to exactly one of these):
 
