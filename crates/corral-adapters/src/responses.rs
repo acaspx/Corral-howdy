@@ -14,16 +14,25 @@
 //!   `Retry-After` when given.
 //! - **Usage** (TP-ADP-05): the provider's billed cost (`cost_in_usd_ticks`, 10^-10 USD) is
 //!   reported in micro-USD, rounded up so spend is never under-counted.
+//! - **The hard spend cap** (SK-5, TP-BUD-01/05): before anything is sent, the request goes to
+//!   the budget meter through [`EventSink::request_model`] with its worst case: the prompt
+//!   bounded at one token per byte plus overhead, at [`ResponsesConfig::price`]. Over the cap,
+//!   the core fails the run and nothing is sent; otherwise the request carries the
+//!   `max_output_tokens` the meter allows. Retries reuse the one admission: a rate-limited or
+//!   unavailable attempt isn't billed.
 //! - **Stop** (TP-ADP-03): the whole request runs inside a `select!` on the cancel token, so
 //!   Stop drops the connection at once.
 
 use crate::sse::{SseEvent, SseParser};
 use crate::transport::Transport;
+use corral_core::budget::{Price, RequestEstimate, input_token_bound};
 use corral_core::event::{
     EventBody, FailureReason, ModelDelta, ModelRequest, ModelResponse, RunCompleted, RunFailed,
     UsageReported,
 };
-use corral_core::supervisor::{CancelToken, EventSink, RunDriver, RunFuture, RunRequest};
+use corral_core::supervisor::{
+    CancelToken, EventSink, RunDriver, RunFuture, RunRequest, SupervisorError,
+};
 use corral_secrets::{KeyError, Provider, SecretStore, resolve};
 use futures_util::StreamExt;
 use serde_json::{Value, json};
@@ -39,8 +48,11 @@ pub struct ResponsesConfig {
     pub base_url: String,
     /// Model ID (configuration, never hard-coded in callers).
     pub model: String,
-    /// Upper bound on output tokens per request, reasoning included.
+    /// Upper bound on output tokens per request, reasoning included. The budget meter may lower
+    /// it for a request; it never raises it.
     pub max_output_tokens: u32,
+    /// The model's price, for the budget meter's worst case before each request.
+    pub price: Price,
     /// Attempts in all for a rate-limited or unavailable request.
     pub max_attempts: u32,
     /// Fail the run if the stream sends nothing for this long.
@@ -48,13 +60,16 @@ pub struct ResponsesConfig {
 }
 
 impl ResponsesConfig {
-    /// xAI's API with the given model.
+    /// xAI's API with the given model, priced at grok-4.7's list price ($2 per million input
+    /// tokens, $6 per million output tokens, checked November 2026). Set [`Self::price`] for
+    /// another model; the versioned price table replaces this in M2.
     pub fn xai(model: impl Into<String>) -> Self {
         Self {
             provider: Provider::Xai,
             base_url: "https://api.x.ai/v1".into(),
             model: model.into(),
             max_output_tokens: 16_384,
+            price: Price::per_million_tokens(2_000_000, 6_000_000),
             max_attempts: 3,
             idle_timeout: Duration::from_secs(300),
         }
@@ -65,15 +80,32 @@ impl ResponsesConfig {
         format!("{}/responses", self.base_url.trim_end_matches('/'))
     }
 
-    /// The request body: the prompt and nothing that could run anything (TP-SKEL-02).
+    /// The request body at the configured output ceiling: the prompt and nothing that could run
+    /// anything (TP-SKEL-02).
     pub fn request_body(&self, prompt: &str) -> Value {
+        self.request_body_limited(prompt, self.max_output_tokens)
+    }
+
+    /// The request body with the output limit the budget meter allowed.
+    pub fn request_body_limited(&self, prompt: &str, max_output_tokens: u32) -> Value {
         json!({
             "model": self.model,
             "input": prompt,
             "stream": true,
             "store": false,
-            "max_output_tokens": self.max_output_tokens,
+            "max_output_tokens": max_output_tokens,
         })
+    }
+
+    /// The most this request could cost, for the budget meter.
+    pub fn estimate(&self, prompt: &str) -> RequestEstimate {
+        RequestEstimate {
+            price: self.price,
+            input_tokens: input_token_bound(prompt),
+            // No provider-side tools in the walking skeleton (TP-SKEL-02).
+            tool_fees_micro_usd: 0,
+            max_output_tokens: self.max_output_tokens,
+        }
     }
 }
 
@@ -114,12 +146,17 @@ impl RunDriver for ResponsesDriver {
     }
 }
 
-/// Why a run ended without completing, before it's emitted.
-struct Failure(FailureReason, String);
+/// Why a run ended without completing.
+enum Failure {
+    /// Not logged yet: the driver emits `run.failed`.
+    Emit(FailureReason, String),
+    /// The core already ended the run (the budget meter refused the request).
+    Ended,
+}
 
 impl ResponsesDriver {
     async fn drive(&self, prompt: &str, sink: &EventSink) {
-        if let Err(Failure(reason, message)) = self.attempt(prompt, sink).await {
+        if let Err(Failure::Emit(reason, message)) = self.attempt(prompt, sink).await {
             // The sink refuses only when the run is already over or the log is gone; either way
             // the supervisor closes the run out.
             let _ = sink.emit(EventBody::RunFailed(RunFailed { reason, message }));
@@ -132,25 +169,38 @@ impl ResponsesDriver {
         let key = match resolve(self.keys.as_ref(), config.provider) {
             Ok(key) => key,
             Err(missing @ KeyError::Missing(_)) => {
-                return Err(Failure(FailureReason::Provider, missing.to_string()));
+                return Err(Failure::Emit(FailureReason::Provider, missing.to_string()));
             }
             Err(KeyError::Store(e)) => {
-                return Err(Failure(
+                return Err(Failure::Emit(
                     FailureReason::Internal,
                     format!("couldn't read the {name} key: {e}"),
                 ));
             }
         };
-        emit(
-            sink,
-            EventBody::ModelRequest(ModelRequest {
-                provider: config.provider.id().into(),
-                model: config.model.clone(),
-            }),
-        )?;
+        let admission = sink
+            .request_model(
+                ModelRequest {
+                    provider: config.provider.id().into(),
+                    model: config.model.clone(),
+                },
+                &config.estimate(prompt),
+            )
+            .map_err(|e| match e {
+                // The core logged run.failed; nothing is sent.
+                SupervisorError::Budget(_) => Failure::Ended,
+                other @ (SupervisorError::Lifecycle(_)
+                | SupervisorError::Log(_)
+                | SupervisorError::DuplicateRun(_)
+                | SupervisorError::UnknownRun(_)
+                | SupervisorError::Poisoned) => Failure::Emit(
+                    FailureReason::Internal,
+                    format!("couldn't log the request: {other}"),
+                ),
+            })?;
 
         let url = config.url();
-        let body = config.request_body(prompt);
+        let body = config.request_body_limited(prompt, admission.max_output_tokens);
         let mut attempt = 0;
         let response = loop {
             attempt += 1;
@@ -159,7 +209,7 @@ impl ResponsesDriver {
                 .post_json(&url, &key, &body)
                 .await
                 .map_err(|e| {
-                    Failure(
+                    Failure::Emit(
                         FailureReason::Provider,
                         format!("couldn't reach {name}: {e}"),
                     )
@@ -168,7 +218,7 @@ impl ResponsesDriver {
                 200..=299 => break response,
                 401 | 403 => {
                     // xAI's message repeats part of the key; it isn't passed on.
-                    return Err(Failure(
+                    return Err(Failure::Emit(
                         FailureReason::Provider,
                         format!(
                             "{name} rejected the key (HTTP {}). Check it in Settings.",
@@ -185,7 +235,7 @@ impl ResponsesDriver {
                     tokio::time::sleep(wait).await;
                 }
                 429 => {
-                    return Err(Failure(
+                    return Err(Failure::Emit(
                         FailureReason::Provider,
                         format!(
                             "{name}'s rate limit was hit {attempt} times in a row. Try again in a minute."
@@ -194,7 +244,7 @@ impl ResponsesDriver {
                 }
                 status => {
                     let detail = error_detail(response.body).await;
-                    return Err(Failure(
+                    return Err(Failure::Emit(
                         FailureReason::Provider,
                         format!("{name} returned HTTP {status}{detail}"),
                     ));
@@ -209,7 +259,7 @@ impl ResponsesDriver {
             let next = tokio::time::timeout(config.idle_timeout, body.next())
                 .await
                 .map_err(|_| {
-                    Failure(
+                    Failure::Emit(
                         FailureReason::Provider,
                         format!(
                             "{name} sent nothing for {} seconds",
@@ -221,11 +271,14 @@ impl ResponsesDriver {
                 None => break,
                 Some(Ok(chunk)) => chunk,
                 Some(Err(e)) => {
-                    return Err(Failure(FailureReason::Provider, format!("{name}: {e}")));
+                    return Err(Failure::Emit(
+                        FailureReason::Provider,
+                        format!("{name}: {e}"),
+                    ));
                 }
             };
             let events = parser.push(&chunk).map_err(|e| {
-                Failure(
+                Failure::Emit(
                     FailureReason::Adapter,
                     format!("{name} sent an unreadable stream: {e}"),
                 )
@@ -239,7 +292,7 @@ impl ResponsesDriver {
                 }
             }
         }
-        Err(Failure(
+        Err(Failure::Emit(
             FailureReason::Adapter,
             format!("{name}'s stream ended before the response finished"),
         ))
@@ -248,7 +301,7 @@ impl ResponsesDriver {
 
 fn emit(sink: &EventSink, body: EventBody) -> Result<(), Failure> {
     sink.emit(body).map_err(|e| {
-        Failure(
+        Failure::Emit(
             FailureReason::Internal,
             format!("couldn't log an event: {e}"),
         )
