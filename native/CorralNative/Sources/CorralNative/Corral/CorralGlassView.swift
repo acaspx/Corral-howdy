@@ -20,7 +20,7 @@ public struct CorralAgentToken: Identifiable, Equatable, Sendable {
     }
 }
 
-public enum CorralIntent: Sendable {
+public enum CorralIntent: Equatable, Sendable {
     case deploy(agentIDs: [String])
     case openAgent(id: String)
     case summonPromptBar
@@ -127,6 +127,8 @@ public struct CorralGlassView: View {
     /// Agents that exist but are not shown (more than 8 configured). Spoken by VoiceOver only.
     public var hiddenCount: Int
     public var onIntent: (CorralIntent) -> Void
+    /// The pointer entered (true) or left (false) a drop. Drives the hover card (Spike S6).
+    public var onHoverDrop: ((String, Bool) -> Void)?
 
     @StateObject private var morph = CorralMorph()
     @State private var selection: Set<String> = []
@@ -136,8 +138,10 @@ public struct CorralGlassView: View {
     private let metrics = CorralMetrics()
     private let start = Date()
 
-    public init(agents: [CorralAgentToken], hiddenCount: Int = 0, onIntent: @escaping (CorralIntent) -> Void) {
+    public init(agents: [CorralAgentToken], hiddenCount: Int = 0, onIntent: @escaping (CorralIntent) -> Void,
+                onHoverDrop: ((String, Bool) -> Void)? = nil) {
         self.agents = agents; self.hiddenCount = hiddenCount; self.onIntent = onIntent
+        self.onHoverDrop = onHoverDrop
     }
 
     public var body: some View {
@@ -213,22 +217,58 @@ public struct CorralGlassView: View {
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .onHover { inside in onHoverDrop?(agent.id, inside) }
         .position(x: pivot.x + blob.offset.x, y: pivot.y + blob.offset.y)
         .accessibilityLabel("\(agent.name), \(statusText(agent.status)), number \(blob.rank) by use")
         .accessibilityHint("Opens the agent. Command-click to select for group deploy.")
     }
 
+    @ViewBuilder
     private func statusRing(_ s: CorralAgentToken.Status, radius: CGFloat, selected: Bool) -> some View {
-        // Status is never colour-only: needsYou also pulses and adds a badge glyph.
-        Circle()
-            .inset(by: 3)
-            .stroke(selected ? Color.accentColor : .clear, lineWidth: 2)
-            .overlay(alignment: .topTrailing) {
-                if s == .needsYou {
-                    Image(systemName: "hand.raised.fill").font(.caption2).padding(4)
+        // Status is never colour-only: every mark has a shape (CorralStatusMark, docs/07 §8.1).
+        ZStack(alignment: .topTrailing) {
+            Circle()
+                .inset(by: 3)
+                .stroke(selected ? Color.accentColor : .clear, lineWidth: 2)
+            switch CorralStatusMark.of(s) {
+            case .none:
+                EmptyView()
+            case .turningArc:
+                // Draws frames only while the agent works, so an idle corral stays at 0 frames.
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
+                    let turn = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 2.4) / 2.4
+                    Circle()
+                        .inset(by: 2)
+                        .trim(from: 0, to: 0.28)
+                        .stroke(Self.coral, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                        .rotationEffect(.degrees(reduceMotion ? -90 : turn * 360))
                 }
+            case .pulse(let badge):
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
+                    let phase = reduceMotion ? 1 : (sin(context.date.timeIntervalSinceReferenceDate * 3) + 1) / 2
+                    Circle()
+                        .inset(by: 2)
+                        .stroke(Self.maroon.opacity(0.55 + 0.45 * phase), lineWidth: 2.5)
+                }
+                badgeView(badge, tint: Self.maroon)
+            case .badge(let symbol):
+                badgeView(symbol, tint: s == .error ? Self.maroon : Self.ink)
             }
+        }
     }
+
+    private func badgeView(_ symbol: String, tint: Color) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(tint)
+            .frame(width: 20, height: 20)
+            .background(Circle().fill(Color.white))
+            .overlay(Circle().stroke(tint.opacity(0.25)))
+    }
+
+    static let coral = Color(red: 0.91, green: 0.42, blue: 0.33)
+    static let maroon = Color(red: 0.48, green: 0.12, blue: 0.16)
+    static let ink = Color(red: 0.11, green: 0.10, blue: 0.10)
 
     private func plainGlass(_ canvas: CGSize, pivot: CGPoint) -> some View {
         // No compiled shader found (CorralShaders): plain system glass drops, no bridges.

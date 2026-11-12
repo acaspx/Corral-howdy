@@ -167,7 +167,15 @@ All of these are **SwiftUI** in CorralNative. As everywhere, state comes from th
 - **Imports are untrusted input** (security model T19): copied into Corral's own folder and never hot-linked, limited to 1 MB and 1024 px, decoded with ImageIO, and SVGs rasterized once at import (no scripts, no external references).
 
 ### 8.2 Hover card (paper)
-Opens above the hovered drop, centered and clamped to the screen edges, never covering the drop itself. Contents, top to bottom:
+Opens above the hovered drop, centered and clamped to the screen edges, never covering the drop itself.
+
+**How it opens and closes** (decided 2026-11-12, the pattern of consumer agent apps; TP-HOVER-01):
+- **Hover** a drop: its card appears after 120 ms, in its own non-activating panel, so the app in front keeps focus. It stays while the pointer is on the drop or the card and closes 260 ms after the pointer leaves both.
+- **Click** a drop: the card is **pinned**. Its panel takes keyboard focus, so the cursor goes straight into the task field, without bringing Corral's other windows forward. While a card is pinned, hovering other drops doesn't swap it; clicking another drop pins that one instead.
+- **Close** a pinned card with **×** (top right), **Esc**, or a click anywhere else.
+- **The task field** sits at the bottom of the card (Return sends): "Give Scout a task" for an agent in the corral, "Ask a follow-up" on a done card (same session), "Give Scout a new task" after Stop. A working card shows Stop instead, and an error card offers Retry. The general prompt bar (M4) is separate: it slides up above the corral for `@agent`, voice and Deploy all.
+
+Contents, top to bottom:
 1. **Label:** `AGENT · PROVIDER` in maroon small caps, with a chevron that opens the trace
 2. **Headline:** the task title in New York serif, or "Ready for a task"
 3. **Status line:** "Step 4 of 5 · 1m 16s", or "Needs your approval · step 5 of 5"

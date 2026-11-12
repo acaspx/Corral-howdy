@@ -10,6 +10,7 @@ The macOS-only Swift layer of Corral: the liquid-glass corral surface with agent
 | `Sources/CorralNative/Corral/CorralGlass.metal` | The liquid-glass SDF shader (`[[stitchable]]`, for SwiftUI `.layerEffect`) |
 | `Sources/CorralNative/Corral/CorralGlassView.swift` | SwiftUI view: system glass + shader, drop tokens, polar morph springs (reorders travel around the ring), accessibility |
 | `Sources/CorralNative/Corral/CorralPanel.swift` | Non-activating NSPanel at bottom center (+ wallpaper backdrop, fallback only) |
+| `Sources/CorralNative/Cards/` | Each drop's card (SK-6): `CorralHoverState` (when it opens, pins and closes), `CorralCardModel` (what it shows per state), `CorralCardView` (paper), `CorralCardController` (its panel, hover sources, Esc and click-away) |
 | `Sources/CorralPlayground/Playground.swift` | Desktop playground: the real corral panel at the bottom of your screen with fake agents, plus a control window that plays the Rust core's part |
 | `Tests/CorralNativeTests/CorralLayoutTests.swift` | TP-SHAPE-01..06, TP-RANK-01..05 (Swift Testing) |
 | `Tests/CorralNativeTests/CorralRobustnessTests.swift` | TP-SHAPE-08..11, TP-PLACE-04..05 |

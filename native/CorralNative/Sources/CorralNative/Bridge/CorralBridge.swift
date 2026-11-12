@@ -47,15 +47,26 @@ final class CorralBridgeModel: ObservableObject {
 struct CorralBridgeRoot: View {
     @ObservedObject var model: CorralBridgeModel
     var body: some View {
-        CorralGlassView(agents: model.agents, hiddenCount: model.hiddenCount) { intent in
-            MainActor.assumeIsolated { CorralBridge.emit(intent) }
-        }
+        CorralGlassView(agents: model.agents, hiddenCount: model.hiddenCount, onIntent: { intent in
+            MainActor.assumeIsolated {
+                // A click on a drop opens its card here; the card's buttons and field talk to Rust.
+                if case .openAgent(let id) = intent {
+                    CorralBridge.cards?.dropClicked(id)
+                } else {
+                    CorralBridge.emit(intent)
+                }
+            }
+        }, onHoverDrop: { id, inside in
+            MainActor.assumeIsolated { CorralBridge.cards?.swiftUIHover(drop: id, inside: inside) }
+        })
     }
 }
 
 @MainActor
 enum CorralBridge {
     static var panel: CorralPanel?
+    /// Each drop's card (SK-6): hover, pin, the task field and the buttons.
+    static var cards: CorralCardController?
     static var callback: CorralIntentCallback?
     static let model = CorralBridgeModel()
     private static var screenObserver: NSObjectProtocol?
@@ -68,6 +79,9 @@ enum CorralBridge {
         self.callback = callback
         let panel = CorralPanel(rootView: CorralBridgeRoot(model: model))
         self.panel = panel
+        cards = CorralCardController(corralPanel: panel) { intent in
+            MainActor.assumeIsolated { CorralBridge.emit(intent) }
+        }
         place()
         panel.orderFrontRegardless()
         // Displays plugged in, unplugged or rearranged: put the corral back at the bottom centre.
@@ -202,12 +216,15 @@ enum CorralBridge {
             model.agents = roster.agents
             model.hiddenCount = roster.hiddenCount
             place()
+            cards?.update(agents: roster.agents, cards: roster.cards)
             return .ok
         }
     }
 
     static func stop() -> CorralBridgeStatus {
         guard let panel else { return .notStarted }
+        cards?.stop()
+        cards = nil
         panel.orderOut(nil)
         self.panel = nil
         callback = nil
