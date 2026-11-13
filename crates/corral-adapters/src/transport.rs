@@ -38,15 +38,65 @@ pub enum TransportError {
     Exhausted(String),
 }
 
-/// Sends one request. The bearer key is read by the caller at request time and used only here.
+/// How the key travels. Either way it's read by the caller at request time and used only by the
+/// transport.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyHeader {
+    /// `Authorization: Bearer <key>` (xAI, OpenAI).
+    Bearer,
+    /// The key alone in a named header, e.g. Anthropic's `x-api-key`.
+    Named(&'static str),
+}
+
+impl KeyHeader {
+    /// The header's name, lowercase.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Bearer => "authorization",
+            Self::Named(name) => name,
+        }
+    }
+}
+
+/// One POST. `headers` are fixed, non-secret headers (an API version); the key goes only in
+/// [`KeyHeader`].
+#[derive(Debug, Clone, Copy)]
+pub struct PostRequest<'a> {
+    /// Where to send it.
+    pub url: &'a str,
+    /// The key.
+    pub key: &'a Secret,
+    /// Which header carries the key.
+    pub key_header: KeyHeader,
+    /// Other headers, `(name, value)`.
+    pub headers: &'a [(&'static str, &'static str)],
+    /// The JSON body.
+    pub body: &'a serde_json::Value,
+}
+
+/// Sends one request.
 pub trait Transport: Send + Sync + 'static {
+    /// POSTs `request.body` as JSON, asking for an event stream.
+    fn post<'a>(
+        &'a self,
+        request: PostRequest<'a>,
+    ) -> BoxFuture<'a, Result<HttpResponse, TransportError>>;
+
     /// POSTs `body` as JSON to `url`, authorized with `bearer`, asking for an event stream.
     fn post_json<'a>(
         &'a self,
         url: &'a str,
         bearer: &'a Secret,
         body: &'a serde_json::Value,
-    ) -> BoxFuture<'a, Result<HttpResponse, TransportError>>;
+    ) -> BoxFuture<'a, Result<HttpResponse, TransportError>> {
+        self.post(PostRequest {
+            url,
+            key: bearer,
+            key_header: KeyHeader::Bearer,
+            headers: &[],
+            body,
+        })
+    }
 }
 
 /// The real network, through `reqwest` with the system's TLS.
@@ -67,20 +117,35 @@ impl ReqwestTransport {
 }
 
 impl Transport for ReqwestTransport {
-    fn post_json<'a>(
+    fn post<'a>(
         &'a self,
-        url: &'a str,
-        bearer: &'a Secret,
-        body: &'a serde_json::Value,
+        request: PostRequest<'a>,
     ) -> BoxFuture<'a, Result<HttpResponse, TransportError>> {
         Box::pin(async move {
-            let response = self
+            let mut builder = self
                 .client
-                .post(url)
+                .post(request.url)
+                .header(reqwest::header::ACCEPT, "text/event-stream");
+            for (name, value) in request.headers {
+                builder = builder.header(*name, *value);
+            }
+            builder = match request.key_header {
                 // reqwest marks this header sensitive, so it's never printed in debug output.
-                .bearer_auth(bearer.expose())
-                .header(reqwest::header::ACCEPT, "text/event-stream")
-                .json(body)
+                KeyHeader::Bearer => builder.bearer_auth(request.key.expose()),
+                KeyHeader::Named(name) => {
+                    let mut value = reqwest::header::HeaderValue::from_str(request.key.expose())
+                        // The error would describe the key; it isn't passed on.
+                        .map_err(|_| {
+                            TransportError::Connect(
+                                "the key has characters that can't go in a header".into(),
+                            )
+                        })?;
+                    value.set_sensitive(true);
+                    builder.header(name, value)
+                }
+            };
+            let response = builder
+                .json(request.body)
                 .send()
                 .await
                 .map_err(|e| TransportError::Connect(e.without_url().to_string()))?;

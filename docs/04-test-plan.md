@@ -106,6 +106,7 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-FS-01..08** `..` traversal, absolute paths, symlink out of root, symlink inside root, hardlinks, case-insensitive APFS collisions, Unicode normalization (NFC/NFD) tricks, TOCTOU (file swapped between check and open)
 
 ### Adapters (contract suite, run for every adapter)
+Run today for xAI's Responses client (`tests/xai.rs`) and Anthropic's Messages client (`tests/claude.rs`), each against its own cassettes.
 - **TP-ADP-01** Streams `run.started` → … → exactly one terminal event
 - **TP-ADP-02** Every side effect is preceded by `policy.decided`
 - **TP-ADP-03** Cancel stops output within 2 s
