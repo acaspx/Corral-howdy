@@ -445,7 +445,8 @@ impl CorralFeed {
 
 /// Swift reports what the user did and never decides (AGENTS.md rule 3); this shell doesn't
 /// decide either. Tasks, Stop, Send back and Retry go to the core's controls, off the main
-/// thread. Linked apps are shown, hidden and opened here, with fixed URLs (ADR-005). The rest
+/// thread; so does Stop all. Linked apps are shown, hidden and opened here, with fixed URLs
+/// (ADR-005). The rest
 /// are reported until their milestones.
 fn on_intent(slot: &OnceLock<Corral>, result: Result<Intent, BridgeError>) {
     let intent = match result {
@@ -473,6 +474,19 @@ fn on_intent(slot: &OnceLock<Corral>, result: Result<Intent, BridgeError>) {
             });
         }
         Intent::OpenLinked(app) => corral.open_linked(app),
+        Intent::StopAll => {
+            let Some(controls) = corral.controls.clone() else {
+                eprintln!("corral: tasks are off, so Stop all had nothing to stop");
+                return;
+            };
+            tauri::async_runtime::spawn(async move {
+                let report = controls.stop_all().await;
+                eprintln!(
+                    "corral: Stop all stopped {} runs ({} had to be dropped)",
+                    report.stopped, report.forced
+                );
+            });
+        }
         Intent::DeployTask { agent, prompt } => {
             let Some(controls) = tasks(&corral, &agent) else {
                 return;

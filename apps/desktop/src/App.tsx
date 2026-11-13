@@ -30,7 +30,8 @@ export function App({ keyApi = defaultKeyApi }: { keyApi?: KeyApi }) {
       </ul>
       <KeyIntake api={keyApi} />
       <p className="status" role="status">
-        Walking skeleton: Grok answers from the corral once its key is connected; more agents arrive next.
+        Walking skeleton: connect a key and its agent joins the corral; Grok and Claude take tasks
+        today. Right-click the corral to place it, add linked apps, or stop all agents.
       </p>
     </main>
   );

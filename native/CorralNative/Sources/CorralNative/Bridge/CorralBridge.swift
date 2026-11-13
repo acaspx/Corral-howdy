@@ -70,6 +70,9 @@ struct CorralBridgeRoot: View {
             CorralLinkedMenu(model: CorralLinkedMenuModel(links: model.links)) { intent in
                 MainActor.assumeIsolated { CorralBridge.emit(intent) }
             }
+            CorralStopAllMenu(agents: model.agents) { intent in
+                MainActor.assumeIsolated { CorralBridge.emit(intent) }
+            }
         }
     }
 }

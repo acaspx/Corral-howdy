@@ -14,7 +14,7 @@
 
 use crate::ids::{AgentId, RunId, SessionId};
 use crate::lifecycle::Phase;
-use crate::supervisor::{RunRequest, Supervisor, SupervisorError};
+use crate::supervisor::{RecallReport, RunRequest, Supervisor, SupervisorError};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
@@ -150,6 +150,13 @@ impl CorralControls {
         };
         self.supervisor.cancel(&run).await?;
         Ok(())
+    }
+
+    /// Stop all agents (Recall-all, from the corral's right-click menu): stops every queued and
+    /// running run, dropping drivers that don't stop within the supervisor's force-drop time.
+    /// Returns once they've all ended. Each agent then takes a new task in a new session.
+    pub async fn stop_all(&self) -> RecallReport {
+        self.supervisor.recall_all().await
     }
 
     /// Closes `agent`'s session once its run has ended.

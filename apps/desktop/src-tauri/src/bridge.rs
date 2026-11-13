@@ -408,6 +408,8 @@ pub enum Intent {
     HideLinked(LinkedApp),
     /// Open on a linked drop's card.
     OpenLinked(LinkedApp),
+    /// Stop all agents, from the right-click menu (Recall-all).
+    StopAll,
 }
 
 /// A click on a checkpoint notification.
@@ -502,6 +504,7 @@ enum IntentWire {
     OpenLinked {
         id: String,
     },
+    StopAll {},
 }
 
 /// Why something crossing the bridge was refused.
@@ -603,6 +606,7 @@ pub fn decode_intent(bytes: &[u8]) -> Result<Intent, BridgeError> {
         }
         IntentWire::HideLinked { id } => Ok(Intent::HideLinked(linked_app(&id)?)),
         IntentWire::OpenLinked { id } => Ok(Intent::OpenLinked(linked_app(&id)?)),
+        IntentWire::StopAll {} => Ok(Intent::StopAll),
     }
 }
 

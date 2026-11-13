@@ -208,6 +208,7 @@ public enum CorralIntentWire {
         case .showLinked(let id, let look): body = Body(kind: "showLinked", id: id, look: look)
         case .hideLinked(let id): body = Body(kind: "hideLinked", id: id)
         case .openLinked(let id): body = Body(kind: "openLinked", id: id)
+        case .stopAll: body = Body(kind: "stopAll")
         }
         // Encoding plain strings can't fail in practice; if it ever does, the tap is dropped
         // rather than sending Rust something malformed.

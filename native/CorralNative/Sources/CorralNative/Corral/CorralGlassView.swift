@@ -42,6 +42,8 @@ public enum CorralIntent: Equatable, Sendable {
     case hideLinked(id: String)
     /// Open on a linked drop's card. Rust opens the app's own site.
     case openLinked(id: String)
+    /// Stop all agents, from the right-click menu (Recall-all). Rust stops every working run.
+    case stopAll
 }
 
 /// Springs drops between layouts so the shape morphs instead of jumping.
