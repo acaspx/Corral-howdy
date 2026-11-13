@@ -1,0 +1,16 @@
+{
+  "description": "A data line that isn't JSON.",
+  "responses": [
+    {
+      "status": 200,
+      "body": [
+        "event: message_start",
+        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_cassette_0001\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-test\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":12,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"output_tokens\":1}}}",
+        "",
+        "event: content_block_delta",
+        "data: {not json",
+        ""
+      ]
+    }
+  ]
+}

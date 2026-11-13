@@ -1,0 +1,11 @@
+{
+  "description": "HTTP 500 with Anthropic's error body.",
+  "responses": [
+    {
+      "status": 500,
+      "body": [
+        "{\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":\"Internal server error\"}}"
+      ]
+    }
+  ]
+}
