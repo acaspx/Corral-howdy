@@ -39,6 +39,7 @@ Goal: add an xAI key, click Grok's drop, ask a question, watch the ring turn and
 | **SK-6a** Corral on real events, core half: run cards (elapsed, spend, the cleaned answer, buttons by state), controls for deploy from a drop, Stop, Send back and Retry, the cards and intents on the bridge, and the app wired to Grok with the event store and a $0.25 cap | SK-2, SK-4, SK-5 | TP-SKEL-03..05 (core and wire) |
 | **SK-6b** Corral on real events, SwiftUI half: each drop's card (hover opens it, a click pins it with the cursor in its task field; ×, Esc or a click elsewhere closes it; 07 §8.2), the working ring and status badges, Stop, Send back and Retry | SK-6a, S6 | TP-SKEL-03..05 (on screen), TP-HOVER-01, 02, 05 |
 | **SK-7** Claude, text only: a streaming `anthropic_messages` client on the same retry, Stop and budget path as Grok (`stream.rs`), no tools sent, `max_tokens` from the remaining budget, cost computed from tokens, hand-written cassettes; Claude's drop runs it once an Anthropic key is connected (pulled forward from M5 item 1) | SK-4, SK-5, agents from keys (#52) | TP-ADP-01, 03, 04, 05; TP-SKEL-02; TP-BUD-01, 05 (for Claude) |
+| **Logos** Provider logos in the drops: fetched once from each provider's own site when its key is connected, checked, kept in Corral's folder, drawn by ImageIO (ADR-015) | Agents from keys (#52) | TP-LOGO-05..10 |
 
 **Exit:** J0 green in CI against a cassette, and the owner runs it once live with a $0.25 cap. Spikes S1 and S5 run during SK-1.
 

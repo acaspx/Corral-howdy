@@ -58,7 +58,10 @@ public struct CorralRoster: Equatable, Sendable {
             var monogram = sanitize(agent.monogram, max: maxMonogramLength)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if monogram.isEmpty { monogram = name.first.map { String($0).uppercased() } ?? "?" }
-            shown.append(CorralAgentToken(id: agent.id, name: name, monogram: monogram, status: status))
+            // A logo path that isn't a logo in a logos folder is dropped; the drop still shows.
+            let logoPath = agent.logo.flatMap { CorralLogo.isValidPath($0) ? $0 : nil }
+            shown.append(CorralAgentToken(id: agent.id, name: name, monogram: monogram, status: status,
+                                          logoPath: logoPath))
         }
         let hidden = min(max(wire.hidden, 0), maxHidden) + overflow
 
@@ -97,8 +100,8 @@ public struct CorralRoster: Equatable, Sendable {
         return String(String(scalars).prefix(max))
     }
 
-    // MARK: Wire format (Fixtures/bridge/roster-v1.json). Unknown keys are rejected, like Rust's
-    // `deny_unknown_fields`, so the two sides can't silently drift apart.
+    // MARK: Wire format (Fixtures/bridge/roster-v1.json; logos: roster-logos-v1.json). Unknown keys
+    // are rejected, like Rust's `deny_unknown_fields`, so the two sides can't silently drift apart.
 
     private struct Wire: Decodable {
         let v: Int
@@ -108,13 +111,15 @@ public struct CorralRoster: Equatable, Sendable {
 
         struct Agent: Decodable {
             let id: String, name: String, monogram: String, status: String
+            let logo: String?
             init(from decoder: Decoder) throws {
-                try rejectUnknownKeys(decoder, allowed: ["id", "name", "monogram", "status"])
+                try rejectUnknownKeys(decoder, allowed: ["id", "name", "monogram", "status", "logo"])
                 let c = try decoder.container(keyedBy: AnyKey.self)
                 id = try c.decode(String.self, forKey: AnyKey("id"))
                 name = try c.decode(String.self, forKey: AnyKey("name"))
                 monogram = try c.decode(String.self, forKey: AnyKey("monogram"))
                 status = try c.decode(String.self, forKey: AnyKey("status"))
+                logo = try c.decodeIfPresent(String.self, forKey: AnyKey("logo"))
             }
         }
 

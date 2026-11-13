@@ -145,6 +145,10 @@ pub struct RosterAgent {
     pub monogram: String,
     /// What the drop shows.
     pub status: DropStatus,
+    /// The provider's logo in Corral's logos folder, when there's one (ADR-015). Swift checks
+    /// the path again and falls back to the monogram.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub logo: Option<String>,
 }
 
 /// Drop status, as Swift's `CorralAgentToken.Status`.
@@ -189,6 +193,14 @@ impl RosterSnapshot {
         snapshot
     }
 
+    /// Adds each shown drop's logo path, from `logo_for` (ADR-015).
+    pub fn with_logos(mut self, logo_for: impl Fn(&AgentId) -> Option<String>) -> Self {
+        for agent in &mut self.agents {
+            agent.logo = logo_for(&agent.id);
+        }
+        self
+    }
+
     /// The JSON bytes passed to `corral_native_set_roster`.
     pub fn to_bytes(&self) -> Result<Vec<u8>, BridgeError> {
         serde_json::to_vec(self).map_err(BridgeError::Encode)
@@ -207,6 +219,7 @@ impl From<&CorralView> for RosterSnapshot {
                 name: drop.agent.name.clone(),
                 monogram: drop.agent.monogram.clone(),
                 status: DropStatus::from(drop.state),
+                logo: None,
             })
             .collect();
         let extra = agents.len().saturating_sub(MAX_SHOWN);
@@ -608,6 +621,7 @@ pub fn demo_roster(count: usize) -> RosterSnapshot {
             name: (*name).to_owned(),
             monogram: (*monogram).to_owned(),
             status: *status,
+            logo: None,
         })
         .collect();
     RosterSnapshot::ranked(agents)
