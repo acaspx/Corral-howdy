@@ -70,8 +70,14 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-LIFE-03** "Prompt again" creates a new run in the same session; history carried
 - **TP-LIFE-04** "Send back" closes the session; agent returns to `Idle`
 - **TP-SUP-01** Concurrency limit queues extra runs in FIFO order
-- **TP-SUP-02** Recall-all cancels every run; misbehaving adapter force-dropped at 2 s
+- **TP-SUP-02** Recall-all cancels every run; misbehaving adapter force-dropped at 2 s; **Stop all agents** in the corral's right-click menu (offered only while an agent is working or waiting on you) stops every working agent through the core, and each can take a new task afterwards
 - **TP-SUP-03** App restart marks orphaned runs `Failed{app_restarted}`
+
+### Fake agent (M1)
+- **TP-FAKE-01** A scripted answer streams its text, sums its usage and completes; scripts can be chosen by prompt, and the driver records every run it was given
+- **TP-FAKE-02** A scripted wait ends at once on Stop; a stubborn step ignores Stop and is force-dropped at 2 s
+- **TP-FAKE-03** A tool step fails the run with `tools_not_enabled` until tools exist (M2), and nothing runs; a scripted failure keeps its reason; a priced fake goes through the budget meter
+- **TP-FAKE-04** A script is plain data: its steps can be listed in order
 
 ### Store
 - **TP-STORE-01** Append/read round-trip, ordering by `seq`

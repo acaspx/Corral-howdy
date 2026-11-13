@@ -1348,3 +1348,29 @@ mod linked_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod stop_all_tests {
+    use super::*;
+
+    const STOP_ALL: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/intent-stop-all-v1.json");
+
+    #[test]
+    fn tp_sup_02_stop_all_from_the_corral_menu_arrives_typed() {
+        assert_eq!(
+            decode_intent(STOP_ALL.as_bytes()).expect("stopAll"),
+            Intent::StopAll
+        );
+    }
+
+    #[test]
+    fn tp_sup_02_stop_all_takes_no_arguments() {
+        for bad in [
+            r#"{"v":1,"intent":{"kind":"stopAll","id":"grok"}}"#,
+            r#"{"v":1,"intent":{"kind":"stopAll","ids":["grok"]}}"#,
+        ] {
+            assert!(decode_intent(bad.as_bytes()).is_err(), "{bad}");
+        }
+    }
+}

@@ -22,5 +22,6 @@ Swift → Rust, through the intent callback:
   adds a task deployed from a drop (`deployTask`), Stop, Send back and Retry.
   Linked apps add `showLinked`, `hideLinked` (from the right-click menu) and `openLinked` (the
   card's Open button). Rust checks the app and the look, saves the choice and opens the app.
+  `stopAll` is the right-click menu's Stop all agents (Recall-all); Rust stops every working run.
 
 TP-BRIDGE-01..04, TP-SKEL-03..05, TP-LOGO-09 and TP-LINK-03..05 (docs/04-test-plan.md).
