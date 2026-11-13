@@ -155,8 +155,9 @@ The corral is glanced at all day, so motion has to earn its place: it shows a **
 All of these are **SwiftUI** in CorralNative. As everywhere, state comes from the Rust core; Swift only displays it and sends intents (approve, deny, new task) back. Deep-work surfaces (trace viewer, editors, spend, settings) stay in the React main window.
 
 ### 8.1 Agent logos in the drops
-- Every agent has an **icon**: the logo the user assigns when adding the agent (PNG, PDF or SVG). Corral suggests a neutral provider glyph until one is set, and falls back to a monogram (SF Pro Rounded) if there's neither.
-- **The repo ships no third-party logos.** Provider marks are trademarks with their own brand guidelines, so users bring their own. A curated "provider marks" pack is possible later, only after checking each provider's guidelines.
+- Every agent has an **icon**. A provider agent (Grok, Claude, GPT, Muse Spark) shows its **provider's logo, fetched at runtime** when the key is connected (ADR-015, decided 2026-11-12). Later, the user can assign a logo when adding an agent (PNG, PDF or SVG), and that one wins. With neither, the drop shows a monogram (SF Pro Rounded).
+- **The repo still ships no third-party logos.** Each logo comes from one fixed HTTPS URL on the provider's own site (`corral_adapters::logos`): xAI's and Meta AI's `favicon.ico`, Claude's `apple-touch-icon.png`. OpenAI's sites refuse requests from apps, so GPT keeps its monogram. Logos are fetched once, kept in Corral's `logos` folder, and never hot-linked.
+- **Fetched logos are untrusted input** (security model T19): redirects only to the provider's own HTTPS hosts, PNG or ICO by header, ≤ 1 MB (the download stops at the cap) and ≤ 1024 px, saved whole under a fixed name. Swift re-checks the path, opens the file without following links, and decodes it with ImageIO as a ≤ 256 px thumbnail, clipped to a circle.
 - **Rendering:** centered in the drop at 46% of its diameter, drawn above the glass (not refracted), full color. Monochrome logos can opt into template mode so they adapt to light and dark.
 - **Status around the logo:**
   - working: a coral arc turning slowly
@@ -164,7 +165,7 @@ All of these are **SwiftUI** in CorralNative. As everywhere, state comes from th
   - done: a check badge
   - error: a triangle badge
   - Status never relies on color alone.
-- **Imports are untrusted input** (security model T19): copied into Corral's own folder and never hot-linked, limited to 1 MB and 1024 px, decoded with ImageIO, and SVGs rasterized once at import (no scripts, no external references).
+- **User imports are untrusted input** too (security model T19): copied into Corral's own folder and never hot-linked, limited to 1 MB and 1024 px, decoded with ImageIO, and SVGs rasterized once at import (no scripts, no external references).
 
 ### 8.2 Hover card (paper)
 Opens above the hovered drop, centered and clamped to the screen edges, never covering the drop itself.

@@ -14,9 +14,14 @@ public struct CorralAgentToken: Identifiable, Equatable, Sendable {
     public var monogram: String       // e.g. "Gk", or an SF Symbol name via `symbol`
     public var symbol: String?
     public var status: Status
+    /// The provider's logo in Corral's logos folder, already checked by `CorralLogo.isValidPath`
+    /// (ADR-015). Nil: the drop shows its monogram.
+    public var logoPath: String?
 
-    public init(id: String, name: String, monogram: String, symbol: String? = nil, status: Status = .available) {
+    public init(id: String, name: String, monogram: String, symbol: String? = nil, status: Status = .available,
+                logoPath: String? = nil) {
         self.id = id; self.name = name; self.monogram = monogram; self.symbol = symbol; self.status = status
+        self.logoPath = logoPath
     }
 }
 
@@ -208,7 +213,19 @@ public struct CorralGlassView: View {
             }
         } label: {
             Group {
-                if let s = agent.symbol { Image(systemName: s) } else { Text(agent.monogram) }
+                if let path = agent.logoPath, let logo = CorralLogoCache.shared.image(at: path) {
+                    // 46% of the drop, above the glass, full color (docs/07 §8.1).
+                    Image(decorative: logo, scale: 1)
+                        .resizable()
+                        .interpolation(.high)
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: blob.radius * 2 * 0.46, height: blob.radius * 2 * 0.46)
+                        .clipShape(Circle())
+                } else if let s = agent.symbol {
+                    Image(systemName: s)
+                } else {
+                    Text(agent.monogram)
+                }
             }
             .font(.system(size: blob.radius * 0.55, weight: .semibold, design: .rounded))
             .foregroundStyle(.primary.opacity(0.75))

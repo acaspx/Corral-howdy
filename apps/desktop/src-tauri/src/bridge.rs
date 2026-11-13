@@ -145,6 +145,10 @@ pub struct RosterAgent {
     pub monogram: String,
     /// What the drop shows.
     pub status: DropStatus,
+    /// The provider's logo in Corral's logos folder, when there's one (ADR-015). Swift checks
+    /// the path again and falls back to the monogram.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub logo: Option<String>,
 }
 
 /// Drop status, as Swift's `CorralAgentToken.Status`.
@@ -189,6 +193,14 @@ impl RosterSnapshot {
         snapshot
     }
 
+    /// Adds each shown drop's logo path, from `logo_for` (ADR-015).
+    pub fn with_logos(mut self, logo_for: impl Fn(&AgentId) -> Option<String>) -> Self {
+        for agent in &mut self.agents {
+            agent.logo = logo_for(&agent.id);
+        }
+        self
+    }
+
     /// The JSON bytes passed to `corral_native_set_roster`.
     pub fn to_bytes(&self) -> Result<Vec<u8>, BridgeError> {
         serde_json::to_vec(self).map_err(BridgeError::Encode)
@@ -207,6 +219,7 @@ impl From<&CorralView> for RosterSnapshot {
                 name: drop.agent.name.clone(),
                 monogram: drop.agent.monogram.clone(),
                 status: DropStatus::from(drop.state),
+                logo: None,
             })
             .collect();
         let extra = agents.len().saturating_sub(MAX_SHOWN);
@@ -608,6 +621,7 @@ pub fn demo_roster(count: usize) -> RosterSnapshot {
             name: (*name).to_owned(),
             monogram: (*monogram).to_owned(),
             status: *status,
+            logo: None,
         })
         .collect();
     RosterSnapshot::ranked(agents)
@@ -1082,4 +1096,59 @@ mod skeleton_tests {
 
     // A full-size prompt, with room for the envelope, fits in one intent.
     const _: () = assert!(MAX_PROMPT_BYTES + 256 <= MAX_INTENT_BYTES);
+}
+
+#[cfg(test)]
+mod logo_tests {
+    use super::*;
+    use corral_core::corral_view::{AgentCard, DropView};
+    use serde_json::Value;
+
+    const LOGOS: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/roster-logos-v1.json");
+    const CLAUDE_LOGO: &str = "/Users/you/Library/Application Support/Corral/logos/anthropic.png";
+
+    fn json(bytes: &[u8]) -> Value {
+        serde_json::from_slice(bytes).expect("json")
+    }
+
+    fn view() -> CorralView {
+        let drop = |id: &str, name: &str, monogram: &str, state| DropView {
+            agent: AgentCard {
+                id: AgentId::from(id),
+                name: name.into(),
+                monogram: monogram.into(),
+            },
+            state,
+        };
+        CorralView {
+            drops: vec![
+                drop("claude", "Claude", "C", DropState::Available),
+                drop("grok", "Grok", "G", DropState::Working),
+            ],
+            hidden: 0,
+        }
+    }
+
+    #[test]
+    fn tp_logo_09_the_roster_carries_each_drops_logo_as_the_fixture_swift_decodes() {
+        let sent = RosterSnapshot::from(&view())
+            .with_logos(|id| (id.as_str() == "claude").then(|| CLAUDE_LOGO.to_owned()))
+            .to_bytes()
+            .expect("encode");
+        assert_eq!(json(&sent), json(LOGOS.as_bytes()));
+    }
+
+    #[test]
+    fn tp_logo_09_a_roster_without_logos_has_no_logo_keys() {
+        let v = json(
+            &RosterSnapshot::from(&view())
+                .with_logos(|_| None)
+                .to_bytes()
+                .expect("encode"),
+        );
+        for agent in v["agents"].as_array().expect("agents") {
+            assert!(agent.get("logo").is_none(), "{agent}");
+        }
+    }
 }

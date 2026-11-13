@@ -11,14 +11,19 @@
 //!
 //! The corral holds one agent per connected provider (Grok, Claude, GPT, Muse Spark; see
 //! `corral_adapters::catalog`): connecting a key adds its drop and removing it takes the drop away
-//! ([`Corral::refresh`]). Only Grok has a client so far; the others say so when given a task. No
+//! ([`Corral::refresh`]). Grok and Claude have clients; the others say so when given a task. No
 //! tools, and a hard cap of [`RUN_CAP_MICRO_USD`] per run. Events go to the SQLite event store in
 //! the app's data folder.
+//!
+//! Each connected provider's logo is fetched once from its own site and kept in the app's
+//! `logos` folder ([`crate::logos`], ADR-015); the drop shows it from then on.
 
 use crate::bridge::{BridgeError, Intent, RosterSnapshot};
 use crate::keys::Keys;
+use crate::logos::{LogoStore, fetch_missing};
 use crate::native;
 use corral_adapters::catalog::{AgentRouter, agent_for, agents_for};
+use corral_adapters::logos::{LogoId, ReqwestLogoFetcher};
 use corral_adapters::messages::{MessagesConfig, MessagesDriver};
 use corral_adapters::responses::{ResponsesConfig, ResponsesDriver};
 use corral_adapters::transport::{ReqwestTransport, Transport};
@@ -48,7 +53,12 @@ pub const CLAUDE_MODEL: &str = "claude-sonnet-5-5";
 /// The agents for the providers with a key in the Keychain. A key that can't be read counts as
 /// missing (the card would fail on it anyway) and is logged.
 fn agents(store: &dyn SecretStore) -> Vec<AgentCard> {
-    let connected: Vec<Provider> = Provider::ALL
+    agents_for(&connected(store))
+}
+
+/// The providers with a key in the Keychain.
+fn connected(store: &dyn SecretStore) -> Vec<Provider> {
+    Provider::ALL
         .into_iter()
         .filter(|p| match corral_secrets::status(store, *p) {
             Ok(status) => status.configured,
@@ -57,8 +67,7 @@ fn agents(store: &dyn SecretStore) -> Vec<AgentCard> {
                 false
             }
         })
-        .collect();
-    agents_for(&connected)
+        .collect()
 }
 
 /// What `setup` keeps alive for the life of the app.
@@ -67,6 +76,8 @@ pub struct Corral {
     pub feed: Arc<CorralFeed>,
     /// Turns clicks into runs, once the event store and the provider client are ready.
     pub controls: Option<Arc<CorralControls>>,
+    /// Provider logos, when the app has a data folder.
+    pub logos: Option<LogoStore>,
 }
 
 impl Corral {
@@ -78,6 +89,39 @@ impl Corral {
             controls.set_agents(cards.iter().map(|c| c.id.clone()));
         }
         self.feed.set_agents(cards);
+        self.show_logos(store);
+    }
+
+    /// Shows each connected provider's logo: a saved one at once, a missing one once it's
+    /// fetched, off the main thread. A logo that can't be had is logged; the drop keeps its
+    /// monogram.
+    pub fn show_logos(&self, store: &dyn SecretStore) {
+        let Some(logos) = self.logos.clone() else {
+            return;
+        };
+        let wanted: Vec<(LogoId, AgentId)> = connected(store)
+            .into_iter()
+            .map(|p| (LogoId::Provider(p), agent_for(p).id))
+            .collect();
+        let feed = Arc::clone(&self.feed);
+        // The task reports its own outcome, so its handle is dropped.
+        tauri::async_runtime::spawn(async move {
+            let ids: Vec<LogoId> = wanted.iter().map(|(id, _)| *id).collect();
+            for (id, result) in fetch_missing(&ReqwestLogoFetcher, &logos, &ids).await {
+                let Some((_, agent)) = wanted.iter().find(|(w, _)| *w == id) else {
+                    continue;
+                };
+                match result.map(|path| path.into_os_string().into_string()) {
+                    Ok(Ok(path)) => feed.set_logo(agent.clone(), path),
+                    Ok(Err(path)) => eprintln!(
+                        "corral: the {} logo's path isn't UTF-8: {}",
+                        id.display_name(),
+                        path.to_string_lossy()
+                    ),
+                    Err(e) => eprintln!("corral: no {} logo: {e}", id.display_name()),
+                }
+            }
+        });
     }
 }
 
@@ -96,6 +140,7 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
         views: Mutex::new(Views {
             corral: CorralTracker::new(cards),
             cards: RunCards::default(),
+            logos: HashMap::new(),
         }),
         app: app.clone(),
         clock: Arc::clone(&clock),
@@ -117,11 +162,24 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
             None
         }
     };
-    Ok(Corral { feed, controls })
+    let logos = match app.path().app_data_dir() {
+        Ok(dir) => Some(LogoStore::new(dir.join("logos"))),
+        Err(e) => {
+            eprintln!("corral: no app data folder, so no provider logos: {e}");
+            None
+        }
+    };
+    let corral = Corral {
+        feed,
+        controls,
+        logos,
+    };
+    corral.show_logos(app.state::<Keys>().0.as_ref());
+    Ok(corral)
 }
 
-/// The supervisor: each agent's runs go to its provider (only Grok's client exists so far), the
-/// event store, the $0.25 cap.
+/// The supervisor: each agent's runs go to its provider (Grok and Claude have clients so far),
+/// the event store, the $0.25 cap.
 fn supervisor(
     app: &AppHandle,
     feed: &Arc<CorralFeed>,
@@ -176,6 +234,8 @@ fn id_source() -> Arc<dyn Fn() -> String + Send + Sync> {
 struct Views {
     corral: CorralTracker,
     cards: RunCards,
+    /// Logo paths by agent.
+    logos: HashMap<AgentId, String>,
 }
 
 /// Keeps the corral in step with the event log.
@@ -206,6 +266,18 @@ impl CorralFeed {
         }
     }
 
+    /// Shows `agent`'s logo from `path`, if it's new.
+    fn set_logo(&self, agent: AgentId, path: String) {
+        let Ok(mut views) = self.views.lock() else {
+            eprintln!("corral: the corral view is poisoned; the corral stops updating");
+            return;
+        };
+        if views.logos.get(&agent) != Some(&path) {
+            views.logos.insert(agent, path);
+            self.send(self.snapshot(&views));
+        }
+    }
+
     /// Sends the current roster from the main thread (during `setup`).
     fn publish_now(&self) -> Result<(), native::NativeError> {
         let views = self
@@ -217,6 +289,7 @@ impl CorralFeed {
 
     fn snapshot(&self, views: &Views) -> RosterSnapshot {
         RosterSnapshot::with_cards(&views.corral.view(), &views.cards, self.clock.now_ms())
+            .with_logos(|id| views.logos.get(id).cloned())
     }
 
     /// Updates the views and, when a drop or a card changed, sends the new roster to Swift. The
