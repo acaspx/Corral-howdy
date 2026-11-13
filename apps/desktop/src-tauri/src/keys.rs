@@ -129,19 +129,45 @@ pub fn identify_provider_key(key: String) -> Option<Provider> {
     identify_key(&key)
 }
 
-/// Command: check a key with its provider, then store it.
+/// Command: check a key with its provider, then store it. The provider's agent drops into the
+/// corral.
 #[tauri::command]
 pub async fn connect_provider_key(
+    app: tauri::AppHandle,
     keys: State<'_, Keys>,
     checker: State<'_, KeyChecker>,
     provider: Provider,
     key: String,
 ) -> Result<Connected, String> {
-    connect_key(keys.0.as_ref(), checker.0.as_ref(), provider, key).await
+    let connected = connect_key(keys.0.as_ref(), checker.0.as_ref(), provider, key).await?;
+    corral_follows_keys(&app, keys.0.as_ref());
+    Ok(connected)
 }
 
-/// Command: remove a provider's key.
+/// Command: remove a provider's key. Its agent leaves the corral.
 #[tauri::command(async)]
-pub fn remove_provider_key(keys: State<'_, Keys>, provider: Provider) -> Result<KeyStatus, String> {
-    remove_key(keys.0.as_ref(), provider)
+pub fn remove_provider_key(
+    app: tauri::AppHandle,
+    keys: State<'_, Keys>,
+    provider: Provider,
+) -> Result<KeyStatus, String> {
+    let status = remove_key(keys.0.as_ref(), provider)?;
+    corral_follows_keys(&app, keys.0.as_ref());
+    Ok(status)
+}
+
+/// Updates the corral's agents after a key changed (TP-VIEW-06). Without the native corral
+/// there's nothing to update.
+fn corral_follows_keys(app: &tauri::AppHandle, store: &dyn SecretStore) {
+    #[cfg(all(target_os = "macos", feature = "native"))]
+    {
+        use tauri::Manager;
+        if let Some(corral) = app.try_state::<crate::surface::Corral>() {
+            corral.refresh(store);
+        }
+    }
+    #[cfg(not(all(target_os = "macos", feature = "native")))]
+    {
+        let _ = (app, store);
+    }
 }

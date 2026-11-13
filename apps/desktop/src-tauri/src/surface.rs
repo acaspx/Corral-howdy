@@ -9,12 +9,16 @@
 //! - **In from Swift:** a task typed into a drop, Stop, Send back and Retry go to
 //!   [`CorralControls`], which decides. Other intents are reported until their milestones.
 //!
-//! The walking skeleton (SK-6, docs/03) has one agent, Grok, with no tools and a hard cap of
-//! [`RUN_CAP_MICRO_USD`] per run. Events go to the SQLite event store in the app's data folder.
+//! The corral holds one agent per connected provider (Grok, Claude, GPT, Muse Spark; see
+//! `corral_adapters::catalog`): connecting a key adds its drop and removing it takes the drop away
+//! ([`Corral::refresh`]). Only Grok has a client so far; the others say so when given a task. No
+//! tools, and a hard cap of [`RUN_CAP_MICRO_USD`] per run. Events go to the SQLite event store in
+//! the app's data folder.
 
 use crate::bridge::{BridgeError, Intent, RosterSnapshot};
 use crate::keys::Keys;
 use crate::native;
+use corral_adapters::catalog::{AgentRouter, agent_for, agents_for};
 use corral_adapters::responses::{ResponsesConfig, ResponsesDriver};
 use corral_adapters::transport::ReqwestTransport;
 use corral_core::budget::BudgetConfig;
@@ -24,8 +28,10 @@ use corral_core::corral_view::{AgentCard, CorralTracker};
 use corral_core::event::Event;
 use corral_core::ids::AgentId;
 use corral_core::run_card::RunCards;
-use corral_core::supervisor::{EventLog, Supervisor, SupervisorConfig, WatchedLog};
+use corral_core::supervisor::{EventLog, RunDriver, Supervisor, SupervisorConfig, WatchedLog};
+use corral_secrets::{Provider, SecretStore};
 use corral_store::Store;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
@@ -36,13 +42,20 @@ pub const RUN_CAP_MICRO_USD: u64 = 250_000;
 /// The model Grok's drop uses. Model IDs are config (docs/01 §4); this is the skeleton's.
 pub const GROK_MODEL: &str = "grok-4.7";
 
-/// The corral's agents in the walking skeleton.
-fn agents() -> Vec<AgentCard> {
-    vec![AgentCard {
-        id: AgentId::from("grok"),
-        name: "Grok".into(),
-        monogram: "G".into(),
-    }]
+/// The agents for the providers with a key in the Keychain. A key that can't be read counts as
+/// missing (the card would fail on it anyway) and is logged.
+fn agents(store: &dyn SecretStore) -> Vec<AgentCard> {
+    let connected: Vec<Provider> = Provider::ALL
+        .into_iter()
+        .filter(|p| match corral_secrets::status(store, *p) {
+            Ok(status) => status.configured,
+            Err(e) => {
+                eprintln!("corral: couldn't read the {} key: {e}", p.display_name());
+                false
+            }
+        })
+        .collect();
+    agents_for(&connected)
 }
 
 /// What `setup` keeps alive for the life of the app.
@@ -51,6 +64,18 @@ pub struct Corral {
     pub feed: Arc<CorralFeed>,
     /// Turns clicks into runs, once the event store and the provider client are ready.
     pub controls: Option<Arc<CorralControls>>,
+}
+
+impl Corral {
+    /// Brings the corral in line with the keys in `store`: a newly connected provider's agent
+    /// drops in, and a removed one leaves (TP-VIEW-06). Called after a key is connected or removed.
+    pub fn refresh(&self, store: &dyn SecretStore) {
+        let cards = agents(store);
+        if let Some(controls) = &self.controls {
+            controls.set_agents(cards.iter().map(|c| c.id.clone()));
+        }
+        self.feed.set_agents(cards);
+    }
 }
 
 /// Shows the corral and wires it to the core. Called from Tauri's `setup`, on the main thread.
@@ -62,7 +87,7 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
     native::start(move |intent| on_intent(&slot, intent))?;
 
     let clock: Arc<dyn Clock> = Arc::new(SystemClock);
-    let cards = agents();
+    let cards = agents(app.state::<Keys>().0.as_ref());
     let ids: Vec<AgentId> = cards.iter().map(|c| c.id.clone()).collect();
     let feed = Arc::new(CorralFeed {
         views: Mutex::new(Views {
@@ -92,7 +117,8 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
     Ok(Corral { feed, controls })
 }
 
-/// The supervisor for the skeleton: Grok over xAI, the event store, the $0.25 cap.
+/// The supervisor: each agent's runs go to its provider (only Grok's client exists so far), the
+/// event store, the $0.25 cap.
 fn supervisor(
     app: &AppHandle,
     feed: &Arc<CorralFeed>,
@@ -115,7 +141,10 @@ fn supervisor(
     }
     let transport = ReqwestTransport::new().map_err(|e| format!("no HTTPS client: {e}"))?;
     let keys = app.state::<Keys>().0.clone();
-    let driver = ResponsesDriver::new(Arc::new(transport), keys, ResponsesConfig::xai(GROK_MODEL));
+    let grok = ResponsesDriver::new(Arc::new(transport), keys, ResponsesConfig::xai(GROK_MODEL));
+    let mut drivers: HashMap<AgentId, Arc<dyn RunDriver>> = HashMap::new();
+    drivers.insert(agent_for(Provider::Xai).id, Arc::new(grok));
+    let driver = AgentRouter::new(drivers);
     Ok(Supervisor::with_budget(
         SupervisorConfig::default(),
         BudgetConfig {
@@ -154,6 +183,17 @@ impl CorralFeed {
         Arc::new(WatchedLog::new(log, move |event: &Event| {
             feed.observe(event)
         }))
+    }
+
+    /// Replaces the corral's agents and, if the corral changed, sends the new roster.
+    fn set_agents(&self, cards: Vec<AgentCard>) {
+        let Ok(mut views) = self.views.lock() else {
+            eprintln!("corral: the corral view is poisoned; the corral stops updating");
+            return;
+        };
+        if views.corral.set_agents(cards) {
+            self.send(self.snapshot(&views));
+        }
     }
 
     /// Sends the current roster from the main thread (during `setup`).

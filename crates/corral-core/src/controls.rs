@@ -66,7 +66,7 @@ struct Latest {
 /// Turns clicks on drops into supervisor calls.
 pub struct CorralControls {
     supervisor: Supervisor,
-    agents: HashSet<AgentId>,
+    agents: Mutex<HashSet<AgentId>>,
     latest: Mutex<HashMap<AgentId, Latest>>,
     ids: IdSource,
 }
@@ -80,9 +80,18 @@ impl CorralControls {
     ) -> Self {
         Self {
             supervisor,
-            agents: agents.into_iter().collect(),
+            agents: Mutex::new(agents.into_iter().collect()),
             latest: Mutex::new(HashMap::new()),
             ids,
+        }
+    }
+
+    /// Replaces the agents that take tasks (keys connected or removed). A run already going
+    /// carries on; Stop, Send back and Retry work only for agents in the corral.
+    pub fn set_agents(&self, agents: impl IntoIterator<Item = AgentId>) {
+        // A poisoned set refuses every task (`known` fails closed), so there's nothing to do then.
+        if let Ok(mut known) = self.agents.lock() {
+            *known = agents.into_iter().collect();
         }
     }
 
@@ -200,7 +209,11 @@ impl CorralControls {
     }
 
     fn known(&self, agent: &AgentId) -> Result<(), ControlError> {
-        if self.agents.contains(agent) {
+        let known = self
+            .agents
+            .lock()
+            .map_err(|_| ControlError::Supervisor(SupervisorError::Poisoned))?;
+        if known.contains(agent) {
             Ok(())
         } else {
             Err(ControlError::UnknownAgent(agent.clone()))

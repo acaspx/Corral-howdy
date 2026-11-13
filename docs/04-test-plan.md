@@ -226,6 +226,7 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-VIEW-03** A change is reported only when a drop changes (streamed model text never republishes); runs of agents not in the corral change nothing
 - **TP-VIEW-04** The first 8 agents show in the order added and the rest count as hidden; a repeated agent shows once; an event the lifecycle refuses is refused and changes nothing
 - **TP-VIEW-05** `WatchedLog` tells its observer about exactly the events the log accepted, in order; a refused append reaches no observer
+- **TP-VIEW-06** The corral follows the connected keys: each provider's key brings one agent (Grok, Claude, GPT, Muse Spark) in a stable order, connecting adds its drop ready for a task, removing takes it away without losing a run's state, controls take tasks only for agents in the corral, and an agent whose client hasn't landed ends its run with a plain message, sending nothing
 
 ### Desktop shell (Tauri)
 - **TP-SHELL-01** Closing the last window keeps Corral running (agents keep working)

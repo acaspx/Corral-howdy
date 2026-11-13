@@ -112,6 +112,22 @@ impl CorralTracker {
         tracker
     }
 
+    /// Replaces the corral's agents (keys connected or removed). Runs keep their state, so an
+    /// agent that comes back shows what its run is doing. Returns `true` when the view changed.
+    pub fn set_agents(&mut self, agents: Vec<AgentCard>) -> bool {
+        let mut unique: Vec<AgentCard> = Vec::with_capacity(agents.len());
+        for card in agents {
+            if !unique.iter().any(|c| c.id == card.id) {
+                unique.push(card);
+            }
+        }
+        self.agents = unique;
+        let view = self.compute();
+        let changed = view != self.shown;
+        self.shown = view;
+        changed
+    }
+
     /// Applies one logged event. Returns `true` when the view changed, so callers republish only
     /// then (streamed model text, for example, never changes a drop). A refused event changes
     /// nothing.
