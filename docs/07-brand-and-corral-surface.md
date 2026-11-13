@@ -201,6 +201,13 @@ Contents, top to bottom:
 - Approve uses the checkpoint's single-use nonce.
 - Deny optionally takes a note that is sent to the agent.
 
+### 8.2.1 Linked apps (consumer Muse and your dot)
+Decided 2026-11-12 (ADR-005; pulled forward from M5). Consumer agents that have no official API show up as **linked drops**. Corral can show them but never drive them.
+- **Turning them on:** the corral's right-click menu, under **Linked apps**. **Muse** toggles Muse's drop. **Your dot ▸** picks your dot's look (Ring, Felipe, Alfred, Iggy or Todd; these are the looks OpenAI publishes, because Corral can't see your own dot) or hides it. Nothing is linked by default, and the choice is remembered across launches.
+- **The drop:** it follows the agents Corral runs and shows the app's own picture, fetched like provider logos (§8.1, ADR-015): Muse's icon from muse.ai, your dot's look from OpenAI's image host. It has no status ring, because Corral doesn't know what the app is doing.
+- **The card:** the label `MUSE · LINKED APP`, the headline "Works in Muse", the status line "Not managed by Corral", and one button: **Open Muse** ("Open ChatGPT" for your dot). Open goes to the app's own site at a fixed URL. There's no task field, no Stop and no trace.
+- A linked app becomes a real Corral agent only when its maker publishes an official control API; it then gets an adapter and a normal card.
+
 ### 8.3 Trace tree (translucent stacked cards)
 - **Where:** centered above the corral, rising from it. One **column per active task**, at most 3 side by side; more become a "+N more running" chip. Ordered needs-you first, then most recent. When nothing is running there is no tree, so the corral stays calm.
 - **Column, top to bottom:**

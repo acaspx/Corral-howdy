@@ -13,6 +13,7 @@
 
 pub mod cassette;
 pub mod catalog;
+pub mod linked;
 pub mod logos;
 pub mod messages;
 pub mod responses;

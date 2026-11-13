@@ -42,6 +42,8 @@ public let corralNativeABIVersion: UInt32 = 2
 final class CorralBridgeModel: ObservableObject {
     @Published var agents: [CorralAgentToken] = []
     @Published var hiddenCount = 0
+    /// Which linked apps show, from Rust, for the right-click menu.
+    @Published var links = CorralLinks(muse: false, dot: nil)
     /// Where the corral sits; the user's choice, remembered across launches.
     @Published var level = CorralLevel.load()
 }
@@ -64,6 +66,9 @@ struct CorralBridgeRoot: View {
         .contextMenu {
             CorralLevelMenu(current: model.level) { level in
                 MainActor.assumeIsolated { CorralBridge.setLevel(level) }
+            }
+            CorralLinkedMenu(model: CorralLinkedMenuModel(links: model.links)) { intent in
+                MainActor.assumeIsolated { CorralBridge.emit(intent) }
             }
         }
     }
@@ -222,6 +227,7 @@ enum CorralBridge {
         case .success(let roster):
             model.agents = roster.agents
             model.hiddenCount = roster.hiddenCount
+            model.links = roster.links
             place()
             cards?.update(agents: roster.agents, cards: roster.cards)
             return .ok

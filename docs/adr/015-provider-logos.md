@@ -28,6 +28,18 @@ shows it in the drop. A logo the user assigns later (docs/07 §8.1) takes preced
 | Meta (Muse Spark) | `https://www.meta.ai/favicon.ico` | 200, ICO, 16/32/48 px |
 | OpenAI (GPT) | none | `chatgpt.com` 404, `openai.com` 403 to non-browsers |
 
+Linked apps (ADR-005) use the same downloader for their pictures, checked in the built-in browser
+on 2026-11-12:
+
+| Linked app | URL | Result |
+|---|---|---|
+| Muse | `https://muse.ai/favicon.ico` | 200, ICO, up to 128 px |
+| Your dot (5 looks) | `https://images.ctfassets.net/8su2tbn87fck/…?fm=png&w=256` | 200, PNG, 81 to 256 px |
+
+The dot looks are on OpenAI's dots page, served from OpenAI's folder (`8su2tbn87fck`) on the
+Contentful image host. That host is shared with other companies, so the source pins the folder:
+the URL and any redirect must stay under `/8su2tbn87fck/` (`LogoSource::path_prefix`).
+
 `grok.com/apple-touch-icon.png` redirects to an HTML page, which the header check refuses, so
 Grok uses xAI's mark. GPT keeps its monogram until a source works.
 

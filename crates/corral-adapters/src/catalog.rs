@@ -6,6 +6,7 @@
 //! arrive with manifests in M5. A provider whose client hasn't landed yet still gets its drop, and
 //! a task given to it ends with a plain message; nothing is sent anywhere.
 
+use crate::linked::{LinkedApp, LinkedSettings};
 use corral_core::corral_view::AgentCard;
 use corral_core::event::{EventBody, FailureReason, RunFailed};
 use corral_core::ids::AgentId;
@@ -44,6 +45,14 @@ pub fn agents_for(connected: &[Provider]) -> Vec<AgentCard> {
         .filter(|p| connected.contains(p))
         .map(agent_for)
         .collect()
+}
+
+/// Everything in the corral: the agents for the connected providers, then the linked apps the
+/// user chose to show (ADR-005).
+pub fn corral_agents(connected: &[Provider], linked: &LinkedSettings) -> Vec<AgentCard> {
+    let mut cards = agents_for(connected);
+    cards.extend(linked.shown().into_iter().map(LinkedApp::agent_card));
+    cards
 }
 
 /// Runs each task with its agent's driver. An agent with no driver ends its run with a message.

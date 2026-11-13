@@ -110,6 +110,12 @@ final class PlaygroundModel: ObservableObject {
         case .retry(let id):
             note("retry \(name(of: id))")
             if let prompt = runs[id]?.prompt { start(id, prompt: prompt) }
+        case .showLinked(let id, let look):
+            note("showLinked \(id)\(look.map { " as \($0)" } ?? "")")
+        case .hideLinked(let id):
+            note("hideLinked \(id)")
+        case .openLinked(let id):
+            note("openLinked \(id)")
         }
     }
 
