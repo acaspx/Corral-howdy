@@ -174,6 +174,12 @@ Run today for xAI's Responses client (`tests/xai.rs`) and Anthropic's Messages c
 - **TP-LOGO-02** SVG import strips scripts and external references and rasterizes once; manifest `icon` paths that leave the manifest's folder are rejected
 - **TP-LOGO-03** Logo is drawn at 46% of the drop, above the glass; no logo → provider glyph → monogram fallback
 - **TP-LOGO-04** Status rings: working / needs-you / done / error each have a distinct shape cue, not only color; Reduce Motion shows a static progress arc
+- **TP-LOGO-05** Provider logos (ADR-015): each provider's logo comes from one fixed HTTPS URL on the provider's own site; redirects only to HTTPS on that provider's listed hosts; no key, cookie or user data is sent
+- **TP-LOGO-06** A fetched logo is refused unless it's a PNG or ICO, ≤ 1 MB (the download stops at the cap) and ≤ 1024 px per side by its header
+- **TP-LOGO-07** A refused or failed fetch is a typed error and stores nothing; a provider with no logo source isn't fetched
+- **TP-LOGO-08** Logos are saved in Corral's own folder as `logos/<provider>.png|ico`, whole or not at all (temp file, then rename), re-checked before writing, and fetched only when missing
+- **TP-LOGO-09** The roster carries each drop's logo path (`roster-logos-v1.json`); Swift drops a path that isn't `<abs>/logos/<provider id>.png|ico` (relative, `..`, control or bidi characters, too long) and the drop keeps its monogram
+- **TP-LOGO-10** Swift reads the logo file without following symlinks, refuses one over 1 MB, and decodes it with ImageIO as a thumbnail ≤ 256 px; a broken file is no logo and never traps
 - **TP-HOVER-01** Hover opens the card after 120 ms and keeps it while the pointer is on the drop or the card; it closes 260 ms after leaving; a click pins it
 - **TP-HOVER-02** The button set matches the state table in 07 §8.2 for idle, working, needs-you, done and error (snapshot per state)
 - **TP-HOVER-03** Progress segments and "Now:" line match the run's `plan_view` and spend projections

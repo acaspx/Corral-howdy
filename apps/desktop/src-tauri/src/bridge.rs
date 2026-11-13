@@ -1083,3 +1083,58 @@ mod skeleton_tests {
     // A full-size prompt, with room for the envelope, fits in one intent.
     const _: () = assert!(MAX_PROMPT_BYTES + 256 <= MAX_INTENT_BYTES);
 }
+
+#[cfg(test)]
+mod logo_tests {
+    use super::*;
+    use corral_core::corral_view::{AgentCard, DropView};
+    use serde_json::Value;
+
+    const LOGOS: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/roster-logos-v1.json");
+    const CLAUDE_LOGO: &str = "/Users/you/Library/Application Support/Corral/logos/anthropic.png";
+
+    fn json(bytes: &[u8]) -> Value {
+        serde_json::from_slice(bytes).expect("json")
+    }
+
+    fn view() -> CorralView {
+        let drop = |id: &str, name: &str, monogram: &str, state| DropView {
+            agent: AgentCard {
+                id: AgentId::from(id),
+                name: name.into(),
+                monogram: monogram.into(),
+            },
+            state,
+        };
+        CorralView {
+            drops: vec![
+                drop("claude", "Claude", "C", DropState::Available),
+                drop("grok", "Grok", "G", DropState::Working),
+            ],
+            hidden: 0,
+        }
+    }
+
+    #[test]
+    fn tp_logo_09_the_roster_carries_each_drops_logo_as_the_fixture_swift_decodes() {
+        let sent = RosterSnapshot::from(&view())
+            .with_logos(|id| (id.as_str() == "claude").then(|| CLAUDE_LOGO.to_owned()))
+            .to_bytes()
+            .expect("encode");
+        assert_eq!(json(&sent), json(LOGOS.as_bytes()));
+    }
+
+    #[test]
+    fn tp_logo_09_a_roster_without_logos_has_no_logo_keys() {
+        let v = json(
+            &RosterSnapshot::from(&view())
+                .with_logos(|_| None)
+                .to_bytes()
+                .expect("encode"),
+        );
+        for agent in v["agents"].as_array().expect("agents") {
+            assert!(agent.get("logo").is_none(), "{agent}");
+        }
+    }
+}

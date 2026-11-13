@@ -1,0 +1,8 @@
+{
+  "v": 1,
+  "agents": [
+    { "id": "claude", "name": "Claude", "monogram": "C", "status": "available", "logo": "/Users/you/Library/Application Support/Corral/logos/anthropic.png" },
+    { "id": "grok", "name": "Grok", "monogram": "G", "status": "working" }
+  ],
+  "hidden": 0
+}
