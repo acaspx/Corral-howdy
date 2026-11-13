@@ -36,7 +36,7 @@ This drives the adapter design, so it is spelled out here (sources in the system
 - **CLI agents** (Claude Code, Codex CLI, Gemini CLI, and others) speak the Agent Client Protocol (ACP) over stdio. Corral can host them as a client.
 - **Custom agents:** the user defines a persona, model, tools and permissions in a manifest, and Corral runs it.
 
-Product rule: **Corral never automates a consumer agent through unofficial wrappers, scraped sessions or shared passwords.** When Meta or OpenAI publish an official control API, it becomes another adapter. Until then, consumer Muse and dots appear as "linked apps" (an open-in-app shortcut plus a manual status), clearly marked as not managed.
+Product rule: **Corral never automates a consumer agent through unofficial wrappers, scraped sessions or shared passwords.** When Meta or OpenAI publish an official control API, it becomes another adapter. Until then, consumer Muse and dots appear as "linked apps" (an open-in-app shortcut plus a manual status), clearly marked as not managed. Linked drops shipped on 2026-11-12, turned on from the corral's right-click menu; the manual status comes later.
 
 ## Principles
 

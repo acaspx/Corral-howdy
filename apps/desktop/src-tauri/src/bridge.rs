@@ -4,6 +4,7 @@
 //! `native/CorralNative/Fixtures/bridge` are tested from both sides (TP-BRIDGE-01..04), so a change
 //! on one side fails the other's tests. The FFI itself lives in `native.rs`.
 
+use corral_adapters::linked::{DotLook, LinkedApp, LinkedSettings};
 use corral_core::controls::MAX_PROMPT_BYTES;
 use corral_core::corral_view::{CorralView, DropState};
 use corral_core::ids::{AgentId, CheckpointId};
@@ -30,6 +31,20 @@ pub struct RosterSnapshot {
     hidden: u32,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     cards: Vec<CardSnapshot>,
+    /// Which linked apps show, for the right-click menu (`roster-linked-v1.json`). Absent when
+    /// nothing is linked.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    links: Option<LinksSnapshot>,
+}
+
+/// Which linked apps show (ADR-005).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LinksSnapshot {
+    /// Muse's drop shows.
+    pub muse: bool,
+    /// Your dot's look, when its drop shows.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dot: Option<&'static str>,
 }
 
 /// What a drop's hover card and result card show, from the core's [`RunCard`]. Text is already
@@ -149,6 +164,9 @@ pub struct RosterAgent {
     /// the path again and falls back to the monogram.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub logo: Option<String>,
+    /// For a linked app's drop (ADR-005), the app it opens in. Its card has only Open.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub linked: Option<&'static str>,
 }
 
 /// Drop status, as Swift's `CorralAgentToken.Status`.
@@ -178,6 +196,7 @@ impl RosterSnapshot {
             agents,
             hidden: u32::try_from(hidden).unwrap_or(u32::MAX),
             cards: Vec::new(),
+            links: None,
         }
     }
 
@@ -191,6 +210,18 @@ impl RosterSnapshot {
             .map(|card| CardSnapshot::from(&card))
             .collect();
         snapshot
+    }
+
+    /// Marks linked apps' drops and says which linked apps show (ADR-005).
+    pub fn with_linked(mut self, settings: &LinkedSettings) -> Self {
+        for agent in &mut self.agents {
+            agent.linked = LinkedApp::from_agent(&agent.id).map(LinkedApp::app_name);
+        }
+        self.links = (!settings.is_empty()).then(|| LinksSnapshot {
+            muse: settings.muse,
+            dot: settings.dot.map(DotLook::id),
+        });
+        self
     }
 
     /// Adds each shown drop's logo path, from `logo_for` (ADR-015).
@@ -220,6 +251,7 @@ impl From<&CorralView> for RosterSnapshot {
                 monogram: drop.agent.monogram.clone(),
                 status: DropStatus::from(drop.state),
                 logo: None,
+                linked: None,
             })
             .collect();
         let extra = agents.len().saturating_sub(MAX_SHOWN);
@@ -365,6 +397,17 @@ pub enum Intent {
     SendBack(AgentId),
     /// Retry on a card.
     Retry(AgentId),
+    /// Show a linked app's drop, from the right-click menu (ADR-005).
+    ShowLinked {
+        /// The app.
+        app: LinkedApp,
+        /// Your dot's look.
+        look: Option<DotLook>,
+    },
+    /// Take a linked app's drop away.
+    HideLinked(LinkedApp),
+    /// Open on a linked drop's card.
+    OpenLinked(LinkedApp),
 }
 
 /// A click on a checkpoint notification.
@@ -448,6 +491,17 @@ enum IntentWire {
     Retry {
         id: String,
     },
+    ShowLinked {
+        id: String,
+        #[serde(default)]
+        look: Option<String>,
+    },
+    HideLinked {
+        id: String,
+    },
+    OpenLinked {
+        id: String,
+    },
 }
 
 /// Why something crossing the bridge was refused.
@@ -474,6 +528,9 @@ pub enum BridgeError {
     /// A task over the core's prompt limit.
     #[error("task is {0} bytes; the limit is {MAX_PROMPT_BYTES}")]
     PromptTooLong(usize),
+    /// A linked app or look this build doesn't know, or a look for an app that has none.
+    #[error("unknown linked app or look")]
+    BadLinked,
     /// A roster that couldn't be encoded.
     #[error("roster encode failed: {0}")]
     Encode(serde_json::Error),
@@ -533,7 +590,24 @@ pub fn decode_intent(bytes: &[u8]) -> Result<Intent, BridgeError> {
         IntentWire::Stop { id } => Ok(Intent::Stop(agent_id(id)?)),
         IntentWire::SendBack { id } => Ok(Intent::SendBack(agent_id(id)?)),
         IntentWire::Retry { id } => Ok(Intent::Retry(agent_id(id)?)),
+        IntentWire::ShowLinked { id, look } => {
+            let app = linked_app(&id)?;
+            let look = match (app, look) {
+                (_, None) => None,
+                (LinkedApp::Dot, Some(look)) => {
+                    Some(DotLook::from_id(&look).ok_or(BridgeError::BadLinked)?)
+                }
+                (LinkedApp::Muse, Some(_)) => return Err(BridgeError::BadLinked),
+            };
+            Ok(Intent::ShowLinked { app, look })
+        }
+        IntentWire::HideLinked { id } => Ok(Intent::HideLinked(linked_app(&id)?)),
+        IntentWire::OpenLinked { id } => Ok(Intent::OpenLinked(linked_app(&id)?)),
     }
+}
+
+fn linked_app(id: &str) -> Result<LinkedApp, BridgeError> {
+    LinkedApp::from_id(id).ok_or(BridgeError::BadLinked)
 }
 
 fn agent_id(id: String) -> Result<AgentId, BridgeError> {
@@ -622,6 +696,7 @@ pub fn demo_roster(count: usize) -> RosterSnapshot {
             monogram: (*monogram).to_owned(),
             status: *status,
             logo: None,
+            linked: None,
         })
         .collect();
     RosterSnapshot::ranked(agents)
@@ -1149,6 +1224,127 @@ mod logo_tests {
         );
         for agent in v["agents"].as_array().expect("agents") {
             assert!(agent.get("logo").is_none(), "{agent}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod linked_tests {
+    use super::*;
+    use corral_adapters::linked::{DotLook, LinkedApp, LinkedSettings};
+    use corral_core::corral_view::{AgentCard, DropView};
+    use serde_json::Value;
+
+    const ROSTER_LINKED: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/roster-linked-v1.json");
+    const SHOW: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/intent-show-linked-v1.json");
+    const HIDE: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/intent-hide-linked-v1.json");
+    const OPEN: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/intent-open-linked-v1.json");
+
+    fn json(bytes: &[u8]) -> Value {
+        serde_json::from_slice(bytes).expect("json")
+    }
+
+    fn view() -> CorralView {
+        let drop = |card: AgentCard| DropView {
+            agent: card,
+            state: DropState::Available,
+        };
+        CorralView {
+            drops: vec![
+                drop(AgentCard {
+                    id: AgentId::from("grok"),
+                    name: "Grok".into(),
+                    monogram: "G".into(),
+                }),
+                drop(LinkedApp::Muse.agent_card()),
+                drop(LinkedApp::Dot.agent_card()),
+            ],
+            hidden: 0,
+        }
+    }
+
+    fn refused(text: &str) -> bool {
+        decode_intent(text.as_bytes()).is_err()
+    }
+
+    #[test]
+    fn tp_link_03_the_roster_marks_linked_drops_as_the_fixture_swift_decodes() {
+        let settings = LinkedSettings {
+            muse: true,
+            dot: Some(DotLook::Felipe),
+        };
+        let sent = RosterSnapshot::from(&view())
+            .with_linked(&settings)
+            .to_bytes()
+            .expect("encode");
+        assert_eq!(json(&sent), json(ROSTER_LINKED.as_bytes()));
+    }
+
+    #[test]
+    fn tp_link_03_with_nothing_linked_the_roster_is_unchanged() {
+        let view = CorralView {
+            drops: vec![DropView {
+                agent: AgentCard {
+                    id: AgentId::from("grok"),
+                    name: "Grok".into(),
+                    monogram: "G".into(),
+                },
+                state: DropState::Available,
+            }],
+            hidden: 0,
+        };
+        let plain = RosterSnapshot::from(&view).to_bytes().expect("encode");
+        let linked = RosterSnapshot::from(&view)
+            .with_linked(&LinkedSettings::default())
+            .to_bytes()
+            .expect("encode");
+        assert_eq!(json(&plain), json(&linked));
+        assert!(json(&linked).get("links").is_none());
+    }
+
+    #[test]
+    fn tp_link_04_menu_and_card_intents_arrive_typed() {
+        assert_eq!(
+            decode_intent(SHOW.as_bytes()).expect("showLinked"),
+            Intent::ShowLinked {
+                app: LinkedApp::Dot,
+                look: Some(DotLook::Felipe)
+            }
+        );
+        assert_eq!(
+            decode_intent(HIDE.as_bytes()).expect("hideLinked"),
+            Intent::HideLinked(LinkedApp::Muse)
+        );
+        assert_eq!(
+            decode_intent(OPEN.as_bytes()).expect("openLinked"),
+            Intent::OpenLinked(LinkedApp::Muse)
+        );
+        assert_eq!(
+            decode_intent(br#"{"v":1,"intent":{"kind":"showLinked","id":"muse"}}"#)
+                .expect("show Muse"),
+            Intent::ShowLinked {
+                app: LinkedApp::Muse,
+                look: None
+            }
+        );
+    }
+
+    #[test]
+    fn tp_link_04_unknown_apps_and_looks_are_refused() {
+        for bad in [
+            r#"{"v":1,"intent":{"kind":"openLinked","id":"grok"}}"#,
+            r#"{"v":1,"intent":{"kind":"openLinked","id":"Muse"}}"#,
+            r#"{"v":1,"intent":{"kind":"hideLinked","id":""}}"#,
+            r#"{"v":1,"intent":{"kind":"showLinked","id":"dot","look":"nobody"}}"#,
+            r#"{"v":1,"intent":{"kind":"showLinked","id":"muse","look":"felipe"}}"#,
+            r#"{"v":1,"intent":{"kind":"showLinked","id":"dot","look":"felipe","url":"https://x"}}"#,
+            r#"{"v":1,"intent":{"kind":"openLinked","id":"muse","url":"https://evil.example"}}"#,
+        ] {
+            assert!(refused(bad), "{bad}");
         }
     }
 }

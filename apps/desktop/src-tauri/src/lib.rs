@@ -15,6 +15,7 @@ pub mod native;
 pub mod surface;
 
 pub mod keys;
+pub mod linked;
 pub mod logos;
 
 use tauri::menu::{Menu, MenuItem};

@@ -153,7 +153,7 @@ public final class CorralCardController {
             }
             return
         }
-        let model = CorralCardModel(agentName: agent.name, card: cards[id])
+        let model = CorralCardModel(agentName: agent.name, card: cards[id], linkedApp: agent.linkedApp)
         host.rootView = AnyView(
             CorralCardView(
                 model: model,

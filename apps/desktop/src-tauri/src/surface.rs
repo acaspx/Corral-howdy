@@ -17,12 +17,18 @@
 //!
 //! Each connected provider's logo is fetched once from its own site and kept in the app's
 //! `logos` folder ([`crate::logos`], ADR-015); the drop shows it from then on.
+//!
+//! Linked apps (consumer Muse and your dot, ADR-005) are drops the user turns on from the
+//! corral's right-click menu. They never take tasks: their card's Open button opens the app's
+//! own site. The choice is kept in `linked-apps.json` ([`crate::linked`]).
 
 use crate::bridge::{BridgeError, Intent, RosterSnapshot};
 use crate::keys::Keys;
+use crate::linked::LinkedStore;
 use crate::logos::{LogoStore, fetch_missing};
 use crate::native;
-use corral_adapters::catalog::{AgentRouter, agent_for, agents_for};
+use corral_adapters::catalog::{AgentRouter, agent_for, agents_for, corral_agents};
+use corral_adapters::linked::{LinkChange, LinkedApp, LinkedSettings};
 use corral_adapters::logos::{LogoId, ReqwestLogoFetcher};
 use corral_adapters::messages::{MessagesConfig, MessagesDriver};
 use corral_adapters::responses::{ResponsesConfig, ResponsesDriver};
@@ -50,13 +56,8 @@ pub const GROK_MODEL: &str = "grok-4.7";
 /// The model Claude's drop uses (SK-7).
 pub const CLAUDE_MODEL: &str = "claude-sonnet-5-5";
 
-/// The agents for the providers with a key in the Keychain. A key that can't be read counts as
-/// missing (the card would fail on it anyway) and is logged.
-fn agents(store: &dyn SecretStore) -> Vec<AgentCard> {
-    agents_for(&connected(store))
-}
-
-/// The providers with a key in the Keychain.
+/// The providers with a key in the Keychain. A key that can't be read counts as missing (the
+/// card would fail on it anyway) and is logged.
 fn connected(store: &dyn SecretStore) -> Vec<Provider> {
     Provider::ALL
         .into_iter()
@@ -70,39 +71,104 @@ fn connected(store: &dyn SecretStore) -> Vec<Provider> {
         .collect()
 }
 
-/// What `setup` keeps alive for the life of the app.
+/// The linked apps the user chose, and where the choice is kept.
+struct Linked {
+    store: Option<LinkedStore>,
+    settings: Mutex<LinkedSettings>,
+}
+
+/// What `setup` keeps alive for the life of the app. Cheap to clone: the intent callback holds
+/// one too.
+#[derive(Clone)]
 pub struct Corral {
     /// Keeps the corral in step with the log.
     pub feed: Arc<CorralFeed>,
     /// Turns clicks into runs, once the event store and the provider client are ready.
     pub controls: Option<Arc<CorralControls>>,
-    /// Provider logos, when the app has a data folder.
+    /// Logos, when the app has a data folder.
     pub logos: Option<LogoStore>,
+    linked: Arc<Linked>,
+    keys: Arc<dyn SecretStore>,
 }
 
 impl Corral {
-    /// Brings the corral in line with the keys in `store`: a newly connected provider's agent
-    /// drops in, and a removed one leaves (TP-VIEW-06). Called after a key is connected or removed.
+    /// Brings the corral in line with the keys in `store` and the linked apps: a newly connected
+    /// provider's agent drops in, and a removed one leaves (TP-VIEW-06). Called after a key or a
+    /// linked app changes.
     pub fn refresh(&self, store: &dyn SecretStore) {
-        let cards = agents(store);
+        let connected = connected(store);
+        let linked = self.linked_settings();
         if let Some(controls) = &self.controls {
-            controls.set_agents(cards.iter().map(|c| c.id.clone()));
+            // Only the agents Corral runs take tasks; a linked drop never does (ADR-005).
+            controls.set_agents(agents_for(&connected).into_iter().map(|c| c.id));
         }
-        self.feed.set_agents(cards);
-        self.show_logos(store);
+        self.feed
+            .set_agents(corral_agents(&connected, &linked), linked);
+        self.show_logos(&connected, &linked);
     }
 
-    /// Shows each connected provider's logo: a saved one at once, a missing one once it's
-    /// fetched, off the main thread. A logo that can't be had is logged; the drop keeps its
-    /// monogram.
-    pub fn show_logos(&self, store: &dyn SecretStore) {
+    fn linked_settings(&self) -> LinkedSettings {
+        match self.linked.settings.lock() {
+            Ok(settings) => *settings,
+            Err(_) => {
+                eprintln!("corral: the linked apps are poisoned; showing none");
+                LinkedSettings::default()
+            }
+        }
+    }
+
+    /// Shows or hides a linked app from the right-click menu, saves the choice and updates the
+    /// corral. A choice that can't be saved still applies until Corral quits, and is logged.
+    pub fn change_linked(&self, change: LinkChange) {
+        {
+            let Ok(mut settings) = self.linked.settings.lock() else {
+                eprintln!("corral: the linked apps are poisoned; {change:?} was dropped");
+                return;
+            };
+            let mut next = *settings;
+            if !next.apply(change) {
+                return;
+            }
+            if let Some(store) = &self.linked.store
+                && let Err(e) = store.save(&next)
+            {
+                eprintln!("corral: {e}; the change lasts until Corral quits");
+            }
+            *settings = next;
+        }
+        self.refresh(self.keys.as_ref());
+    }
+
+    /// Opens a linked app's own site (ADR-005): a fixed URL, never one from Swift.
+    pub fn open_linked(&self, app: LinkedApp) {
+        let url = app.open_url();
+        // The task reports its own outcome, so its handle is dropped.
+        tauri::async_runtime::spawn_blocking(move || {
+            match std::process::Command::new("/usr/bin/open")
+                .arg(url)
+                .status()
+            {
+                Ok(status) if status.success() => {}
+                Ok(status) => eprintln!("corral: opening {url} ended with {status}"),
+                Err(e) => eprintln!("corral: couldn't open {url}: {e}"),
+            }
+        });
+    }
+
+    /// Shows each drop's logo: a saved one at once, a missing one once it's fetched, off the
+    /// main thread. A logo that can't be had is logged; the drop keeps its monogram.
+    fn show_logos(&self, connected: &[Provider], linked: &LinkedSettings) {
         let Some(logos) = self.logos.clone() else {
             return;
         };
-        let wanted: Vec<(LogoId, AgentId)> = connected(store)
+        let providers = connected
+            .iter()
+            .map(|p| (LogoId::Provider(*p), agent_for(*p).id));
+        let apps = linked
+            .shown()
             .into_iter()
-            .map(|p| (LogoId::Provider(p), agent_for(p).id))
-            .collect();
+            .filter_map(|app| linked.logo(app).map(|id| (id, app.agent_card().id)));
+        let wanted: Vec<(LogoId, AgentId)> = providers.chain(apps).collect();
         let feed = Arc::clone(&self.feed);
         // The task reports its own outcome, so its handle is dropped.
         tauri::async_runtime::spawn(async move {
@@ -129,18 +195,39 @@ impl Corral {
 /// If the event store or the provider client can't start, the corral still shows, and tasks are
 /// refused with a logged reason.
 pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
-    let controls_slot: Arc<OnceLock<Arc<CorralControls>>> = Arc::new(OnceLock::new());
-    let slot = Arc::clone(&controls_slot);
+    let corral_slot: Arc<OnceLock<Corral>> = Arc::new(OnceLock::new());
+    let slot = Arc::clone(&corral_slot);
     native::start(move |intent| on_intent(&slot, intent))?;
 
+    let data_dir = match app.path().app_data_dir() {
+        Ok(dir) => Some(dir),
+        Err(e) => {
+            eprintln!("corral: no app data folder, so no logos and no saved linked apps: {e}");
+            None
+        }
+    };
+    let logos = data_dir.as_ref().map(|d| LogoStore::new(d.join("logos")));
+    let linked_store = data_dir
+        .as_ref()
+        .map(|d| LinkedStore::new(d.join("linked-apps.json")));
+    let linked = match linked_store.as_ref().map(LinkedStore::load) {
+        None => LinkedSettings::default(),
+        Some(Ok(settings)) => settings,
+        Some(Err(e)) => {
+            eprintln!("corral: {e}; no linked apps this time");
+            LinkedSettings::default()
+        }
+    };
+
+    let keys = app.state::<Keys>().0.clone();
+    let connected = connected(keys.as_ref());
     let clock: Arc<dyn Clock> = Arc::new(SystemClock);
-    let cards = agents(app.state::<Keys>().0.as_ref());
-    let ids: Vec<AgentId> = cards.iter().map(|c| c.id.clone()).collect();
     let feed = Arc::new(CorralFeed {
         views: Mutex::new(Views {
-            corral: CorralTracker::new(cards),
+            corral: CorralTracker::new(corral_agents(&connected, &linked)),
             cards: RunCards::default(),
             logos: HashMap::new(),
+            linked,
         }),
         app: app.clone(),
         clock: Arc::clone(&clock),
@@ -148,24 +235,16 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
     feed.publish_now()?;
     feed.start_ticking();
 
+    // Only the agents Corral runs take tasks; linked drops never do (ADR-005).
+    let runnable: Vec<AgentId> = agents_for(&connected).into_iter().map(|c| c.id).collect();
     let controls = match supervisor(app, &feed, clock) {
-        Ok(supervisor) => {
-            let controls = Arc::new(CorralControls::new(supervisor, ids, id_source()));
-            // The slot is empty: this is its only writer, and `start` runs once.
-            if controls_slot.set(Arc::clone(&controls)).is_err() {
-                eprintln!("corral: the controls were already set; keeping the first");
-            }
-            Some(controls)
-        }
+        Ok(supervisor) => Some(Arc::new(CorralControls::new(
+            supervisor,
+            runnable,
+            id_source(),
+        ))),
         Err(reason) => {
             eprintln!("corral: tasks are off: {reason}");
-            None
-        }
-    };
-    let logos = match app.path().app_data_dir() {
-        Ok(dir) => Some(LogoStore::new(dir.join("logos"))),
-        Err(e) => {
-            eprintln!("corral: no app data folder, so no provider logos: {e}");
             None
         }
     };
@@ -173,8 +252,17 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
         feed,
         controls,
         logos,
+        linked: Arc::new(Linked {
+            store: linked_store,
+            settings: Mutex::new(linked),
+        }),
+        keys,
     };
-    corral.show_logos(app.state::<Keys>().0.as_ref());
+    // The slot is empty: this is its only writer, and `start` runs once.
+    if corral_slot.set(corral.clone()).is_err() {
+        eprintln!("corral: the corral was already set; keeping the first");
+    }
+    corral.show_logos(&connected, &linked);
     Ok(corral)
 }
 
@@ -236,6 +324,8 @@ struct Views {
     cards: RunCards,
     /// Logo paths by agent.
     logos: HashMap<AgentId, String>,
+    /// Which linked apps show, for the right-click menu.
+    linked: LinkedSettings,
 }
 
 /// Keeps the corral in step with the event log.
@@ -256,12 +346,15 @@ impl CorralFeed {
     }
 
     /// Replaces the corral's agents and, if the corral changed, sends the new roster.
-    fn set_agents(&self, cards: Vec<AgentCard>) {
+    fn set_agents(&self, cards: Vec<AgentCard>, linked: LinkedSettings) {
         let Ok(mut views) = self.views.lock() else {
             eprintln!("corral: the corral view is poisoned; the corral stops updating");
             return;
         };
-        if views.corral.set_agents(cards) {
+        let drops_changed = views.corral.set_agents(cards);
+        let links_changed = views.linked != linked;
+        views.linked = linked;
+        if drops_changed || links_changed {
             self.send(self.snapshot(&views));
         }
     }
@@ -290,6 +383,7 @@ impl CorralFeed {
     fn snapshot(&self, views: &Views) -> RosterSnapshot {
         RosterSnapshot::with_cards(&views.corral.view(), &views.cards, self.clock.now_ms())
             .with_logos(|id| views.logos.get(id).cloned())
+            .with_linked(&views.linked)
     }
 
     /// Updates the views and, when a drop or a card changed, sends the new roster to Swift. The
@@ -351,8 +445,9 @@ impl CorralFeed {
 
 /// Swift reports what the user did and never decides (AGENTS.md rule 3); this shell doesn't
 /// decide either. Tasks, Stop, Send back and Retry go to the core's controls, off the main
-/// thread. The rest are reported until their milestones.
-fn on_intent(controls: &OnceLock<Arc<CorralControls>>, result: Result<Intent, BridgeError>) {
+/// thread. Linked apps are shown, hidden and opened here, with fixed URLs (ADR-005). The rest
+/// are reported until their milestones.
+fn on_intent(slot: &OnceLock<Corral>, result: Result<Intent, BridgeError>) {
     let intent = match result {
         Ok(intent) => intent,
         Err(e) => {
@@ -360,13 +455,28 @@ fn on_intent(controls: &OnceLock<Arc<CorralControls>>, result: Result<Intent, Br
             return;
         }
     };
-    let Some(controls) = controls.get().cloned() else {
-        eprintln!("corral: tasks are off, so {intent:?} was dropped (see the startup log)");
+    let Some(corral) = slot.get().cloned() else {
+        eprintln!("corral: still starting, so {intent:?} was dropped");
         return;
     };
-    // Each task's handle is dropped on purpose: the task reports its own outcome.
+    // Each task's handle is dropped on purpose: the task reports its own outcome. Linked
+    // changes read the Keychain, so they also run off the main thread.
     match intent {
+        Intent::ShowLinked { app, look } => {
+            tauri::async_runtime::spawn_blocking(move || {
+                corral.change_linked(LinkChange::Show { app, look });
+            });
+        }
+        Intent::HideLinked(app) => {
+            tauri::async_runtime::spawn_blocking(move || {
+                corral.change_linked(LinkChange::Hide(app));
+            });
+        }
+        Intent::OpenLinked(app) => corral.open_linked(app),
         Intent::DeployTask { agent, prompt } => {
+            let Some(controls) = tasks(&corral, &agent) else {
+                return;
+            };
             tauri::async_runtime::spawn(async move {
                 report(
                     "deploy",
@@ -376,16 +486,25 @@ fn on_intent(controls: &OnceLock<Arc<CorralControls>>, result: Result<Intent, Br
             });
         }
         Intent::Stop(agent) => {
+            let Some(controls) = tasks(&corral, &agent) else {
+                return;
+            };
             tauri::async_runtime::spawn(async move {
                 report("stop", &agent, controls.stop(&agent).await);
             });
         }
         Intent::SendBack(agent) => {
+            let Some(controls) = tasks(&corral, &agent) else {
+                return;
+            };
             tauri::async_runtime::spawn(async move {
                 report("send back", &agent, controls.send_back(&agent));
             });
         }
         Intent::Retry(agent) => {
+            let Some(controls) = tasks(&corral, &agent) else {
+                return;
+            };
             tauri::async_runtime::spawn(async move {
                 report("retry", &agent, controls.retry(&agent).map(|_| ()));
             });
@@ -399,6 +518,15 @@ fn on_intent(controls: &OnceLock<Arc<CorralControls>>, result: Result<Intent, Br
             eprintln!("corral: intent {intent:?} (handled in a later milestone)");
         }
     }
+}
+
+/// The controls, or a logged reason why a task click went nowhere.
+fn tasks(corral: &Corral, agent: &AgentId) -> Option<Arc<CorralControls>> {
+    let controls = corral.controls.clone();
+    if controls.is_none() {
+        eprintln!("corral: tasks are off, so a click on {agent} was dropped (see the startup log)");
+    }
+    controls
 }
 
 /// Logs a refused click. The hover card shows these from SK-6b.

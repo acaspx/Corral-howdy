@@ -17,11 +17,13 @@ public struct CorralAgentToken: Identifiable, Equatable, Sendable {
     /// The provider's logo in Corral's logos folder, already checked by `CorralLogo.isValidPath`
     /// (ADR-015). Nil: the drop shows its monogram.
     public var logoPath: String?
+    /// For a linked app's drop (ADR-005), the app it opens in; its card has only Open.
+    public var linkedApp: String?
 
     public init(id: String, name: String, monogram: String, symbol: String? = nil, status: Status = .available,
-                logoPath: String? = nil) {
+                logoPath: String? = nil, linkedApp: String? = nil) {
         self.id = id; self.name = name; self.monogram = monogram; self.symbol = symbol; self.status = status
-        self.logoPath = logoPath
+        self.logoPath = logoPath; self.linkedApp = linkedApp
     }
 }
 
@@ -35,6 +37,11 @@ public enum CorralIntent: Equatable, Sendable {
     case stop(id: String)
     case sendBack(id: String)
     case retry(id: String)
+    /// Linked apps (ADR-005), from the right-click menu: show one (your dot in a look), or hide it.
+    case showLinked(id: String, look: String?)
+    case hideLinked(id: String)
+    /// Open on a linked drop's card. Rust opens the app's own site.
+    case openLinked(id: String)
 }
 
 /// Springs drops between layouts so the shape morphs instead of jumping.

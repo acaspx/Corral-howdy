@@ -13,6 +13,7 @@
 //! - **Decoding** is done by ImageIO in Swift, as a bounded thumbnail; nothing here decodes
 //!   pixels.
 
+use crate::linked::DotLook;
 use crate::transport::BoxFuture;
 use corral_secrets::Provider;
 use futures_util::{Stream, StreamExt};
@@ -33,6 +34,10 @@ const TIMEOUT: Duration = Duration::from_secs(15);
 pub enum LogoId {
     /// A provider's agent (Grok, Claude…).
     Provider(Provider),
+    /// Consumer Muse, a linked app.
+    Muse,
+    /// Your dot, a linked app, in the look you picked.
+    Dot(DotLook),
 }
 
 impl LogoId {
@@ -40,6 +45,12 @@ impl LogoId {
     pub fn name(self) -> &'static str {
         match self {
             Self::Provider(provider) => provider.id(),
+            Self::Muse => "muse",
+            Self::Dot(DotLook::Ring) => "dot-ring",
+            Self::Dot(DotLook::Felipe) => "dot-felipe",
+            Self::Dot(DotLook::Alfred) => "dot-alfred",
+            Self::Dot(DotLook::Iggy) => "dot-iggy",
+            Self::Dot(DotLook::Todd) => "dot-todd",
         }
     }
 
@@ -47,6 +58,8 @@ impl LogoId {
     pub fn display_name(self) -> &'static str {
         match self {
             Self::Provider(provider) => provider.display_name(),
+            Self::Muse => "Muse",
+            Self::Dot(_) => "dot",
         }
     }
 }
@@ -91,11 +104,47 @@ pub fn logo_source(id: impl Into<LogoId>) -> Option<&'static LogoSource> {
         hosts: &["www.meta.ai", "meta.ai"],
         path_prefix: "/",
     };
+    // Linked apps (ADR-005). Muse's icon (128 px ICO) from its own site.
+    const MUSE: LogoSource = LogoSource {
+        url: "https://muse.ai/favicon.ico",
+        hosts: &["muse.ai", "www.muse.ai"],
+        path_prefix: "/",
+    };
+    // The dot looks OpenAI's dots page shows, served from OpenAI's folder (8su2tbn87fck) on its
+    // image host and converted there to 256 px PNGs. The host is shared, so the folder is pinned.
+    const fn dot(url: &'static str) -> LogoSource {
+        LogoSource {
+            url,
+            hosts: &["images.ctfassets.net"],
+            path_prefix: "/8su2tbn87fck/",
+        }
+    }
+    const DOT_RING: LogoSource = dot(
+        "https://images.ctfassets.net/8su2tbn87fck/PulStHeDuz5begF06sEwk/c2080ae53243122046ba61074a5f0bd2/dots-o-updated.svg?fm=png&w=256",
+    );
+    const DOT_FELIPE: LogoSource = dot(
+        "https://images.ctfassets.net/8su2tbn87fck/5c6KF403NZydjgJI4JRL6V/a51c63d6e728559d5c6069fa3169e0ff/poster-felipe.webp?fm=png&w=256",
+    );
+    const DOT_ALFRED: LogoSource = dot(
+        "https://images.ctfassets.net/8su2tbn87fck/1kV9mVs6c09GY7Fd6Kqe0Y/4cd80b14db0c087697481458a833005e/poster-alfred.webp?fm=png&w=256",
+    );
+    const DOT_IGGY: LogoSource = dot(
+        "https://images.ctfassets.net/8su2tbn87fck/7CWQv0rfN2pMgFb84Q2bC3/f58361d25e71dbaaf21aa91ff1ffa459/poster-iggy.webp?fm=png&w=256",
+    );
+    const DOT_TODD: LogoSource = dot(
+        "https://images.ctfassets.net/8su2tbn87fck/4YflfkDn7xUsAN4No5LsNf/92ae64f016cfc1efc70745c73029ce6c/poster-todd.webp?fm=png&w=256",
+    );
     match id.into() {
         LogoId::Provider(Provider::Xai) => Some(&XAI),
         LogoId::Provider(Provider::Anthropic) => Some(&CLAUDE),
         LogoId::Provider(Provider::OpenAi) => None,
         LogoId::Provider(Provider::Meta) => Some(&META_AI),
+        LogoId::Muse => Some(&MUSE),
+        LogoId::Dot(DotLook::Ring) => Some(&DOT_RING),
+        LogoId::Dot(DotLook::Felipe) => Some(&DOT_FELIPE),
+        LogoId::Dot(DotLook::Alfred) => Some(&DOT_ALFRED),
+        LogoId::Dot(DotLook::Iggy) => Some(&DOT_IGGY),
+        LogoId::Dot(DotLook::Todd) => Some(&DOT_TODD),
     }
 }
 

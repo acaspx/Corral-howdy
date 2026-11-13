@@ -10,12 +10,15 @@ import Foundation
 public struct CorralCardModel: Equatable, Sendable {
     public enum Button: Equatable, Hashable, Sendable {
         case stop, sendBack, retry
+        /// A linked drop's only button: opens the app it lives in (ADR-005).
+        case open(String)
 
         public var title: String {
             switch self {
             case .stop: "Stop"
             case .sendBack: "Send back"
             case .retry: "Retry"
+            case .open(let app): "Open \(app)"
             }
         }
     }
@@ -36,7 +39,20 @@ public struct CorralCardModel: Equatable, Sendable {
     /// The task field's placeholder, or nil when the card has no field.
     public var fieldPlaceholder: String?
 
-    public init(agentName: String, card: CorralRunCard?) {
+    /// `linkedApp`: for a linked app's drop, the app it opens in. Corral can't give it tasks, so
+    /// its card says so and offers only Open (ADR-005, docs/07 §8.3).
+    public init(agentName: String, card: CorralRunCard?, linkedApp: String? = nil) {
+        if let linkedApp {
+            label = "\(agentName.uppercased()) · LINKED APP"
+            headline = "Works in \(linkedApp)"
+            status = "Not managed by Corral"
+            answer = nil
+            answerTruncated = false
+            error = nil
+            buttons = [.open(linkedApp)]
+            fieldPlaceholder = nil
+            return
+        }
         label = agentName.uppercased()
         guard let card else {
             headline = "Ready for a task"
@@ -82,6 +98,7 @@ public struct CorralCardModel: Equatable, Sendable {
         case .stop: .stop(id: agentID)
         case .sendBack: .sendBack(id: agentID)
         case .retry: .retry(id: agentID)
+        case .open: .openLinked(id: agentID)
         }
     }
 

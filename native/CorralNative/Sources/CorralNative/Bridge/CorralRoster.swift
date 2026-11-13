@@ -19,6 +19,8 @@ public struct CorralRoster: Equatable, Sendable {
     public static let maxIDLength = 64
     public static let maxNameLength = 64
     public static let maxMonogramLength = 3
+    public static let maxLinkedAppLength = 32
+    public static let maxLookLength = 32
     public static let maxHidden = 9_999
 
     /// Agents to show, most used first, at most `maxShown`.
@@ -27,6 +29,8 @@ public struct CorralRoster: Equatable, Sendable {
     public var hiddenCount: Int
     /// Run cards by agent ID, for shown agents only (SK-6, `roster-cards-v1.json`).
     public var cards: [String: CorralRunCard] = [:]
+    /// Which linked apps show, for the right-click menu (`roster-linked-v1.json`).
+    public var links = CorralLinks(muse: false, dot: nil)
 
     public enum DecodeError: Error, Equatable, Sendable {
         case empty
@@ -60,8 +64,9 @@ public struct CorralRoster: Equatable, Sendable {
             if monogram.isEmpty { monogram = name.first.map { String($0).uppercased() } ?? "?" }
             // A logo path that isn't a logo in a logos folder is dropped; the drop still shows.
             let logoPath = agent.logo.flatMap { CorralLogo.isValidPath($0) ? $0 : nil }
+            let linkedApp = agent.linked.flatMap(nonEmpty(max: maxLinkedAppLength))
             shown.append(CorralAgentToken(id: agent.id, name: name, monogram: monogram, status: status,
-                                          logoPath: logoPath))
+                                          logoPath: logoPath, linkedApp: linkedApp))
         }
         let hidden = min(max(wire.hidden, 0), maxHidden) + overflow
 
@@ -74,7 +79,19 @@ public struct CorralRoster: Equatable, Sendable {
                   let decoded = CorralRunCard(card) else { continue }
             cards[card.id] = decoded
         }
-        return .success(CorralRoster(agents: shown, hiddenCount: min(hidden, maxHidden), cards: cards))
+        let dot: String? = wire.links?.dot
+        let links = CorralLinks(muse: wire.links?.muse ?? false,
+                                dot: dot.flatMap(nonEmpty(max: maxLookLength)))
+        return .success(CorralRoster(agents: shown, hiddenCount: min(hidden, maxHidden), cards: cards,
+                                     links: links))
+    }
+
+    /// Cleaned and bounded, or nil when nothing is left.
+    private static func nonEmpty(max: Int) -> (String) -> String? {
+        { text in
+            let clean = sanitize(text, max: max).trimmingCharacters(in: .whitespacesAndNewlines)
+            return clean.isEmpty ? nil : clean
+        }
     }
 
     static func status(_ s: String) -> CorralAgentToken.Status? {
@@ -108,29 +125,55 @@ public struct CorralRoster: Equatable, Sendable {
         let agents: [Agent]
         let hidden: Int
         let cards: [CorralRunCard.Wire]?
+        let links: Links?
+
+        struct Links: Decodable {
+            let muse: Bool?
+            let dot: String?
+            init(from decoder: Decoder) throws {
+                try rejectUnknownKeys(decoder, allowed: ["muse", "dot"])
+                let c = try decoder.container(keyedBy: AnyKey.self)
+                muse = try c.decodeIfPresent(Bool.self, forKey: AnyKey("muse"))
+                dot = try c.decodeIfPresent(String.self, forKey: AnyKey("dot"))
+            }
+        }
 
         struct Agent: Decodable {
             let id: String, name: String, monogram: String, status: String
             let logo: String?
+            let linked: String?
             init(from decoder: Decoder) throws {
-                try rejectUnknownKeys(decoder, allowed: ["id", "name", "monogram", "status", "logo"])
+                try rejectUnknownKeys(decoder, allowed: ["id", "name", "monogram", "status", "logo", "linked"])
                 let c = try decoder.container(keyedBy: AnyKey.self)
                 id = try c.decode(String.self, forKey: AnyKey("id"))
                 name = try c.decode(String.self, forKey: AnyKey("name"))
                 monogram = try c.decode(String.self, forKey: AnyKey("monogram"))
                 status = try c.decode(String.self, forKey: AnyKey("status"))
                 logo = try c.decodeIfPresent(String.self, forKey: AnyKey("logo"))
+                linked = try c.decodeIfPresent(String.self, forKey: AnyKey("linked"))
             }
         }
 
         init(from decoder: Decoder) throws {
-            try rejectUnknownKeys(decoder, allowed: ["v", "agents", "hidden", "cards"])
+            try rejectUnknownKeys(decoder, allowed: ["v", "agents", "hidden", "cards", "links"])
             let c = try decoder.container(keyedBy: AnyKey.self)
             v = try c.decode(Int.self, forKey: AnyKey("v"))
             agents = try c.decode([Agent].self, forKey: AnyKey("agents"))
             hidden = try c.decode(Int.self, forKey: AnyKey("hidden"))
             cards = try c.decodeIfPresent([CorralRunCard.Wire].self, forKey: AnyKey("cards"))
+            links = try c.decodeIfPresent(Links.self, forKey: AnyKey("links"))
         }
+    }
+}
+
+/// Which linked apps show (ADR-005). `dot` is your dot's look, as Rust named it.
+public struct CorralLinks: Equatable, Sendable {
+    public var muse: Bool
+    public var dot: String?
+
+    public init(muse: Bool, dot: String?) {
+        self.muse = muse
+        self.dot = dot
     }
 }
 
@@ -149,6 +192,7 @@ public enum CorralIntentWire {
         var id: String? = nil
         var ids: [String]? = nil
         var prompt: String? = nil
+        var look: String? = nil
     }
 
     public static func encode(_ intent: CorralIntent) -> Data? {
@@ -161,6 +205,9 @@ public enum CorralIntentWire {
         case .stop(let id): body = Body(kind: "stop", id: id)
         case .sendBack(let id): body = Body(kind: "sendBack", id: id)
         case .retry(let id): body = Body(kind: "retry", id: id)
+        case .showLinked(let id, let look): body = Body(kind: "showLinked", id: id, look: look)
+        case .hideLinked(let id): body = Body(kind: "hideLinked", id: id)
+        case .openLinked(let id): body = Body(kind: "openLinked", id: id)
         }
         // Encoding plain strings can't fail in practice; if it ever does, the tap is dropped
         // rather than sending Rust something malformed.
