@@ -449,3 +449,35 @@ fn decisions_say_why_in_plain_words() {
     };
     assert_eq!(reason, "Sending a message or email needs your approval.");
 }
+
+// ---- Mutation gaps (cargo-mutants) ----------------------------------------------------------------
+
+#[test]
+fn checkpoint_timeouts_take_seconds_minutes_and_hours_up_to_a_week() {
+    let timeout = |t: &str| {
+        Profile::from_toml(&format!("checkpoint_timeout = \"{t}\"")).map(|p| p.checkpoint_timeout)
+    };
+    assert_eq!(timeout("90s"), Ok(Duration::from_secs(90)));
+    assert_eq!(timeout("5m"), Ok(Duration::from_secs(300)));
+    assert_eq!(timeout("2h"), Ok(Duration::from_secs(7200)));
+    assert_eq!(
+        timeout("168h"),
+        Ok(Duration::from_secs(168 * 3600)),
+        "a week is the most"
+    );
+    assert_eq!(timeout("604800s"), Ok(Duration::from_secs(604_800)));
+    for bad in ["604801s", "169h", "0s", "1d", "m", "", "-5m", "5 m"] {
+        assert!(
+            matches!(timeout(bad), Err(PolicyError::BadDuration(_))),
+            "{bad:?}"
+        );
+    }
+}
+
+#[test]
+fn a_policy_keeps_its_profile_for_the_tools_that_need_it() {
+    let profile = Profile::from_toml(RESEARCHER).expect("parses");
+    let policy = Policy::new(profile.clone());
+    assert_eq!(policy.profile(), &profile);
+    assert_eq!(policy.profile().sandbox_roots, ["~/Corral/Scout"]);
+}
