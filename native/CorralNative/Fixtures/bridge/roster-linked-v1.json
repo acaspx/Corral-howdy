@@ -1,0 +1,10 @@
+{
+  "v": 1,
+  "agents": [
+    { "id": "grok", "name": "Grok", "monogram": "G", "status": "available" },
+    { "id": "muse", "name": "Muse", "monogram": "Mu", "status": "available", "linked": "Muse" },
+    { "id": "dot", "name": "Your dot", "monogram": "D", "status": "available", "linked": "ChatGPT" }
+  ],
+  "hidden": 0,
+  "links": { "muse": true, "dot": "felipe" }
+}

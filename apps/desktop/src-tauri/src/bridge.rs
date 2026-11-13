@@ -1152,3 +1152,124 @@ mod logo_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod linked_tests {
+    use super::*;
+    use corral_adapters::linked::{DotLook, LinkedApp, LinkedSettings};
+    use corral_core::corral_view::{AgentCard, DropView};
+    use serde_json::Value;
+
+    const ROSTER_LINKED: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/roster-linked-v1.json");
+    const SHOW: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/intent-show-linked-v1.json");
+    const HIDE: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/intent-hide-linked-v1.json");
+    const OPEN: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/intent-open-linked-v1.json");
+
+    fn json(bytes: &[u8]) -> Value {
+        serde_json::from_slice(bytes).expect("json")
+    }
+
+    fn view() -> CorralView {
+        let drop = |card: AgentCard| DropView {
+            agent: card,
+            state: DropState::Available,
+        };
+        CorralView {
+            drops: vec![
+                drop(AgentCard {
+                    id: AgentId::from("grok"),
+                    name: "Grok".into(),
+                    monogram: "G".into(),
+                }),
+                drop(LinkedApp::Muse.agent_card()),
+                drop(LinkedApp::Dot.agent_card()),
+            ],
+            hidden: 0,
+        }
+    }
+
+    fn refused(text: &str) -> bool {
+        decode_intent(text.as_bytes()).is_err()
+    }
+
+    #[test]
+    fn tp_link_03_the_roster_marks_linked_drops_as_the_fixture_swift_decodes() {
+        let settings = LinkedSettings {
+            muse: true,
+            dot: Some(DotLook::Felipe),
+        };
+        let sent = RosterSnapshot::from(&view())
+            .with_linked(&settings)
+            .to_bytes()
+            .expect("encode");
+        assert_eq!(json(&sent), json(ROSTER_LINKED.as_bytes()));
+    }
+
+    #[test]
+    fn tp_link_03_with_nothing_linked_the_roster_is_unchanged() {
+        let view = CorralView {
+            drops: vec![DropView {
+                agent: AgentCard {
+                    id: AgentId::from("grok"),
+                    name: "Grok".into(),
+                    monogram: "G".into(),
+                },
+                state: DropState::Available,
+            }],
+            hidden: 0,
+        };
+        let plain = RosterSnapshot::from(&view).to_bytes().expect("encode");
+        let linked = RosterSnapshot::from(&view)
+            .with_linked(&LinkedSettings::default())
+            .to_bytes()
+            .expect("encode");
+        assert_eq!(json(&plain), json(&linked));
+        assert!(json(&linked).get("links").is_none());
+    }
+
+    #[test]
+    fn tp_link_04_menu_and_card_intents_arrive_typed() {
+        assert_eq!(
+            decode_intent(SHOW.as_bytes()).expect("showLinked"),
+            Intent::ShowLinked {
+                app: LinkedApp::Dot,
+                look: Some(DotLook::Felipe)
+            }
+        );
+        assert_eq!(
+            decode_intent(HIDE.as_bytes()).expect("hideLinked"),
+            Intent::HideLinked(LinkedApp::Muse)
+        );
+        assert_eq!(
+            decode_intent(OPEN.as_bytes()).expect("openLinked"),
+            Intent::OpenLinked(LinkedApp::Muse)
+        );
+        assert_eq!(
+            decode_intent(br#"{"v":1,"intent":{"kind":"showLinked","id":"muse"}}"#)
+                .expect("show Muse"),
+            Intent::ShowLinked {
+                app: LinkedApp::Muse,
+                look: None
+            }
+        );
+    }
+
+    #[test]
+    fn tp_link_04_unknown_apps_and_looks_are_refused() {
+        for bad in [
+            r#"{"v":1,"intent":{"kind":"openLinked","id":"grok"}}"#,
+            r#"{"v":1,"intent":{"kind":"openLinked","id":"Muse"}}"#,
+            r#"{"v":1,"intent":{"kind":"hideLinked","id":""}}"#,
+            r#"{"v":1,"intent":{"kind":"showLinked","id":"dot","look":"nobody"}}"#,
+            r#"{"v":1,"intent":{"kind":"showLinked","id":"muse","look":"felipe"}}"#,
+            r#"{"v":1,"intent":{"kind":"showLinked","id":"dot","look":"felipe","url":"https://x"}}"#,
+            r#"{"v":1,"intent":{"kind":"openLinked","id":"muse","url":"https://evil.example"}}"#,
+        ] {
+            assert!(refused(bad), "{bad}");
+        }
+    }
+}

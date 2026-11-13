@@ -180,6 +180,13 @@ Run today for xAI's Responses client (`tests/xai.rs`) and Anthropic's Messages c
 - **TP-LOGO-08** Logos are saved in Corral's own folder as `logos/<provider>.png|ico`, whole or not at all (temp file, then rename), re-checked before writing, and fetched only when missing
 - **TP-LOGO-09** The roster carries each drop's logo path (`roster-logos-v1.json`); Swift drops a path that isn't `<abs>/logos/<provider id>.png|ico` (relative, `..`, control or bidi characters, too long) and the drop keeps its monogram
 - **TP-LOGO-10** Swift reads the logo file without following symlinks, refuses one over 1 MB, and decodes it with ImageIO as a thumbnail ≤ 256 px; a broken file is no logo and never traps
+
+### Linked apps (ADR-005)
+- **TP-LINK-01** Consumer Muse and your dot appear as linked drops with their own IDs (never an agent Corral runs); Open goes to a fixed HTTPS URL on the app's own site; nothing is linked by default
+- **TP-LINK-02** The user's choices (Muse on or off; your dot off or one of its looks) are saved in Corral's folder as plain JSON, whole or not at all; a damaged or oversized file is an error, not a guess
+- **TP-LINK-03** The roster marks a linked drop with the app it opens in and says which linked apps are shown (`roster-linked-v1.json`); with nothing linked it is unchanged; Swift bounds and cleans the text
+- **TP-LINK-04** The right-click menu sends `showLinked`, `hideLinked`; the card sends `openLinked`; Rust refuses unknown apps, unknown looks, a look for Muse and extra fields
+- **TP-LINK-05** A linked drop's card says it isn't managed, offers only Open, and has no task field
 - **TP-HOVER-01** Hover opens the card after 120 ms and keeps it while the pointer is on the drop or the card; it closes 260 ms after leaving; a click pins it
 - **TP-HOVER-02** The button set matches the state table in 07 §8.2 for idle, working, needs-you, done and error (snapshot per state)
 - **TP-HOVER-03** Progress segments and "Now:" line match the run's `plan_view` and spend projections
