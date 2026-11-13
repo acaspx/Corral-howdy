@@ -10,8 +10,7 @@
 //!   `model.response`, `usage.reported` and `run.completed`; or one `run.failed` (TP-ADP-01).
 //! - **Errors are typed** (TP-ADP-04): a rejected key, a persistent rate limit, a server error or
 //!   a failed response is a provider failure; a stream Corral can't read is an adapter failure.
-//!   429 and 503 are retried up to [`ResponsesConfig::max_attempts`] times in all, waiting for
-//!   `Retry-After` when given.
+//!   Retries and Stop are shared with every streamed protocol ([`crate::stream`]).
 //! - **Usage** (TP-ADP-05): the provider's billed cost (`cost_in_usd_ticks`, 10^-10 USD) is
 //!   reported in micro-USD, rounded up so spend is never under-counted.
 //! - **The hard spend cap** (SK-5, TP-BUD-01/05): before anything is sent, the request goes to
@@ -23,20 +22,15 @@
 //! - **Stop** (TP-ADP-03): the whole request runs inside a `select!` on the cancel token, so
 //!   Stop drops the connection at once.
 
-use crate::sse::{SseEvent, SseParser};
-use crate::transport::Transport;
+use crate::sse::SseEvent;
+use crate::stream::{Protocol, StreamDecoder, StreamDriver, clean};
+use crate::transport::KeyHeader;
 use corral_core::budget::{Price, RequestEstimate, input_token_bound};
 use corral_core::event::{
-    EventBody, FailureReason, ModelDelta, ModelRequest, ModelResponse, RunCompleted, RunFailed,
-    UsageReported,
+    EventBody, FailureReason, ModelDelta, ModelResponse, RunCompleted, RunFailed, UsageReported,
 };
-use corral_core::supervisor::{
-    CancelToken, EventSink, RunDriver, RunFuture, RunRequest, SupervisorError,
-};
-use corral_secrets::{KeyError, Provider, SecretStore, resolve};
-use futures_util::StreamExt;
+use corral_secrets::Provider;
 use serde_json::{Value, json};
-use std::sync::Arc;
 use std::time::Duration;
 
 /// Where and how to call a Responses API.
@@ -110,234 +104,60 @@ impl ResponsesConfig {
 }
 
 /// A [`RunDriver`] that runs a prompt through a Responses API.
-#[derive(Clone)]
-pub struct ResponsesDriver {
-    transport: Arc<dyn Transport>,
-    keys: Arc<dyn SecretStore>,
-    config: Arc<ResponsesConfig>,
-}
+pub type ResponsesDriver = StreamDriver<ResponsesConfig>;
 
-impl ResponsesDriver {
-    /// A driver that sends through `transport`, reading keys from `keys`.
-    pub fn new(
-        transport: Arc<dyn Transport>,
-        keys: Arc<dyn SecretStore>,
-        config: ResponsesConfig,
-    ) -> Self {
-        Self {
-            transport,
-            keys,
-            config: Arc::new(config),
-        }
+impl Protocol for ResponsesConfig {
+    type Decoder = ResponseDecoder;
+
+    fn provider(&self) -> Provider {
+        self.provider
+    }
+
+    fn model(&self) -> &str {
+        &self.model
+    }
+
+    fn estimate(&self, prompt: &str) -> RequestEstimate {
+        ResponsesConfig::estimate(self, prompt)
+    }
+
+    fn url(&self) -> String {
+        ResponsesConfig::url(self)
+    }
+
+    fn body(&self, prompt: &str, max_output_tokens: u32) -> Value {
+        self.request_body_limited(prompt, max_output_tokens)
+    }
+
+    fn key_header(&self) -> KeyHeader {
+        KeyHeader::Bearer
+    }
+
+    fn headers(&self) -> &'static [(&'static str, &'static str)] {
+        &[]
+    }
+
+    fn max_attempts(&self) -> u32 {
+        self.max_attempts
+    }
+
+    fn idle_timeout(&self) -> Duration {
+        self.idle_timeout
+    }
+
+    fn decoder(&self) -> ResponseDecoder {
+        ResponseDecoder::default()
     }
 }
 
-impl RunDriver for ResponsesDriver {
-    fn run(&self, request: RunRequest, sink: EventSink, cancel: CancelToken) -> RunFuture {
-        let me = self.clone();
-        Box::pin(async move {
-            tokio::select! {
-                biased;
-                // Dropping `drive` drops the HTTP stream; the supervisor logs run.cancelled.
-                () = cancel.cancelled() => {}
-                () = me.drive(&request.prompt, &sink) => {}
-            }
-        })
-    }
-}
-
-/// Why a run ended without completing.
-enum Failure {
-    /// Not logged yet: the driver emits `run.failed`.
-    Emit(FailureReason, String),
-    /// The core already ended the run (the budget meter refused the request).
-    Ended,
-}
-
-impl ResponsesDriver {
-    async fn drive(&self, prompt: &str, sink: &EventSink) {
-        if let Err(Failure::Emit(reason, message)) = self.attempt(prompt, sink).await {
-            // The sink refuses only when the run is already over or the log is gone; either way
-            // the supervisor closes the run out.
-            let _ = sink.emit(EventBody::RunFailed(RunFailed { reason, message }));
-        }
+impl StreamDecoder for ResponseDecoder {
+    fn on_event(&mut self, event: &SseEvent) -> Vec<EventBody> {
+        ResponseDecoder::on_event(self, event)
     }
 
-    async fn attempt(&self, prompt: &str, sink: &EventSink) -> Result<(), Failure> {
-        let config = &self.config;
-        let name = config.provider.display_name();
-        let key = match resolve(self.keys.as_ref(), config.provider) {
-            Ok(key) => key,
-            Err(missing @ KeyError::Missing(_)) => {
-                return Err(Failure::Emit(FailureReason::Provider, missing.to_string()));
-            }
-            Err(KeyError::Store(e)) => {
-                return Err(Failure::Emit(
-                    FailureReason::Internal,
-                    format!("couldn't read the {name} key: {e}"),
-                ));
-            }
-        };
-        let admission = sink
-            .request_model(
-                ModelRequest {
-                    provider: config.provider.id().into(),
-                    model: config.model.clone(),
-                },
-                &config.estimate(prompt),
-            )
-            .map_err(|e| match e {
-                // The core logged run.failed; nothing is sent.
-                SupervisorError::Budget(_) => Failure::Ended,
-                other @ (SupervisorError::Lifecycle(_)
-                | SupervisorError::Log(_)
-                | SupervisorError::DuplicateRun(_)
-                | SupervisorError::UnknownRun(_)
-                | SupervisorError::Poisoned) => Failure::Emit(
-                    FailureReason::Internal,
-                    format!("couldn't log the request: {other}"),
-                ),
-            })?;
-
-        let url = config.url();
-        let body = config.request_body_limited(prompt, admission.max_output_tokens);
-        let mut attempt = 0;
-        let response = loop {
-            attempt += 1;
-            let response = self
-                .transport
-                .post_json(&url, &key, &body)
-                .await
-                .map_err(|e| {
-                    Failure::Emit(
-                        FailureReason::Provider,
-                        format!("couldn't reach {name}: {e}"),
-                    )
-                })?;
-            match response.status {
-                200..=299 => break response,
-                401 | 403 => {
-                    // xAI's message repeats part of the key; it isn't passed on.
-                    return Err(Failure::Emit(
-                        FailureReason::Provider,
-                        format!(
-                            "{name} rejected the key (HTTP {}). Check it in Settings.",
-                            response.status
-                        ),
-                    ));
-                }
-                429 | 503 if attempt < config.max_attempts => {
-                    let backoff = Duration::from_secs(1 << (attempt - 1));
-                    let wait = response
-                        .retry_after
-                        .unwrap_or(backoff)
-                        .min(Duration::from_secs(60));
-                    tokio::time::sleep(wait).await;
-                }
-                429 => {
-                    return Err(Failure::Emit(
-                        FailureReason::Provider,
-                        format!(
-                            "{name}'s rate limit was hit {attempt} times in a row. Try again in a minute."
-                        ),
-                    ));
-                }
-                status => {
-                    let detail = error_detail(response.body).await;
-                    return Err(Failure::Emit(
-                        FailureReason::Provider,
-                        format!("{name} returned HTTP {status}{detail}"),
-                    ));
-                }
-            }
-        };
-
-        let mut parser = SseParser::default();
-        let mut decoder = ResponseDecoder::default();
-        let mut body = response.body;
-        loop {
-            let next = tokio::time::timeout(config.idle_timeout, body.next())
-                .await
-                .map_err(|_| {
-                    Failure::Emit(
-                        FailureReason::Provider,
-                        format!(
-                            "{name} sent nothing for {} seconds",
-                            config.idle_timeout.as_secs()
-                        ),
-                    )
-                })?;
-            let chunk = match next {
-                None => break,
-                Some(Ok(chunk)) => chunk,
-                Some(Err(e)) => {
-                    return Err(Failure::Emit(
-                        FailureReason::Provider,
-                        format!("{name}: {e}"),
-                    ));
-                }
-            };
-            let events = parser.push(&chunk).map_err(|e| {
-                Failure::Emit(
-                    FailureReason::Adapter,
-                    format!("{name} sent an unreadable stream: {e}"),
-                )
-            })?;
-            for event in &events {
-                for out in decoder.on_event(event) {
-                    emit(sink, out)?;
-                }
-                if decoder.is_finished() {
-                    return Ok(());
-                }
-            }
-        }
-        Err(Failure::Emit(
-            FailureReason::Adapter,
-            format!("{name}'s stream ended before the response finished"),
-        ))
+    fn is_finished(&self) -> bool {
+        ResponseDecoder::is_finished(self)
     }
-}
-
-fn emit(sink: &EventSink, body: EventBody) -> Result<(), Failure> {
-    sink.emit(body).map_err(|e| {
-        Failure::Emit(
-            FailureReason::Internal,
-            format!("couldn't log an event: {e}"),
-        )
-    })
-}
-
-/// `: <message>` from an error body (`{"error": "..."}` or `{"error": {"message": "..."}}`),
-/// cleaned and shortened; empty if there's nothing usable. Reads at most 16 KB.
-async fn error_detail(mut body: crate::transport::ByteStream) -> String {
-    let mut bytes = Vec::new();
-    while let Some(Ok(chunk)) = body.next().await {
-        bytes.extend_from_slice(&chunk);
-        if bytes.len() > 16 * 1024 {
-            break;
-        }
-    }
-    let message = serde_json::from_slice::<Value>(&bytes).ok().and_then(|v| {
-        let e = v.get("error")?;
-        e.as_str()
-            .or_else(|| e.get("message").and_then(Value::as_str))
-            .map(str::to_owned)
-    });
-    match message {
-        Some(m) if !clean(&m).is_empty() => format!(": {}", clean(&m)),
-        _ => String::new(),
-    }
-}
-
-/// Provider text for a card or trace: no control characters, at most 300 characters.
-fn clean(text: &str) -> String {
-    text.chars()
-        .filter(|c| !c.is_control())
-        .take(300)
-        .collect::<String>()
-        .trim()
-        .to_owned()
 }
 
 /// Turns Responses stream events into Corral events. Pure, so the recorded cassettes and the

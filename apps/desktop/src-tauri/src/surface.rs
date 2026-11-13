@@ -19,8 +19,9 @@ use crate::bridge::{BridgeError, Intent, RosterSnapshot};
 use crate::keys::Keys;
 use crate::native;
 use corral_adapters::catalog::{AgentRouter, agent_for, agents_for};
+use corral_adapters::messages::{MessagesConfig, MessagesDriver};
 use corral_adapters::responses::{ResponsesConfig, ResponsesDriver};
-use corral_adapters::transport::ReqwestTransport;
+use corral_adapters::transport::{ReqwestTransport, Transport};
 use corral_core::budget::BudgetConfig;
 use corral_core::clock::{Clock, SystemClock};
 use corral_core::controls::{ControlError, CorralControls};
@@ -41,6 +42,8 @@ use tauri::{AppHandle, Manager};
 pub const RUN_CAP_MICRO_USD: u64 = 250_000;
 /// The model Grok's drop uses. Model IDs are config (docs/01 §4); this is the skeleton's.
 pub const GROK_MODEL: &str = "grok-4.7";
+/// The model Claude's drop uses (SK-7).
+pub const CLAUDE_MODEL: &str = "claude-sonnet-5-5";
 
 /// The agents for the providers with a key in the Keychain. A key that can't be read counts as
 /// missing (the card would fail on it anyway) and is logged.
@@ -141,9 +144,16 @@ fn supervisor(
     }
     let transport = ReqwestTransport::new().map_err(|e| format!("no HTTPS client: {e}"))?;
     let keys = app.state::<Keys>().0.clone();
-    let grok = ResponsesDriver::new(Arc::new(transport), keys, ResponsesConfig::xai(GROK_MODEL));
+    let transport: Arc<dyn Transport> = Arc::new(transport);
+    let grok = ResponsesDriver::new(
+        transport.clone(),
+        keys.clone(),
+        ResponsesConfig::xai(GROK_MODEL),
+    );
+    let claude = MessagesDriver::new(transport, keys, MessagesConfig::anthropic(CLAUDE_MODEL));
     let mut drivers: HashMap<AgentId, Arc<dyn RunDriver>> = HashMap::new();
     drivers.insert(agent_for(Provider::Xai).id, Arc::new(grok));
+    drivers.insert(agent_for(Provider::Anthropic).id, Arc::new(claude));
     let driver = AgentRouter::new(drivers);
     Ok(Supervisor::with_budget(
         SupervisorConfig::default(),

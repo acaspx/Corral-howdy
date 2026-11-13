@@ -4,9 +4,8 @@
 //! order. Request headers are never stored, so a key can't end up in one; [`CassetteTransport`]
 //! keeps what was sent in memory ([`SeenRequest`]) for tests to check.
 
-use crate::transport::{BoxFuture, HttpResponse, Transport, TransportError};
+use crate::transport::{BoxFuture, HttpResponse, PostRequest, Transport, TransportError};
 use bytes::Bytes;
-use corral_secrets::Secret;
 use futures_util::stream;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -73,8 +72,12 @@ impl Cassette {
 pub struct SeenRequest {
     /// Where it was sent.
     pub url: String,
-    /// The bearer key's last 4 characters.
+    /// The key's last 4 characters.
     pub bearer_last4: String,
+    /// The header that carried the key (`authorization` or e.g. `x-api-key`), lowercase.
+    pub key_header: String,
+    /// The other headers sent, `(name, value)`. Never the key.
+    pub headers: Vec<(String, String)>,
     /// The JSON body.
     pub body: serde_json::Value,
 }
@@ -108,18 +111,22 @@ impl CassetteTransport {
 }
 
 impl Transport for CassetteTransport {
-    fn post_json<'a>(
+    fn post<'a>(
         &'a self,
-        url: &'a str,
-        bearer: &'a Secret,
-        body: &'a serde_json::Value,
+        request: PostRequest<'a>,
     ) -> BoxFuture<'a, Result<HttpResponse, TransportError>> {
         Box::pin(async move {
             let poisoned = || TransportError::Exhausted("the cassette's state is poisoned".into());
             self.seen.lock().map_err(|_| poisoned())?.push(SeenRequest {
-                url: url.to_owned(),
-                bearer_last4: bearer.last4(),
-                body: body.clone(),
+                url: request.url.to_owned(),
+                bearer_last4: request.key.last4(),
+                key_header: request.key_header.name().to_owned(),
+                headers: request
+                    .headers
+                    .iter()
+                    .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
+                    .collect(),
+                body: request.body.clone(),
             });
             let next = self.responses.lock().map_err(|_| poisoned())?.pop_front();
             let response = next.ok_or_else(|| {
