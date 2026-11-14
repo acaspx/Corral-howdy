@@ -13,10 +13,25 @@
 //! - **Taint** (T28): once a run has read untrusted content, grants on the classes that can send
 //!   data out (`net.write`, `comms.send`, `net.read.unlisted`) stop applying, and the checkpoint
 //!   names the untrusted source. Taint never clears within a run.
+//! - **The gate** (T2): one [`Gate`] per run. [`Gate::check`] is the only way to an
+//!   [`AllowToken`], and the tool gateway (`corral-tools`) runs nothing without one. A token can't
+//!   be made, copied or reused outside this crate:
+//!
+//! ```compile_fail
+//! // No constructor: a token comes only from Gate::check or an approved checkpoint.
+//! let forged = corral_policy::AllowToken::default();
+//! ```
+//!
+//! ```compile_fail
+//! fn reuse(token: corral_policy::AllowToken) -> (corral_policy::AllowToken, corral_policy::AllowToken) {
+//!     (token.clone(), token)
+//! }
+//! ```
 
 use corral_core::domain::{ActionClass, Risk};
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 /// What a profile or ceiling says about a class, from strictest to most permissive.
@@ -472,4 +487,172 @@ impl Policy {
             }
         }
     }
+}
+
+/// One tool call an agent wants to make: what it is (for the policy) and its arguments (for the
+/// tool).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ToolCall {
+    /// The action, mapped to its class.
+    pub action: Action,
+    /// The tool's arguments.
+    pub args: serde_json::Value,
+}
+
+/// How long an approval lasts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scope {
+    /// This call only.
+    Once,
+    /// This call, and the same class for the rest of the run (pinned to the destination for high
+    /// and critical classes).
+    ForRun,
+}
+
+/// Permission to run exactly one tool call. Only [`Gate::check`] and an approved
+/// [`PendingApproval`] make one; it can't be built, cloned or reused (the tool gateway takes it by
+/// value).
+#[derive(Debug)]
+pub struct AllowToken {
+    call: ToolCall,
+    run: Arc<Mutex<RunGrants>>,
+}
+
+impl AllowToken {
+    /// The call this token allows.
+    pub fn call(&self) -> &ToolCall {
+        &self.call
+    }
+
+    /// Marks the token's run as having read untrusted content from `source` (T28). The tool
+    /// gateway calls this after a tool that reads the web or an untrusted server.
+    pub fn taint(&self, source: impl Into<String>) {
+        lock(&self.run).taint(source);
+    }
+}
+
+/// A checkpoint waiting for the user: the call, its risk and why it asks.
+#[derive(Debug)]
+pub struct PendingApproval {
+    // Boxed so a refused approval, which hands this back, stays small.
+    call: Box<ToolCall>,
+    risk: Risk,
+    reason: String,
+    run: Arc<Mutex<RunGrants>>,
+}
+
+/// An approval the gesture wasn't enough for. The checkpoint stays open.
+#[derive(Debug)]
+pub struct Refused {
+    /// The checkpoint, still waiting.
+    pub pending: PendingApproval,
+    /// Why, in plain words.
+    pub reason: String,
+}
+
+impl PendingApproval {
+    /// How much is at stake.
+    pub fn risk(&self) -> Risk {
+        self.risk
+    }
+
+    /// Why it asks.
+    pub fn reason(&self) -> &str {
+        &self.reason
+    }
+
+    /// The call waiting.
+    pub fn call(&self) -> &ToolCall {
+        &self.call
+    }
+
+    /// Approves with `how`. Refused (and still open) if the gesture isn't enough for the risk
+    /// (TP-POL-09). With [`Scope::ForRun`] the run keeps a grant for later calls.
+    pub fn approve(self, how: Approval, scope: Scope) -> Result<AllowToken, Refused> {
+        if !can_approve(self.risk, how) {
+            let reason = match self.risk {
+                Risk::Critical => "This needs Touch ID.",
+                Risk::High => "This can't be approved by voice.",
+                Risk::Normal => "This approval wasn't accepted.",
+            };
+            return Err(Refused {
+                pending: self,
+                reason: reason.into(),
+            });
+        }
+        if scope == Scope::ForRun {
+            lock(&self.run).allow_for_run(&self.call.action);
+        }
+        Ok(AllowToken {
+            call: *self.call,
+            run: self.run,
+        })
+    }
+
+    /// Denies it. Nothing is granted; the call comes back so the agent can be told.
+    pub fn deny(self) -> ToolCall {
+        *self.call
+    }
+}
+
+/// What the gate says about one call.
+#[derive(Debug)]
+pub enum Verdict {
+    /// Go ahead with this token.
+    Allow(AllowToken),
+    /// Wait for the user.
+    Ask(PendingApproval),
+    /// Never; the agent is told why.
+    Deny {
+        /// Why, in plain words.
+        reason: String,
+    },
+}
+
+/// The policy for one run, with that run's grants and taint. Every tool call goes through
+/// [`Gate::check`].
+#[derive(Debug)]
+pub struct Gate {
+    policy: Policy,
+    run: Arc<Mutex<RunGrants>>,
+}
+
+impl Gate {
+    /// A gate for a new run: no grants, no taint.
+    pub fn new(policy: Policy) -> Self {
+        Self {
+            policy,
+            run: Arc::default(),
+        }
+    }
+
+    /// Decides one call.
+    pub fn check(&self, call: ToolCall) -> Verdict {
+        let decision = self.policy.decide(&call.action, &lock(&self.run));
+        match decision {
+            Decision::Allow => Verdict::Allow(AllowToken {
+                call,
+                run: Arc::clone(&self.run),
+            }),
+            Decision::Ask { risk, reason } => Verdict::Ask(PendingApproval {
+                call: Box::new(call),
+                risk,
+                reason,
+                run: Arc::clone(&self.run),
+            }),
+            Decision::Deny { reason } => Verdict::Deny { reason },
+        }
+    }
+
+    /// The first untrusted source this run read, if any.
+    pub fn tainted_by(&self) -> Option<String> {
+        lock(&self.run).tainted_by().map(str::to_owned)
+    }
+}
+
+/// The run's grants. A poisoned lock means a panic while holding it; the grants are plain data,
+/// so they're still sound to read and extend.
+fn lock(run: &Mutex<RunGrants>) -> std::sync::MutexGuard<'_, RunGrants> {
+    run.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
