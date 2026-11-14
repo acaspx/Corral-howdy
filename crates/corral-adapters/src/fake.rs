@@ -7,11 +7,13 @@
 //! - **Wait** takes real (or paused-test) time and ends at once on Stop.
 //! - **Stubborn** takes time and ignores Stop, like a misbehaving adapter, so the supervisor has
 //!   to force-drop it (TP-SUP-02).
-//! - **Tool** is refused until tools and the policy engine exist (M2): the run fails with
-//!   `tools_not_enabled` and nothing runs, exactly like the skeleton's real agents.
+//! - **Tool** goes through the policy gate and the tool gateway when the driver has a
+//!   [`ToolSetup`]: an Ask waits at a checkpoint, and the agent hears the answer and carries on.
+//!   Without one the run fails with `tools_not_enabled` and nothing runs, exactly like the
+//!   skeleton's real agents.
 //! - **Fail** ends the run with a given reason.
 //!
-//! The eval runner will build these scripts from scenario files once checkpoints exist (M2).
+//! The eval runner builds these scripts from scenario files (M2).
 
 use corral_core::budget::{Price, RequestEstimate, input_token_bound};
 use corral_core::event::{
@@ -19,6 +21,8 @@ use corral_core::event::{
     UsageReported,
 };
 use corral_core::supervisor::{CancelToken, EventSink, RunDriver, RunFuture, RunRequest};
+use corral_policy::Policy;
+use corral_tools::{CheckpointDesk, IdSource, ToolAnswer, ToolGateway, ToolRunner};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -42,7 +46,7 @@ pub enum FakeStep {
         /// Cost in micro-USD.
         cost_micro_usd: u64,
     },
-    /// Asks to use a tool. Refused until M2: the run fails and nothing runs.
+    /// Asks to use a tool: through the gate with a [`ToolSetup`], refused without one.
     Tool {
         /// The tool, e.g. `email.send`.
         name: String,
@@ -119,12 +123,27 @@ impl FakeScript {
     }
 }
 
+/// What a fake agent's tool calls go through: the same policy, gateway and desk as a real one.
+#[derive(Clone)]
+pub struct ToolSetup {
+    /// The agent's policy. Each run gets a fresh gate under it.
+    pub policy: Policy,
+    /// The registered tools.
+    pub gateway: Arc<ToolGateway>,
+    /// Where checkpoints wait.
+    pub desk: Arc<CheckpointDesk>,
+    /// Tool-call and checkpoint IDs.
+    pub ids: IdSource,
+}
+
 /// Runs scripts. Each run gets the script for its prompt, or the default one.
 pub struct FakeDriver {
     default: Arc<FakeScript>,
     by_prompt: HashMap<String, Arc<FakeScript>>,
     price: Price,
     runs: Arc<Mutex<Vec<RunRequest>>>,
+    tools: Option<ToolSetup>,
+    answers: Arc<Mutex<Vec<ToolAnswer>>>,
 }
 
 impl FakeDriver {
@@ -135,6 +154,8 @@ impl FakeDriver {
             by_prompt: HashMap::new(),
             price: Price::per_million_tokens(0, 0),
             runs: Arc::default(),
+            tools: None,
+            answers: Arc::default(),
         }
     }
 
@@ -148,6 +169,17 @@ impl FakeDriver {
     pub fn priced(mut self, price: Price) -> Self {
         self.price = price;
         self
+    }
+
+    /// Sends tool steps through `setup` instead of refusing them.
+    pub fn with_tools(mut self, setup: ToolSetup) -> Self {
+        self.tools = Some(setup);
+        self
+    }
+
+    /// What the agent was told about each tool call, in order.
+    pub fn tool_answers(&self) -> Arc<Mutex<Vec<ToolAnswer>>> {
+        Arc::clone(&self.answers)
     }
 
     /// Every run this driver was given, in order.
@@ -172,8 +204,18 @@ impl RunDriver for FakeDriver {
         if let Ok(mut runs) = self.runs.lock() {
             runs.push(request);
         }
-        Box::pin(async move { play(&script, &sink, &cancel, &estimate).await })
+        let tools = self.tools.clone().map(|setup| Tools {
+            runner: ToolRunner::new(setup.policy, setup.gateway, setup.desk, setup.ids),
+            answers: Arc::clone(&self.answers),
+        });
+        Box::pin(async move { play(&script, &sink, &cancel, &estimate, tools.as_ref()).await })
     }
+}
+
+/// One run's tools.
+struct Tools {
+    runner: ToolRunner,
+    answers: Arc<Mutex<Vec<ToolAnswer>>>,
 }
 
 /// Plays a script. Returning without a terminal event leaves the run to the supervisor: it logs
@@ -183,6 +225,7 @@ async fn play(
     sink: &EventSink,
     cancel: &CancelToken,
     estimate: &RequestEstimate,
+    tools: Option<&Tools>,
 ) {
     let request = ModelRequest {
         provider: "fake".into(),
@@ -222,6 +265,16 @@ async fn play(
                 input = input.saturating_add(*input_tokens);
                 output = output.saturating_add(*output_tokens);
                 cost = cost.saturating_add(*cost_micro_usd);
+            }
+            FakeStep::Tool { name, args } if let Some(tools) = tools => {
+                let answer = tools.runner.call(name, args.clone(), sink, cancel).await;
+                let stopped = answer == ToolAnswer::Stopped;
+                if let Ok(mut answers) = tools.answers.lock() {
+                    answers.push(answer);
+                }
+                if stopped {
+                    return;
+                }
             }
             FakeStep::Tool { name, args: _ } => {
                 emit(

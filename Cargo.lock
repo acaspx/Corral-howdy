@@ -405,7 +405,9 @@ version = "0.0.1"
 dependencies = [
  "bytes",
  "corral-core",
+ "corral-policy",
  "corral-secrets",
+ "corral-tools",
  "futures-util",
  "reqwest",
  "serde",

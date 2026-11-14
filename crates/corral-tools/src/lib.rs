@@ -9,7 +9,17 @@
 //! - **Taint.** A tool that reads untrusted content (the web, an untrusted MCP server) names its
 //!   source, and the gateway marks the run through the token (T28).
 //!
+//! - **Checkpoints.** [`ToolRunner`] takes an agent's call through the gate: an Ask waits at the
+//!   [`CheckpointDesk`] until the user answers with a strong enough gesture, the profile's timeout
+//!   passes, or the run is stopped (docs/01 §5).
+//!
 //! The filesystem sandbox (`src/fs`) and the MCP client come next (M2 item 6, M5 item 6).
+
+mod checkpoint;
+mod runner;
+
+pub use checkpoint::{Answer, CheckpointDesk, DeskError, MAX_NOTE_CHARS};
+pub use runner::{IdSource, MAX_DETAIL_CHARS, ToolAnswer, ToolRunner};
 
 use corral_core::domain::ActionClass;
 use corral_policy::AllowToken;
@@ -45,6 +55,12 @@ pub trait Tool: Send + Sync {
     /// For a tool that reads untrusted content: where this call reads from.
     fn untrusted_source(&self, args: &Value) -> Option<String> {
         let _ = args; // Trusted by default; only readers of untrusted content override this.
+        None
+    }
+    /// Where this call sends data or acts, as the policy should see it (an address, a domain, a
+    /// path). Read from the arguments by the tool, never taken from the model's description.
+    fn destination(&self, args: &Value) -> Option<String> {
+        let _ = args; // Most tools have no destination worth pinning a grant to.
         None
     }
     /// Runs the call.
@@ -117,6 +133,11 @@ impl ToolGateway {
     /// A registered tool's class, so adapters map calls from the registry, not from the model.
     pub fn class_of(&self, name: &str) -> Option<ActionClass> {
         self.tools.get(name).map(|tool| tool.class())
+    }
+
+    /// Where a call to `name` with `args` goes, as the tool reads it.
+    pub fn destination_of(&self, name: &str, args: &Value) -> Option<String> {
+        self.tools.get(name).and_then(|tool| tool.destination(args))
     }
 
     /// Runs the call `token` allows, and nothing else.
