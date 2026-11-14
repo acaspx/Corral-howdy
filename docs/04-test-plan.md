@@ -107,6 +107,12 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-GATE-05** Tool output for the model is capped (16 KB by default) on a character boundary, with a marker; the full output is kept for the trace (T30)
 - **TP-GATE-06** A tool that reads untrusted content taints its run through its token
 - **TP-GATE-07** A tool error is typed and doesn't taint the run
+- **TP-CHK-01** An Ask pauses the run at a checkpoint drawn only from core fields: the class, the risk, a title written by the core and the exact detail (tool, destination, arguments); nothing runs while it waits
+- **TP-CHK-02** Deny records the note (capped at 1,000 characters), runs nothing, and tells the agent, which carries on
+- **TP-CHK-03** Approve once runs that call and the next one asks again; approve for the run covers the same destination only (high and critical)
+- **TP-CHK-04** A gesture too weak for the risk is refused and the checkpoint stays open
+- **TP-CHK-05** An unanswered checkpoint expires at the profile's timeout and is denied, or cancels the run under `on_timeout = "cancel_run"`
+- **TP-CHK-06** Stop while a checkpoint waits ends the run and takes it off the desk; a later answer does nothing, and Stop wins over an approval that arrives at the same moment
 - **TP-POL-12** On a run that has taken in untrusted content (`tainted`), allow-for-run grants on `net.write`, `comms.send`, `net.read.unlisted` and `a2a` don't apply; each action asks and names the untrusted source; taint never clears within the run (T28)
 
 ### Budget
