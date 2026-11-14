@@ -4,6 +4,11 @@
 // The core decides the run's state and its buttons (`CorralRunCard.actions`); this only words
 // them. "New task" isn't a button: it's the task field at the bottom of the card, shown when the
 // agent is in the corral, done or stopped. Pure, so every state is testable without a window.
+//
+// While a checkpoint waits, the card carries its approval box (`Approval`): only the core's
+// fields, with the presentation rules from docs/07 §8.2. High-risk Approve needs a pinned card and
+// the whole detail shown; critical needs Touch ID, which the card can't do yet. The policy still
+// checks every gesture in Rust; these rules only keep Approve from being pressed too easily.
 
 import Foundation
 
@@ -12,6 +17,10 @@ public struct CorralCardModel: Equatable, Sendable {
         case stop, sendBack, retry
         /// A linked drop's only button: opens the app it lives in (ADR-005).
         case open(String)
+        /// Approve the waiting checkpoint. `touchID`: it's critical, so it needs Touch ID.
+        case approve(checkpoint: String, touchID: Bool)
+        /// Deny the waiting checkpoint.
+        case deny(checkpoint: String)
 
         public var title: String {
             switch self {
@@ -19,6 +28,63 @@ public struct CorralCardModel: Equatable, Sendable {
             case .sendBack: "Send back"
             case .retry: "Retry"
             case .open(let app): "Open \(app)"
+            case .approve(_, let touchID): touchID ? "Approve with Touch ID" : "Approve"
+            case .deny: "Deny"
+            }
+        }
+    }
+
+    /// The approval box: what's waiting, from the core's checkpoint only (docs/07 §8.2).
+    public struct Approval: Equatable, Sendable {
+        /// A detail longer than this, in characters or lines, shows collapsed until expanded.
+        public static let collapsedCharacters = 240
+        public static let collapsedLines = 4
+
+        public var checkpointID: String
+        public var title: String
+        public var detail: String
+        /// The core or the bridge cut the detail; the full arguments are in the trace.
+        public var detailCut: Bool
+        public var classLabel: String
+        public var risk: CorralRunCard.Checkpoint.Risk
+        public var riskLabel: String
+
+        init(_ checkpoint: CorralRunCard.Checkpoint) {
+            checkpointID = checkpoint.id
+            title = checkpoint.title
+            detail = checkpoint.detail
+            detailCut = checkpoint.detailTruncated
+            classLabel = checkpoint.actionClass
+            risk = checkpoint.risk
+            riskLabel = switch checkpoint.risk {
+            case .normal: "Normal risk"
+            case .high: "High risk"
+            case .critical: "Critical"
+            }
+        }
+
+        /// Whether the detail is too long to show whole at first.
+        public var needsExpanding: Bool {
+            let lines = detail.split(separator: "\n", omittingEmptySubsequences: false)
+            return detail.count > Self.collapsedCharacters || lines.count > Self.collapsedLines
+        }
+
+        /// Whether Approve can be pressed now.
+        public func canApprove(pinned: Bool, expanded: Bool) -> Bool {
+            approveHint(pinned: pinned, expanded: expanded) == nil
+        }
+
+        /// Why Approve can't be pressed yet, or nil when it can.
+        public func approveHint(pinned: Bool, expanded: Bool) -> String? {
+            switch risk {
+            case .normal:
+                return nil
+            case .high:
+                if !pinned { return "Click the drop to pin this card, then approve." }
+                if needsExpanding, !expanded { return "Show the whole action before approving." }
+                return nil
+            case .critical:
+                return "Touch ID approval isn't ready yet. Deny, or let it wait."
             }
         }
     }
@@ -34,6 +100,8 @@ public struct CorralCardModel: Equatable, Sendable {
     public var answerTruncated: Bool
     /// Why the run failed.
     public var error: String?
+    /// The approval box, while a checkpoint waits.
+    public var approval: Approval?
     /// The buttons, in the core's order. The first is the primary one.
     public var buttons: [Button]
     /// The task field's placeholder, or nil when the card has no field.
@@ -49,6 +117,7 @@ public struct CorralCardModel: Equatable, Sendable {
             answer = nil
             answerTruncated = false
             error = nil
+            approval = nil
             buttons = [.open(linkedApp)]
             fieldPlaceholder = nil
             return
@@ -60,6 +129,7 @@ public struct CorralCardModel: Equatable, Sendable {
             answer = nil
             answerTruncated = false
             error = nil
+            approval = nil
             buttons = []
             fieldPlaceholder = "Give \(agentName) a task"
             return
@@ -77,15 +147,21 @@ public struct CorralCardModel: Equatable, Sendable {
         answer = card.answer
         answerTruncated = card.answerTruncated
         error = card.error
+        let approval = card.checkpoint.map(Approval.init)
+        self.approval = approval
         buttons = card.actions.compactMap { action -> Button? in
             switch action {
             case .stop: .stop
             case .sendBack: .sendBack
             case .retry: .retry
             case .newTask: nil
+            case .approve: approval.map { Button.approve(checkpoint: $0.checkpointID, touchID: $0.risk == .critical) }
+            case .deny: approval.map { Button.deny(checkpoint: $0.checkpointID) }
             }
         }
-        fieldPlaceholder = if card.actions.contains(.newTask) {
+        fieldPlaceholder = if approval != nil, card.actions.contains(.deny) {
+            "Deny with a note for \(agentName)"
+        } else if card.actions.contains(.newTask) {
             card.status == .done ? "Ask a follow-up" : "Give \(agentName) a new task"
         } else {
             nil
@@ -99,7 +175,21 @@ public struct CorralCardModel: Equatable, Sendable {
         case .sendBack: .sendBack(id: agentID)
         case .retry: .retry(id: agentID)
         case .open: .openLinked(id: agentID)
+        case .approve(let checkpoint, _): .approveCheckpoint(id: agentID, checkpoint: checkpoint, forRun: false)
+        case .deny(let checkpoint): .denyCheckpoint(id: agentID, checkpoint: checkpoint, note: nil)
         }
+    }
+
+    /// What Return in the card's field sends: Deny with the text as its note while a checkpoint
+    /// waits, otherwise the text as a task. Nil for empty text or a card with no field.
+    public func fieldIntent(_ text: String, agentID: String) -> CorralIntent? {
+        guard fieldPlaceholder != nil else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let approval, buttons.contains(.deny(checkpoint: approval.checkpointID)) {
+            return .denyCheckpoint(id: agentID, checkpoint: approval.checkpointID, note: trimmed)
+        }
+        return Self.task(trimmed, agentID: agentID)
     }
 
     /// The intent the task field sends, or nil for an empty task.

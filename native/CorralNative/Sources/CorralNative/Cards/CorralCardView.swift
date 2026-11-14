@@ -2,7 +2,8 @@
 // A drop's card on paper (docs/07 §8.2, §8.4).
 //
 // Top to bottom: the agent's name in maroon small caps (and × when pinned), the task in New York
-// serif, the status line, the answer or the error, the buttons, and the task field. Paper stays
+// serif, the status line, the approval box while a checkpoint waits, the answer or the error, the
+// buttons, and the task field (which takes a Deny note while a checkpoint waits). Paper stays
 // light in dark mode, like a sheet of paper on the desk. Everything shown comes from
 // `CorralCardModel`; this view decides nothing.
 
@@ -26,6 +27,8 @@ public struct CorralCardView: View {
     let onPointerInside: (Bool) -> Void
 
     @State private var text = ""
+    /// Whether the approval box shows the whole detail. Starts collapsed for every checkpoint.
+    @State private var expanded = false
     @State private var guardrail = CorralInputGuard(shownAt: ProcessInfo.processInfo.systemUptime)
     @FocusState private var fieldFocused: Bool
 
@@ -73,6 +76,10 @@ public struct CorralCardView: View {
                 .font(.callout.monospacedDigit())
                 .foregroundStyle(Self.ink.opacity(0.6))
 
+            if let approval = model.approval {
+                approvalBox(approval)
+            }
+
             if let answer = model.answer {
                 answerBox(answer)
             }
@@ -85,11 +92,18 @@ public struct CorralCardView: View {
             if !model.buttons.isEmpty {
                 HStack(spacing: 8) {
                     ForEach(Array(model.buttons.enumerated()), id: \.element) { index, button in
-                        cardButton(button, primary: index == 0 && button.isPrimary)
+                        cardButton(button, primary: index == 0 && button.isPrimary,
+                                   enabled: isEnabled(button))
                     }
                     Spacer(minLength: 0)
                 }
                 .padding(.top, 2)
+                if let hint = model.approval?.approveHint(pinned: pinned, expanded: expanded) {
+                    Text(hint)
+                        .font(.caption)
+                        .foregroundStyle(Self.ink.opacity(0.6))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             if let placeholder = model.fieldPlaceholder {
                 taskField(placeholder)
@@ -109,6 +123,80 @@ public struct CorralCardView: View {
         .onChange(of: focusRequest) { _, _ in
             if pinned { fieldFocused = true }
         }
+        .onChange(of: model.approval?.checkpointID) { _, _ in
+            // A new checkpoint under the pointer: start collapsed and re-arm the 300 ms guard,
+            // so a click meant for the old one can't approve the new one.
+            expanded = false
+            guardrail = CorralInputGuard(shownAt: ProcessInfo.processInfo.systemUptime)
+        }
+    }
+
+    private func isEnabled(_ button: CorralCardModel.Button) -> Bool {
+        guard case .approve = button, let approval = model.approval else { return true }
+        return approval.canApprove(pinned: pinned, expanded: expanded)
+    }
+
+    /// "NEEDS YOUR APPROVAL", the core's title, the exact detail (monospaced, verbatim) and chips
+    /// for the class and the risk. Drawn only from the core's checkpoint.
+    private func approvalBox(_ approval: CorralCardModel.Approval) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("NEEDS YOUR APPROVAL")
+                .font(.caption2.weight(.semibold))
+                .tracking(1.1)
+                .foregroundStyle(Self.maroon)
+            Text(approval.title)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(Self.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            if expanded {
+                ScrollView {
+                    detailText(approval.detail)
+                }
+                .frame(height: Self.answerHeight(approval.detail))
+            } else {
+                detailText(approval.detail)
+                    .lineLimit(approval.needsExpanding ? CorralCardModel.Approval.collapsedLines : nil)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if approval.needsExpanding {
+                Button(expanded ? "Show less" : "Show the whole action") { expanded.toggle() }
+                    .buttonStyle(.plain)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Self.maroon)
+            }
+            if approval.detailCut {
+                Text("Cut to fit. The full arguments are in the trace.")
+                    .font(.caption)
+                    .foregroundStyle(Self.ink.opacity(0.5))
+            }
+            HStack(spacing: 6) {
+                chip(approval.classLabel)
+                chip(approval.riskLabel)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Self.maroon.opacity(0.3)))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Needs your approval: \(approval.title), \(approval.riskLabel)")
+    }
+
+    private func detailText(_ detail: String) -> some View {
+        Text(detail)
+            .font(.system(.callout, design: .monospaced))
+            .foregroundStyle(Self.ink)
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func chip(_ label: String) -> some View {
+        Text(label)
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .foregroundStyle(Self.ink.opacity(0.7))
+            .background(Capsule().fill(Self.ink.opacity(0.06)))
     }
 
     private func answerBox(_ answer: String) -> some View {
@@ -143,9 +231,9 @@ public struct CorralCardView: View {
         return min(220, CGFloat(lines) * 20 + 4)
     }
 
-    private func cardButton(_ button: CorralCardModel.Button, primary: Bool) -> some View {
+    private func cardButton(_ button: CorralCardModel.Button, primary: Bool, enabled: Bool) -> some View {
         Button {
-            guard guardrail.accepts(at: ProcessInfo.processInfo.systemUptime) else { return }
+            guard enabled, guardrail.accepts(at: ProcessInfo.processInfo.systemUptime) else { return }
             onButton(button)
         } label: {
             Text(button.title)
@@ -157,6 +245,8 @@ public struct CorralCardView: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.45)
     }
 
     private func taskField(_ placeholder: String) -> some View {

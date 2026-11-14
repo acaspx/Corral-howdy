@@ -44,6 +44,10 @@ public enum CorralIntent: Equatable, Sendable {
     case openLinked(id: String)
     /// Stop all agents, from the right-click menu (Recall-all). Rust stops every working run.
     case stopAll
+    /// Approve and Deny on a card's approval box (M2). They carry the checkpoint's single-use ID;
+    /// Rust answers only the checkpoint that card shows, and the policy checks the gesture.
+    case approveCheckpoint(id: String, checkpoint: String, forRun: Bool)
+    case denyCheckpoint(id: String, checkpoint: String, note: String?)
 }
 
 /// Springs drops between layouts so the shape morphs instead of jumping.

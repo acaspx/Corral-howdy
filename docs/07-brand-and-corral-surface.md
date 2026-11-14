@@ -199,7 +199,9 @@ Contents, top to bottom:
 - The approval box is drawn only from the core's checkpoint data. Agent-written text (titles, plan steps, summaries) uses its own style, is length-capped, and has control and bidi characters stripped; destinations show internationalized domains as punycode (security model T20).
 - Voice can't press Approve on high or critical actions.
 - Approve uses the checkpoint's single-use nonce.
-- Deny optionally takes a note that is sent to the agent.
+- Deny optionally takes a note that is sent to the agent: while a checkpoint waits, the card's field reads "Deny with a note for Scout", and Return sends Deny with it. Return never approves.
+- A new checkpoint replacing the shown one starts collapsed and re-arms the 300 ms guard, so a click meant for the old one can't approve the new one.
+- Until Touch ID is wired to the card, a critical checkpoint's Approve stays disabled with "Touch ID approval isn't ready yet. Deny, or let it wait." (2026-11-14)
 
 ### 8.2.1 Linked apps (consumer Muse and your dot)
 Decided 2026-11-12 (ADR-005; pulled forward from M5). Consumer agents that have no official API show up as **linked drops**. Corral can show them but never drive them.
