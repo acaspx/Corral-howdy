@@ -13,6 +13,8 @@ corral-core = { path = "../corral-core" }
 corral-policy = { path = "../corral-policy" }
 serde_json.workspace = true
 thiserror.workspace = true
+# Checkpoints wait for an answer, a timeout or Stop.
+tokio = { version = "1", features = ["sync", "time", "macros"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros"] }

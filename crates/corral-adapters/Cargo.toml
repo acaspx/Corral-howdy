@@ -10,6 +10,8 @@ publish.workspace = true
 
 [dependencies]
 corral-core = { path = "../corral-core" }
+corral-policy = { path = "../corral-policy" }
+corral-tools = { path = "../corral-tools" }
 corral-secrets = { path = "../corral-secrets" }
 serde.workspace = true
 serde_json.workspace = true

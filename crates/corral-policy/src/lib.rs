@@ -346,6 +346,12 @@ fn is_way_out(class: ActionClass) -> bool {
     }
 }
 
+/// The checkpoint title for an action of `class`, e.g. "Sending a message or email". Written by the
+/// core, never by the agent (security model T20).
+pub fn title(class: ActionClass) -> &'static str {
+    what(class)
+}
+
 /// What an action of `class` does, for checkpoint text.
 fn what(class: ActionClass) -> &'static str {
     match class {
@@ -642,6 +648,11 @@ impl Gate {
             }),
             Decision::Deny { reason } => Verdict::Deny { reason },
         }
+    }
+
+    /// The profile this run is decided under (for its checkpoint timeout).
+    pub fn profile(&self) -> &Profile {
+        self.policy.profile()
     }
 
     /// The first untrusted source this run read, if any.
