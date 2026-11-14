@@ -240,3 +240,62 @@ fn rules_are_reexported_for_profiles() {
     // Callers build profiles without depending on corral-policy's internals.
     assert!(Rule::Allow > Rule::Ask);
 }
+
+// ---- Mutation gaps (cargo-mutants) ----------------------------------------------------------------
+
+/// A tool that keeps the trait's defaults.
+struct Plain;
+
+impl Tool for Plain {
+    fn name(&self) -> &str {
+        "notes.read"
+    }
+
+    fn class(&self) -> ActionClass {
+        ActionClass::ReadLocal
+    }
+
+    fn call<'a>(&'a self, _args: &'a Value) -> BoxFuture<'a, Result<String, ToolError>> {
+        Box::pin(async { Ok("notes".to_owned()) })
+    }
+}
+
+#[tokio::test]
+async fn a_tool_is_trusted_unless_it_says_otherwise() {
+    let mut gateway = ToolGateway::new();
+    gateway.register(Arc::new(Plain)).expect("registered");
+    let gate = open_gate();
+    let token = token_for(&gate, ActionClass::ReadLocal, "notes.read", json!({}));
+    gateway.run(token).await.expect("runs");
+    assert_eq!(gate.tainted_by(), None);
+}
+
+#[test]
+fn the_model_sees_at_most_16_kb_of_tool_output() {
+    assert_eq!(MODEL_OUTPUT_CAP, 16_384);
+}
+
+#[tokio::test]
+async fn output_is_cut_back_to_a_character_boundary() {
+    // "€" is 3 bytes, so the cap (16,384) lands inside one; the cut moves back to 16,383.
+    let long = "€".repeat(MODEL_OUTPUT_CAP);
+    let mut gateway = ToolGateway::new();
+    gateway
+        .register(Arc::new(Echo::new(
+            "fs.read",
+            ActionClass::ReadLocal,
+            &long,
+        )))
+        .expect("registered");
+    let token = token_for(&open_gate(), ActionClass::ReadLocal, "fs.read", json!({}));
+    let out = gateway.run(token).await.expect("runs");
+    let kept = out.for_model.find("\n[Output").expect("marker");
+    assert_eq!(kept, MODEL_OUTPUT_CAP - 1);
+    assert_eq!(
+        out.for_model[kept..],
+        format!(
+            "\n[Output truncated: {} more bytes are in the trace.]",
+            long.len() - kept
+        )
+    );
+}
