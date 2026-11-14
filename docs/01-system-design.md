@@ -230,6 +230,8 @@ on_timeout         = "deny"   # deny | cancel_run
 
 **Where it lives (M2, `corral-policy`):** `Policy::decide(&Action, &RunGrants) -> Decision`. A `Profile` is read from TOML strictly (unknown keys, unknown classes, duplicate rules and any rule that opens `unknown` are errors) and is capped by global `Ceilings` (money, deleting and running commands always ask at least). Provider-side tools are denied unless the profile allows them. `RunGrants` holds a run's allow-for-run grants and its taint and is never saved. Every decision carries a plain-words reason for the checkpoint. Mutation testing catches every viable mutant (37 of 37).
 
+**The gate and the gateway (M2 item 3, T2).** Each run gets a `Gate` (its policy plus its grants and taint). `Gate::check(ToolCall)` returns `Allow(AllowToken)`, `Ask(PendingApproval)` or `Deny`. A `PendingApproval` turns into a token only through `approve(how, Once | ForRun)` with a gesture its risk allows; a refused gesture hands the checkpoint back still open. An `AllowToken` can't be built, cloned or reused outside `corral-policy` (compile-fail doc tests). `corral_tools::ToolGateway::run(token)` runs exactly the call the token carries, only if the registered tool's class matches the class the policy decided on, caps the output the model sees at 16 KB on a character boundary (keeping the full output for the trace), and taints the run when the tool read untrusted content. The checkpoint lifecycle (events, timeouts, nonces, the hover card's buttons) comes next.
+
 **Risk tiers → required gesture:**
 - normal: click or keyboard
 - high: click; voice cannot approve
