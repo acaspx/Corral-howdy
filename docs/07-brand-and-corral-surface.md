@@ -107,7 +107,7 @@ The prototype code is wired for plan A, and plan C's helper is kept in `CorralPa
 | Drag a drop upward | Shortcut for "New task": the prompt bar opens attached to that agent. The drop stays in the corral |
 | Click a task card in the trace tree | Opens that run in the trace viewer (main window) |
 | Click a subtask stack | Fans the stack out into a list of every subtask with its status |
-| Recall-all hotkey | Every working agent stops; trace columns fold back down into their drops |
+| Recall-all hotkey, or **Stop all agents** in the corral's right-click menu (offered while an agent is working or waiting on you; shipped 2026-11-13) | Every working agent stops; trace columns fold back down into their drops |
 
 ## 7. Motion
 

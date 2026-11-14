@@ -116,6 +116,9 @@ final class PlaygroundModel: ObservableObject {
             note("hideLinked \(id)")
         case .openLinked(let id):
             note("openLinked \(id)")
+        case .stopAll:
+            note("stopAll")
+            for id in runs.keys { finish(id, as: .stopped) }
         }
     }
 

@@ -408,6 +408,8 @@ pub enum Intent {
     HideLinked(LinkedApp),
     /// Open on a linked drop's card.
     OpenLinked(LinkedApp),
+    /// Stop all agents, from the right-click menu (Recall-all).
+    StopAll,
 }
 
 /// A click on a checkpoint notification.
@@ -502,6 +504,7 @@ enum IntentWire {
     OpenLinked {
         id: String,
     },
+    StopAll {},
 }
 
 /// Why something crossing the bridge was refused.
@@ -603,6 +606,7 @@ pub fn decode_intent(bytes: &[u8]) -> Result<Intent, BridgeError> {
         }
         IntentWire::HideLinked { id } => Ok(Intent::HideLinked(linked_app(&id)?)),
         IntentWire::OpenLinked { id } => Ok(Intent::OpenLinked(linked_app(&id)?)),
+        IntentWire::StopAll {} => Ok(Intent::StopAll),
     }
 }
 
@@ -1345,6 +1349,32 @@ mod linked_tests {
             r#"{"v":1,"intent":{"kind":"openLinked","id":"muse","url":"https://evil.example"}}"#,
         ] {
             assert!(refused(bad), "{bad}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod stop_all_tests {
+    use super::*;
+
+    const STOP_ALL: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/intent-stop-all-v1.json");
+
+    #[test]
+    fn tp_sup_02_stop_all_from_the_corral_menu_arrives_typed() {
+        assert_eq!(
+            decode_intent(STOP_ALL.as_bytes()).expect("stopAll"),
+            Intent::StopAll
+        );
+    }
+
+    #[test]
+    fn tp_sup_02_stop_all_takes_no_arguments() {
+        for bad in [
+            r#"{"v":1,"intent":{"kind":"stopAll","id":"grok"}}"#,
+            r#"{"v":1,"intent":{"kind":"stopAll","ids":["grok"]}}"#,
+        ] {
+            assert!(decode_intent(bad.as_bytes()).is_err(), "{bad}");
         }
     }
 }

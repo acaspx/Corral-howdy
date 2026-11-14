@@ -42,10 +42,10 @@ Goal: add an xAI key, click Grok's drop, ask a question, watch the ring turn and
 | **Logos** Provider logos in the drops: fetched once from each provider's own site when its key is connected, checked, kept in Corral's folder, drawn by ImageIO (ADR-015) | Agents from keys (#52) | TP-LOGO-05..10 |
 | **Linked apps** Consumer Muse and your dot as linked drops (open-in-app only), turned on from the corral's right-click menu, with their pictures; pulled forward from M5 item 7 (ADR-005) | Logos | TP-LINK-01..05 |
 
-**Exit:** J0 green in CI against a cassette, and the owner runs it once live with a $0.25 cap. Spikes S1 and S5 run during SK-1.
+**Exit:** J0 green in CI against a cassette, and the owner runs it once live with a $0.25 cap. Spikes S1 and S5 run during SK-1. **The owner ran J0 live on 2026-11-13.**
 
 ### 3. Then grow the skeleton
-1. **Rest of M1:** `FakeAdapter`, Recall-all, crash recovery; pending safety scenarios fail the gate (TP-EVAL-09..10)
+1. **Rest of M1:** ~~`FakeAdapter`, Recall-all, crash recovery~~ done (FakeAdapter and Stop all agents 2026-11-13; Recall-all and crash recovery were already in the core). Still to do: pending safety scenarios fail the gate (TP-EVAL-09..10), which lands with M2 so the gate doesn't go red before checkpoints exist
 2. **M2:** tools, the policy engine and checkpoints; approvals appear in the hover card
 3. **Rest of M3:** Grok's tools through the gate, nightly live smoke
 4. **M4:** the full corral UI: setup flow, prompt bar, trace tree, Compare

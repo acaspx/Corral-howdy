@@ -258,7 +258,8 @@ How the hard cap is enforced (SK-5, `corral-core/src/budget`): each run's `Event
 
 - One tokio task (actor) per run, owning that run's state. Its mailbox receives `Cancel`, `Pause`, `CheckpointResolved`, `AdapterEvent`.
 - The supervisor owns the actor registry and enforces global limits: max concurrent runs (default 8) and per-provider rate limits.
-- **Recall-all** (global hotkey + menu item) broadcasts `Cancel` to every actor. Adapters must stop within 2 s or are force-dropped: ACP child processes are killed, HTTP streams are aborted. Covered by an eval.
+- **Recall-all** (global hotkey + menu item) broadcasts `Cancel` to every actor. Adapters must stop within 2 s or are force-dropped: ACP child processes are killed, HTTP streams are aborted. Covered by an eval. Today it's **Stop all agents** in the corral's right-click menu (`CorralControls::stop_all`); the hotkey comes with M4.
+- **FakeAdapter** (`corral_adapters::fake`): a scripted agent (say, wait, usage, a tool request, a failure, a stubborn step that ignores Stop) run through the real supervisor, so the core's lifecycle, budget and Stop paths are tested without a model. EV-STOP-01 runs on it today (8 fake runs, Recall-all within 2 s); the eval runner builds fake scripts from scenario files once checkpoints exist (M2).
 - Crash safety: on launch, any run in `Running` without a terminal event is marked `Failed{reason: "app_restarted"}`. Runs are not auto-resumed in v1.
 - **Process model (decided in Spike S1):** the Swift UI is linked in-process, so a UI crash would take the supervisor down. S1 decides between keeping one process (with hardened, bounded Swift input) and running the core as a separate helper process the UI talks to. Closing the main window never quits Corral; only Quit does.
 
