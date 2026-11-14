@@ -123,8 +123,8 @@ Issues (examples):
 ## M2: Policy engine and checkpoints (~2 weeks)
 Goal: the safety core, proven before any real agent can touch it.
 
-1. Action class enum (exhaustive) + profile TOML schema + default profiles
-2. Pure `decide(profile, action, ctx)` + table-driven tests for every class × decision
+1. ✅ Action class enum (exhaustive) + profile TOML schema + default profiles (2026-11-13)
+2. ✅ Pure `decide(profile, action, ctx)` + table-driven tests for every class × decision; allow-for-run, destination pinning and taint included (2026-11-13; 37 of 37 mutants caught)
 3. `PolicyGate` + `Decision::Allow` capability token required by `ToolGateway`
 4. Checkpoint lifecycle: open → resolve (approve / deny / edit / allow-for-run) → timeout behavior
 5. Budget meter: pre-request estimate, hard cap, soft-limit checkpoint, reconciliation

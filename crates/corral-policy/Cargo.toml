@@ -9,6 +9,11 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+corral-core = { path = "../corral-core" }
+serde.workspace = true
+thiserror.workspace = true
+# Agent policy profiles are TOML (docs/01 §5); already in the tree through Tauri.
+toml = "1"
 
 [lints]
 workspace = true

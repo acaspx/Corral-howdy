@@ -228,6 +228,8 @@ on_timeout         = "deny"   # deny | cancel_run
 
 **Checkpoint resolution options:** Approve once · Deny (with optional note sent to the agent) · Edit arguments then approve · Allow for the rest of this run. For normal-risk classes, allow-for-run covers the class. For high and critical classes it covers the class *and the destination* (same recipient, domain or path root), so one approval can't sweep through a later injected action (T21). "Allow forever" is *only* available in the policy editor, never one click away on a checkpoint. That keeps approval drift deliberate.
 
+**Where it lives (M2, `corral-policy`):** `Policy::decide(&Action, &RunGrants) -> Decision`. A `Profile` is read from TOML strictly (unknown keys, unknown classes, duplicate rules and any rule that opens `unknown` are errors) and is capped by global `Ceilings` (money, deleting and running commands always ask at least). Provider-side tools are denied unless the profile allows them. `RunGrants` holds a run's allow-for-run grants and its taint and is never saved. Every decision carries a plain-words reason for the checkpoint. Mutation testing catches every viable mutant (37 of 37).
+
 **Risk tiers → required gesture:**
 - normal: click or keyboard
 - high: click; voice cannot approve
