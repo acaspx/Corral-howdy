@@ -143,7 +143,14 @@ impl ToolRunner {
         cancel: &CancelToken,
     ) -> ToolAnswer {
         let class = pending.call().action.class;
-        let text = detail(pending.call());
+        // The loop detector asked: say so first, so the card shows why.
+        let text = match pending.repeated() {
+            Some(n) => capped(format!(
+                "Same call {n} times in this run.\n{}",
+                full_detail(pending.call())
+            )),
+            None => detail(pending.call()),
+        };
         let (checkpoint_id, waited) = self.wait(&id, class, text, pending, sink, cancel).await;
         let profile = self.gate.profile();
         let (resolution, then) = match waited {
@@ -423,11 +430,21 @@ enum Then {
 /// The checkpoint's exact detail: the tool, where it goes, and its arguments verbatim, capped at
 /// [`MAX_DETAIL_CHARS`] with a marker.
 fn detail(call: &ToolCall) -> String {
+    capped(full_detail(call))
+}
+
+/// The tool, where it goes, and its arguments verbatim.
+fn full_detail(call: &ToolCall) -> String {
     let mut text = match &call.action.destination {
         Some(destination) => format!("{} to {destination}\n", call.action.tool),
         None => format!("{}\n", call.action.tool),
     };
     text.push_str(&call.args.to_string());
+    text
+}
+
+/// `text` cut to [`MAX_DETAIL_CHARS`] with a marker.
+fn capped(text: String) -> String {
     if text.chars().count() <= MAX_DETAIL_CHARS {
         return text;
     }
