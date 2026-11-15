@@ -12,7 +12,7 @@
 
 use crate::sse::{SseEvent, SseParser};
 use crate::transport::{KeyHeader, PostRequest, Transport};
-use corral_core::budget::RequestEstimate;
+use corral_core::budget::{BudgetError, RequestEstimate};
 use corral_core::event::{EventBody, FailureReason, ModelRequest, RunFailed};
 use corral_core::supervisor::{
     CancelToken, EventSink, RunDriver, RunFuture, RunRequest, SupervisorError,
@@ -142,8 +142,14 @@ impl<P: Protocol> StreamDriver<P> {
                 &config.estimate(prompt),
             )
             .map_err(|e| match e {
+                // These agents can't ask the user yet (M3), so a soft limit ends the run here.
+                SupervisorError::Budget(refusal @ BudgetError::SoftLimit { .. }) => {
+                    Failure::Emit(FailureReason::BudgetHardCap, refusal.to_string())
+                }
                 // The core logged run.failed; nothing is sent.
-                SupervisorError::Budget(_) => Failure::Ended,
+                SupervisorError::Budget(BudgetError::OverCap { .. } | BudgetError::NotAdmitted) => {
+                    Failure::Ended
+                }
                 other @ (SupervisorError::Lifecycle(_)
                 | SupervisorError::Log(_)
                 | SupervisorError::DuplicateRun(_)
