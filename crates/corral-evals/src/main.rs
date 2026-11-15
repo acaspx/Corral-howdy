@@ -7,7 +7,9 @@
 //! Exit code 0 when the gate passes, 1 when it fails, 2 on usage or input errors
 //! (including a `--baseline` file that is missing or unreadable).
 
-use corral_evals::{Report, Suite, build_report, load_all, markdown_summary, run};
+use corral_evals::{
+    Profiles, Report, Suite, build_report, execute_all, load_all, markdown_summary,
+};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -91,7 +93,13 @@ fn main() -> ExitCode {
         None => None,
     };
 
-    let report = build_report(args.suite, run(&scenarios), baseline.as_ref());
+    let outcomes = execute_all(&scenarios, &Profiles::builtin());
+    let mut report = build_report(
+        args.suite,
+        outcomes.iter().map(|o| o.result.clone()).collect(),
+        baseline.as_ref(),
+    );
+    report.attach_notes(&outcomes);
 
     if let Some(path) = &args.report {
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty())
