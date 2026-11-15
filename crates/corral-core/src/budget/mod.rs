@@ -129,6 +129,22 @@ pub enum BudgetError {
         /// The least this request could cost (input, fees and the smallest answer).
         needed_micro_usd: u64,
     },
+    /// The run reached its soft limit: the next request waits until the user approves going on
+    /// (a `budget.threshold` checkpoint), which lifts the limit to the hard cap.
+    #[error(
+        "This run reached its {} soft limit ({} used so far). Approve to let it go on, up to its {} cap.",
+        usd(*limit_micro_usd),
+        usd(*committed_micro_usd),
+        usd(*cap_micro_usd)
+    )]
+    SoftLimit {
+        /// The soft limit.
+        limit_micro_usd: u64,
+        /// Billed plus held for requests in flight.
+        committed_micro_usd: u64,
+        /// The hard cap approval would lift it to.
+        cap_micro_usd: u64,
+    },
     /// Something tried to log `model.request` without going through the meter.
     #[error("a model request must be admitted by the budget meter first")]
     NotAdmitted,
@@ -164,6 +180,10 @@ pub struct RunBudget {
     cap_micro_usd: u64,
     spent_micro_usd: u64,
     reservations: VecDeque<Reservation>,
+    /// Below the cap, or none.
+    soft_micro_usd: Option<u64>,
+    /// The user approved going past the soft limit.
+    past_soft: bool,
 }
 
 impl RunBudget {
@@ -173,6 +193,38 @@ impl RunBudget {
             cap_micro_usd,
             spent_micro_usd: 0,
             reservations: VecDeque::new(),
+            soft_micro_usd: None,
+            past_soft: false,
+        }
+    }
+
+    /// The same budget with a soft limit (TP-BUD-02). One at or over the cap is no soft limit.
+    pub fn with_soft_limit(mut self, soft_micro_usd: u64) -> Self {
+        self.soft_micro_usd = (soft_micro_usd < self.cap_micro_usd).then_some(soft_micro_usd);
+        self
+    }
+
+    /// The soft limit, if the run has one.
+    pub fn soft_limit(&self) -> Option<u64> {
+        self.soft_micro_usd
+    }
+
+    /// Whether the user approved going past the soft limit.
+    pub fn past_soft_limit(&self) -> bool {
+        self.past_soft
+    }
+
+    /// The user approved going on: for the rest of the run, only the hard cap applies.
+    pub fn approve_soft_limit(&mut self) {
+        self.past_soft = true;
+    }
+
+    /// The limit requests are admitted under now: the soft limit until it's approved, then the
+    /// cap.
+    fn limit(&self) -> u64 {
+        match self.soft_micro_usd {
+            Some(soft) if !self.past_soft => soft,
+            Some(_) | None => self.cap_micro_usd,
         }
     }
 
@@ -195,16 +247,25 @@ impl RunBudget {
             })
     }
 
-    /// Admits a request if its worst case fits under the cap, holding that worst case until its
-    /// usage is reported. A refusal holds nothing.
+    /// Admits a request if its worst case fits under the limit (the soft limit until approved,
+    /// then the cap), holding that worst case until its usage is reported. A refusal holds
+    /// nothing.
     pub fn admit(&mut self, estimate: &RequestEstimate) -> Result<Admission, BudgetError> {
         let price = estimate.price;
         let committed = self.committed();
-        let remaining = self.cap_micro_usd.saturating_sub(committed);
+        let limit = self.limit();
+        let remaining = limit.saturating_sub(committed);
         let fixed = price
             .input_cost(estimate.input_tokens)
             .saturating_add(estimate.tool_fees_micro_usd);
         let needed = fixed.saturating_add(price.output_cost(u64::from(MIN_OUTPUT_TOKENS)));
+        if needed > remaining && limit < self.cap_micro_usd {
+            return Err(BudgetError::SoftLimit {
+                limit_micro_usd: limit,
+                committed_micro_usd: committed,
+                cap_micro_usd: self.cap_micro_usd,
+            });
+        }
         if needed > remaining {
             return Err(BudgetError::OverCap {
                 cap_micro_usd: self.cap_micro_usd,
