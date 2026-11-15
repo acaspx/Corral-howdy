@@ -17,7 +17,7 @@ thiserror.workspace = true
 tokio = { version = "1", features = ["sync", "time", "macros"] }
 # The filesystem sandbox opens everything beneath a directory handle, so a path can't escape the
 # agent's folder through `..` or a symlink, even if the folder changes under it (TOCTOU).
-cap-std = "3"
+cap-std = "4"
 # Names are compared case- and normalization-insensitively, as APFS does (TP-FS-06..07).
 unicode-normalization = "0.1"
 
