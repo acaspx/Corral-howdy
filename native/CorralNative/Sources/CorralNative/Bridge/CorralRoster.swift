@@ -193,6 +193,10 @@ public enum CorralIntentWire {
         var ids: [String]? = nil
         var prompt: String? = nil
         var look: String? = nil
+        var checkpoint: String? = nil
+        var scope: String? = nil
+        var how: String? = nil
+        var note: String? = nil
     }
 
     public static func encode(_ intent: CorralIntent) -> Data? {
@@ -209,6 +213,12 @@ public enum CorralIntentWire {
         case .hideLinked(let id): body = Body(kind: "hideLinked", id: id)
         case .openLinked(let id): body = Body(kind: "openLinked", id: id)
         case .stopAll: body = Body(kind: "stopAll")
+        case .approveCheckpoint(let id, let checkpoint, let forRun):
+            // A card only ever reports a click; Touch ID and voice never come this way.
+            body = Body(kind: "approveCheckpoint", id: id, checkpoint: checkpoint,
+                        scope: forRun ? "forRun" : "once", how: "click")
+        case .denyCheckpoint(let id, let checkpoint, let note):
+            body = Body(kind: "denyCheckpoint", id: id, checkpoint: checkpoint, note: note)
         }
         // Encoding plain strings can't fail in practice; if it ever does, the tap is dropped
         // rather than sending Rust something malformed.

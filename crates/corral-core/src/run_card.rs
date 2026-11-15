@@ -11,14 +11,20 @@
 //!   none), and errors are the `run.failed` message. Both are agent text: cleaned and capped
 //!   ([`AgentText`]).
 //!
+//! - **A waiting checkpoint** puts its approval box on the card, drawn only from
+//!   `checkpoint.opened`, which the core wrote (M2 item 4, TP-CHK-07). Its title and detail are
+//!   cleaned and capped like agent text, because the detail quotes the agent's arguments
+//!   verbatim. With more than one waiting, the oldest shows first.
+//!
 //! Every event is checked with the same lifecycle function the supervisor uses ([`next`]), so a
 //! card can never disagree with the log. Feed every logged event to [`RunCards::observe`].
 
 use crate::agent_text::{ANSWER_MAX_CHARS, AgentText, PROMPT_MAX_CHARS};
 use crate::budget::usd;
 use crate::corral_view::ViewError;
+use crate::domain::{ActionClass, Risk};
 use crate::event::{Event, EventBody};
-use crate::ids::{AgentId, RunId};
+use crate::ids::{AgentId, CheckpointId, RunId};
 use crate::lifecycle::{Lifecycle, Phase, next};
 use std::collections::HashMap;
 
@@ -50,6 +56,30 @@ pub enum CardAction {
     NewTask,
     /// Run the failed prompt again, in the same session.
     Retry,
+    /// Approve the waiting checkpoint.
+    Approve,
+    /// Deny the waiting checkpoint.
+    Deny,
+}
+
+/// The longest checkpoint title on a card, in characters.
+pub const CHECKPOINT_TITLE_MAX_CHARS: usize = 120;
+/// The longest checkpoint detail on a card, in characters (the runner's cap, applied again).
+pub const CHECKPOINT_DETAIL_MAX_CHARS: usize = 2_000;
+
+/// The approval box: a waiting checkpoint, from `checkpoint.opened` only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CardCheckpoint {
+    /// The checkpoint, whose ID answers it once.
+    pub id: CheckpointId,
+    /// What kind of action it is.
+    pub class: ActionClass,
+    /// How much is at stake, which sets the gesture.
+    pub risk: Risk,
+    /// The core's title, e.g. "Sending a message or email".
+    pub title: AgentText,
+    /// The exact detail: tool, destination, arguments.
+    pub detail: AgentText,
 }
 
 /// What one drop's card shows.
@@ -75,6 +105,8 @@ pub struct RunCard {
     pub error: Option<AgentText>,
     /// The buttons, in display order.
     pub actions: Vec<CardAction>,
+    /// The oldest checkpoint waiting on the user, while the run waits.
+    pub checkpoint: Option<CardCheckpoint>,
 }
 
 #[derive(Debug)]
@@ -87,6 +119,8 @@ struct Record {
     spend_micro_usd: u64,
     answer: Option<String>,
     error: Option<String>,
+    /// Checkpoints waiting, oldest first.
+    waiting: Vec<CardCheckpoint>,
 }
 
 /// Keeps every agent's card up to date from the event stream.
@@ -147,6 +181,7 @@ impl RunCards {
                     spend_micro_usd: 0,
                     answer: None,
                     error: None,
+                    waiting: Vec::new(),
                 },
             );
             self.latest
@@ -176,14 +211,22 @@ impl RunCards {
                 record.error = Some(failed.message.clone());
             }
             EventBody::RunCancelled(_) => record.ended_ms = Some(event.ts),
+            EventBody::CheckpointOpened(opened) => record.waiting.push(CardCheckpoint {
+                id: opened.checkpoint_id.clone(),
+                class: opened.action_class,
+                risk: opened.risk,
+                title: AgentText::new(&opened.title, CHECKPOINT_TITLE_MAX_CHARS),
+                detail: AgentText::new(&opened.detail, CHECKPOINT_DETAIL_MAX_CHARS),
+            }),
+            EventBody::CheckpointResolved(resolved) => record
+                .waiting
+                .retain(|waiting| waiting.id != resolved.checkpoint_id),
             EventBody::RunQueued(_)
             | EventBody::PlanUpdated(_)
             | EventBody::ModelRequest(_)
             | EventBody::ModelDelta(_)
             | EventBody::ToolRequested(_)
             | EventBody::PolicyDecided(_)
-            | EventBody::CheckpointOpened(_)
-            | EventBody::CheckpointResolved(_)
             | EventBody::ToolStarted(_)
             | EventBody::ToolResult(_)
             | EventBody::BudgetWarned(_)
@@ -219,7 +262,19 @@ impl RunCards {
                 .as_deref()
                 .map(|e| AgentText::new(e, PROMPT_MAX_CHARS)),
             actions: actions(status),
+            // A run that has ended waits on nothing, whatever was open when it stopped.
+            checkpoint: (status == CardStatus::NeedsYou)
+                .then(|| record.waiting.first().cloned())
+                .flatten(),
         })
+    }
+
+    /// Whether `checkpoint` is the one `agent`'s card shows now, so an answer from that card is
+    /// for what the user saw (TP-HOVER-06).
+    pub fn shows_checkpoint(&self, agent: &AgentId, checkpoint: &CheckpointId) -> bool {
+        self.card(agent, 0)
+            .and_then(|card| card.checkpoint)
+            .is_some_and(|shown| shown.id == *checkpoint)
     }
 
     /// Whether some card's clock is moving, so it needs republishing once a second.
@@ -248,7 +303,7 @@ fn status(phase: Phase) -> Option<CardStatus> {
 fn actions(status: CardStatus) -> Vec<CardAction> {
     match status {
         CardStatus::Queued | CardStatus::Working => vec![CardAction::Stop],
-        CardStatus::NeedsYou => Vec::new(),
+        CardStatus::NeedsYou => vec![CardAction::Approve, CardAction::Deny],
         CardStatus::Done | CardStatus::Stopped => vec![CardAction::SendBack, CardAction::NewTask],
         CardStatus::Error => vec![CardAction::Retry, CardAction::SendBack],
     }

@@ -119,6 +119,10 @@ final class PlaygroundModel: ObservableObject {
         case .stopAll:
             note("stopAll")
             for id in runs.keys { finish(id, as: .stopped) }
+        case .approveCheckpoint(let id, let checkpoint, let forRun):
+            note("approveCheckpoint \(name(of: id)) \(checkpoint)\(forRun ? " for the run" : "")")
+        case .denyCheckpoint(let id, let checkpoint, let note):
+            self.note("denyCheckpoint \(name(of: id)) \(checkpoint)\(note.map { ": \($0)" } ?? "")")
         }
     }
 

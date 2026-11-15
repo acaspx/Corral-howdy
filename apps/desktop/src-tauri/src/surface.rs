@@ -38,11 +38,12 @@ use corral_core::clock::{Clock, SystemClock};
 use corral_core::controls::{ControlError, CorralControls};
 use corral_core::corral_view::{AgentCard, CorralTracker};
 use corral_core::event::Event;
-use corral_core::ids::AgentId;
+use corral_core::ids::{AgentId, CheckpointId};
 use corral_core::run_card::RunCards;
 use corral_core::supervisor::{EventLog, RunDriver, Supervisor, SupervisorConfig, WatchedLog};
 use corral_secrets::{Provider, SecretStore};
 use corral_store::Store;
+use corral_tools::{Answer, CheckpointDesk};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -89,9 +90,27 @@ pub struct Corral {
     pub logos: Option<LogoStore>,
     linked: Arc<Linked>,
     keys: Arc<dyn SecretStore>,
+    /// Where tool calls wait for the user. Empty until agents get tools (M3): Grok and Claude
+    /// still refuse tool calls, and the FakeAdapter isn't in the app.
+    desk: Arc<CheckpointDesk>,
 }
 
 impl Corral {
+    /// Answers the checkpoint on `agent`'s card. Only the checkpoint that card shows now can be
+    /// answered from it (TP-HOVER-06); the desk takes each one once, and the policy checks the
+    /// gesture. A refusal is logged; the card follows the log either way.
+    fn answer(&self, agent: &AgentId, checkpoint: &CheckpointId, answer: Answer) {
+        if !self.feed.shows_checkpoint(agent, checkpoint) {
+            eprintln!(
+                "corral: {agent}'s card doesn't show that checkpoint now, so the answer was dropped"
+            );
+            return;
+        }
+        if let Err(e) = self.desk.answer(checkpoint, answer) {
+            eprintln!("corral: the answer on {agent}'s card wasn't taken: {e}");
+        }
+    }
+
     /// Brings the corral in line with the keys in `store` and the linked apps: a newly connected
     /// provider's agent drops in, and a removed one leaves (TP-VIEW-06). Called after a key or a
     /// linked app changes.
@@ -257,6 +276,7 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
             settings: Mutex::new(linked),
         }),
         keys,
+        desk: Arc::new(CheckpointDesk::default()),
     };
     // The slot is empty: this is its only writer, and `start` runs once.
     if corral_slot.set(corral.clone()).is_err() {
@@ -336,6 +356,15 @@ pub struct CorralFeed {
 }
 
 impl CorralFeed {
+    /// Whether `agent`'s card shows `checkpoint` now (the core decides, from the log).
+    fn shows_checkpoint(&self, agent: &AgentId, checkpoint: &CheckpointId) -> bool {
+        let Ok(views) = self.views.lock() else {
+            eprintln!("corral: the corral view is poisoned, so no checkpoint can be answered");
+            return false;
+        };
+        views.cards.shows_checkpoint(agent, checkpoint)
+    }
+
     /// Wraps `log` so every event it accepts updates the corral. Give the result to the
     /// supervisor as its event log.
     pub fn watch(self: &Arc<Self>, log: Arc<dyn EventLog>) -> Arc<dyn EventLog> {
@@ -445,7 +474,7 @@ impl CorralFeed {
 
 /// Swift reports what the user did and never decides (AGENTS.md rule 3); this shell doesn't
 /// decide either. Tasks, Stop, Send back and Retry go to the core's controls, off the main
-/// thread; so does Stop all. Linked apps are shown, hidden and opened here, with fixed URLs
+/// thread; so does Stop all. Approve and Deny on a card go to the checkpoint desk. Linked apps are shown, hidden and opened here, with fixed URLs
 /// (ADR-005). The rest
 /// are reported until their milestones.
 fn on_intent(slot: &OnceLock<Corral>, result: Result<Intent, BridgeError>) {
@@ -523,6 +552,17 @@ fn on_intent(slot: &OnceLock<Corral>, result: Result<Intent, BridgeError>) {
                 report("retry", &agent, controls.retry(&agent).map(|_| ()));
             });
         }
+        Intent::ApproveCheckpoint {
+            agent,
+            checkpoint,
+            scope,
+            how,
+        } => corral.answer(&agent, &checkpoint, Answer::Approve { how, scope }),
+        Intent::DenyCheckpoint {
+            agent,
+            checkpoint,
+            note,
+        } => corral.answer(&agent, &checkpoint, Answer::Deny { note }),
         Intent::OpenAgent(_)
         | Intent::Deploy(_)
         | Intent::SummonPromptBar

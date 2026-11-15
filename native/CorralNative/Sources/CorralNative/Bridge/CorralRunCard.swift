@@ -6,6 +6,10 @@
 // Everything from Rust is untrusted (AGENTS.md, rules learned 2026-11-07), and answers are agent
 // text (security model T20), so text is cleaned and capped again here: control and format
 // characters (bidi included) go, except line breaks and the zero-width joiner that emoji need.
+//
+// A waiting checkpoint (M2) brings its approval box: the core's title and the exact detail, with
+// the action class and risk. A checkpoint with a bad ID or a risk this build doesn't know is
+// dropped, never guessed at, and with it the card's Approve and Deny.
 
 import Foundation
 
@@ -15,7 +19,70 @@ public struct CorralRunCard: Equatable, Sendable {
     }
 
     public enum Action: String, Equatable, Sendable {
-        case stop, sendBack, newTask, retry
+        case stop, sendBack, newTask, retry, approve, deny
+    }
+
+    /// A checkpoint waiting on the user, from the core's `checkpoint.opened` only.
+    public struct Checkpoint: Equatable, Sendable {
+        public enum Risk: String, Equatable, Sendable { case normal, high, critical }
+
+        public static let maxTitleLength = 120
+        public static let maxDetailLength = 2_000
+        public static let maxClassLength = 32
+
+        /// The single-use ID an answer carries.
+        public var id: String
+        /// The action class, as the policy names it (`comms.send`).
+        public var actionClass: String
+        public var risk: Risk
+        public var title: String
+        /// The exact detail: tool, destination, arguments.
+        public var detail: String
+        /// Whether the core or the bridge cut the detail to fit.
+        public var detailTruncated: Bool
+
+        public init(id: String, actionClass: String, risk: Risk, title: String, detail: String,
+                    detailTruncated: Bool = false) {
+            self.id = id
+            self.actionClass = actionClass
+            self.risk = risk
+            self.title = title
+            self.detail = detail
+            self.detailTruncated = detailTruncated
+        }
+
+        /// A checkpoint from the wire, or nil for a bad ID or an unknown risk.
+        init?(_ wire: Wire) {
+            guard CorralRoster.isValidID(wire.id), let risk = Risk(rawValue: wire.risk) else { return nil }
+            id = wire.id
+            self.risk = risk
+            actionClass = CorralRunCard.clean(wire.actionClass, max: Self.maxClassLength).text
+            title = CorralRunCard.clean(wire.title, max: Self.maxTitleLength).text
+            let detail = CorralRunCard.clean(wire.detail, max: Self.maxDetailLength)
+            self.detail = detail.text
+            detailTruncated = wire.detailTruncated || detail.cut
+        }
+
+        struct Wire: Decodable {
+            let id: String
+            /// `class` on the wire.
+            let actionClass: String
+            let risk: String
+            let title: String
+            let detail: String
+            let detailTruncated: Bool
+
+            init(from decoder: Decoder) throws {
+                try rejectUnknownKeys(decoder, allowed: ["id", "class", "risk", "title", "detail", "detailTruncated"])
+                let c = try decoder.container(keyedBy: AnyKey.self)
+                id = try c.decode(String.self, forKey: AnyKey("id"))
+                actionClass = try c.decode(String.self, forKey: AnyKey("class"))
+                risk = try c.decode(String.self, forKey: AnyKey("risk"))
+                title = try c.decode(String.self, forKey: AnyKey("title"))
+                detail = try c.decode(String.self, forKey: AnyKey("detail"))
+                detailTruncated = try c.decode(Bool.self, forKey: AnyKey("detailTruncated"))
+            }
+        }
     }
 
     public static let maxPromptLength = 280
@@ -35,10 +102,13 @@ public struct CorralRunCard: Equatable, Sendable {
     public var error: String?
     /// The buttons, in order. Unknown ones are dropped, never guessed at.
     public var actions: [Action]
+    /// The checkpoint waiting on the user, if any.
+    public var checkpoint: Checkpoint?
 
     /// A card as the core would send it, for previews and the playground.
     public init(status: Status, prompt: String, elapsedMs: Int, spend: String,
-                answer: String? = nil, error: String? = nil, actions: [Action]) {
+                answer: String? = nil, error: String? = nil, actions: [Action],
+                checkpoint: Checkpoint? = nil) {
         self.status = status
         self.prompt = prompt
         promptTruncated = false
@@ -48,6 +118,7 @@ public struct CorralRunCard: Equatable, Sendable {
         answerTruncated = false
         self.error = error
         self.actions = actions
+        self.checkpoint = checkpoint
     }
 
     /// A card from the wire, or nil for a status this build doesn't know.
@@ -63,9 +134,13 @@ public struct CorralRunCard: Equatable, Sendable {
         self.answer = answer?.text
         answerTruncated = wire.answerTruncated || (answer?.cut ?? false)
         error = wire.error.map { Self.clean($0, max: Self.maxErrorLength).text }
+        let checkpoint = wire.checkpoint.flatMap { Checkpoint($0) }
+        self.checkpoint = checkpoint
         var actions: [Action] = []
         for raw in wire.actions {
             guard let action = Action(rawValue: raw), !actions.contains(action) else { continue }
+            // Approve and Deny answer a checkpoint; without one they'd answer nothing.
+            if checkpoint == nil, action == .approve || action == .deny { continue }
             actions.append(action)
         }
         self.actions = actions
@@ -95,11 +170,12 @@ public struct CorralRunCard: Equatable, Sendable {
         let answerTruncated: Bool
         let error: String?
         let actions: [String]
+        let checkpoint: Checkpoint.Wire?
 
         init(from decoder: Decoder) throws {
             try rejectUnknownKeys(decoder, allowed: [
                 "id", "status", "prompt", "promptTruncated", "elapsedMs", "spend", "answer",
-                "answerTruncated", "error", "actions",
+                "answerTruncated", "error", "actions", "checkpoint",
             ])
             let c = try decoder.container(keyedBy: AnyKey.self)
             id = try c.decode(String.self, forKey: AnyKey("id"))
@@ -112,6 +188,7 @@ public struct CorralRunCard: Equatable, Sendable {
             answerTruncated = try c.decode(Bool.self, forKey: AnyKey("answerTruncated"))
             error = try c.decodeIfPresent(String.self, forKey: AnyKey("error"))
             actions = try c.decode([String].self, forKey: AnyKey("actions"))
+            checkpoint = try c.decodeIfPresent(Checkpoint.Wire.self, forKey: AnyKey("checkpoint"))
         }
     }
 }

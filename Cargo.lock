@@ -433,8 +433,10 @@ version = "0.0.1"
 dependencies = [
  "corral-adapters",
  "corral-core",
+ "corral-policy",
  "corral-secrets",
  "corral-store",
+ "corral-tools",
  "serde",
  "serde_json",
  "swift-rs",

@@ -99,7 +99,7 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-POL-09** Risk tier → required gesture (click / no-voice / Touch ID)
 - **TP-POL-10** `ToolGateway` refuses execution without a valid `Decision::Allow` token (also enforced at compile time; this test covers the runtime path for dynamic MCP tools)
 - **TP-POL-11** Allow-for-run on a high or critical class covers only the approved destination; a new recipient, domain or path root asks again
-- **TP-POL-12** On a tainted run (it has read untrusted content), grants on `net.write`, `comms.send` and `net.read.unlisted` stop applying and the checkpoint names the untrusted source; taint never clears within a run
+- **TP-POL-12** On a tainted run (it has read untrusted content), grants on `net.write`, `comms.send` and `net.read.unlisted` stop applying (and on `a2a` once that class exists) and the checkpoint names the untrusted source; taint never clears within a run (T28)
 - **TP-GATE-01** A checkpoint (an Ask) yields a token only when approved with a gesture its risk allows (voice never for high or critical, Touch ID for critical); a refused gesture leaves it open
 - **TP-GATE-02** Approve once covers that call; approve for the run adds a grant to this run's gate only; denying grants nothing
 - **TP-GATE-03** A token can taint its run, and ways out ask again afterwards
@@ -113,7 +113,8 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-CHK-04** A gesture too weak for the risk is refused and the checkpoint stays open
 - **TP-CHK-05** An unanswered checkpoint expires at the profile's timeout and is denied, or cancels the run under `on_timeout = "cancel_run"`
 - **TP-CHK-06** Stop while a checkpoint waits ends the run and takes it off the desk; a later answer does nothing, and Stop wins over an approval that arrives at the same moment
-- **TP-POL-12** On a run that has taken in untrusted content (`tainted`), allow-for-run grants on `net.write`, `comms.send`, `net.read.unlisted` and `a2a` don't apply; each action asks and names the untrusted source; taint never clears within the run (T28)
+- **TP-CHK-07** (core) While a checkpoint waits, the agent's card shows it, drawn only from `checkpoint.opened` (class, risk, title, detail; cleaned and capped at 120 and 2,000 characters), with Approve and Deny; the oldest waiting checkpoint shows first; once it's answered or the run stops, it leaves the card
+- **TP-CHK-08** The checkpoint rides on the roster card (`roster-checkpoint-v1.json`); Approve and Deny come back as `approveCheckpoint` and `denyCheckpoint` with the checkpoint's ID; only click or keyboard can approve from a card (never Touch ID or voice); a note over 4 KB, an unknown scope or extra fields are refused; Rust answers only the checkpoint that's on that agent's card
 
 ### Budget
 - **TP-BUD-01** Pre-request estimate blocks a request that would cross the hard cap

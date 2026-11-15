@@ -166,7 +166,7 @@ public final class CorralCardController {
                 },
                 onTask: { [weak self] text in
                     MainActor.assumeIsolated {
-                        if let intent = CorralCardModel.task(text, agentID: id) { self?.send(intent) }
+                        if let intent = model.fieldIntent(text, agentID: id) { self?.send(intent) }
                     }
                 },
                 onClose: { [weak self] in

