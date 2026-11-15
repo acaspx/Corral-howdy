@@ -13,9 +13,13 @@
 //!   [`CheckpointDesk`] until the user answers with a strong enough gesture, the profile's timeout
 //!   passes, or the run is stopped (docs/01 §5).
 //!
-//! The filesystem sandbox (`src/fs`) and the MCP client come next (M2 item 6, M5 item 6).
+//! - **The filesystem sandbox** ([`fs`]): `fs.read`, `fs.write` and `fs.delete` reach only the
+//!   agent's own folders, opened beneath a directory handle (M2 item 6).
+//!
+//! The MCP client comes later (M5 item 6).
 
 mod checkpoint;
+pub mod fs;
 mod runner;
 
 pub use checkpoint::{Answer, CheckpointDesk, DeskError, MAX_NOTE_CHARS};

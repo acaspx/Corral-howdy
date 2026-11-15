@@ -27,7 +27,7 @@ Corral holds API keys and can make agents act on a user's behalf. Treat it like 
 | T5 | Voice misrecognition approves an action | Voice cannot approve high/critical | TP-VOICE-04 |
 | T6 | Key theft from disk/logs/traces | Keychain only; redaction filter on every log/trace sink; secret-scanner test over all persisted bytes after eval runs | TP-SEC-01, EV-SAFE-30 |
 | T7 | Malicious imported manifest grants itself broad permissions | Strict schema; import shows diff of permissions; profiles can't widen beyond global ceilings | TP-MAN-*, fuzz FZ-01 |
-| T8 | Path traversal / symlink escape from sandbox roots | Canonicalize + `openat`-style checks; deny symlinks leaving root | TP-FS-01..08, fuzz FZ-02 |
+| T8 | Path traversal / symlink escape from sandbox roots | Every path is opened beneath the root's directory handle (`cap-std`: `RESOLVE_BENEATH` on Linux, step-by-step `openat` with no following out on macOS), so a link or a swapped folder can't lead out; `..`, `~` and absolute paths outside the roots are refused first; hard-linked files and names that differ only in case or normalization are refused; writes are temp-then-rename | TP-FS-01..10, fuzz FZ-02 |
 | T9 | Runaway spend (loops, multi-agent amplification) | Pre-request hard caps; per-provider rate limits; loop detector (same tool+args N times) → pause | EV-COST-01..05 |
 | T10 | Compromised webview calls privileged IPC | Tauri capabilities scoped per window; no remote URLs loaded; strict CSP; untrusted markdown sanitized; approve commands require a nonce issued for that checkpoint | TP-IPC-01..04 |
 | T11 | Audit log tampering | Hash-chained events; verify on open; tamper → banner + read-only | TP-STORE-05 |
