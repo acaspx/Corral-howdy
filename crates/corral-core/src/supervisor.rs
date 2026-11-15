@@ -28,8 +28,8 @@
 use crate::budget::{Admission, BudgetConfig, BudgetError, RequestEstimate, RunBudget};
 use crate::clock::Clock;
 use crate::event::{
-    CancelledBy, Event, EventBody, FailureReason, ModelRequest, RunCancelled, RunFailed, RunQueued,
-    RunStarted, SessionClosed,
+    BudgetScope, BudgetWarned, CancelledBy, Event, EventBody, FailureReason, ModelRequest,
+    RunCancelled, RunFailed, RunQueued, RunStarted, SessionClosed,
 };
 use crate::ids::{AgentId, RunId, SessionId, SpanId};
 use crate::lifecycle::{Lifecycle, LifecycleError, Phase, next};
@@ -178,6 +178,8 @@ struct RunLog {
     state: Lifecycle,
     next_seq: u64,
     budget: RunBudget,
+    /// `budget.warned` was logged for the soft limit (once per threshold).
+    warned_soft: bool,
 }
 
 /// Emits a run's events: assigns `seq` and `ts`, enforces the lifecycle, appends to the log.
@@ -214,6 +216,20 @@ impl EventSink {
         next(&run.state, &event)?;
         let admission = match run.budget.admit(estimate) {
             Ok(admission) => admission,
+            // The soft limit doesn't end the run: the driver asks the user (a
+            // `budget.threshold` checkpoint) and calls `raise_to_cap` or stops.
+            Err(refusal @ BudgetError::SoftLimit { .. }) => {
+                if !run.warned_soft {
+                    let warned = EventBody::BudgetWarned(BudgetWarned {
+                        scope: BudgetScope::Run,
+                        spent_micro_usd: run.budget.committed(),
+                        limit_micro_usd: run.budget.soft_limit().unwrap_or(run.budget.cap()),
+                    });
+                    self.append(&mut run, warned)?;
+                    run.warned_soft = true;
+                }
+                return Err(refusal.into());
+            }
             Err(refusal) => {
                 self.append(
                     &mut run,
@@ -231,6 +247,25 @@ impl EventSink {
             return Err(e);
         }
         Ok(admission)
+    }
+
+    /// The user approved going past the soft limit: for the rest of the run, requests are
+    /// admitted up to the hard cap. Nothing changes for a run without a soft limit.
+    pub fn raise_to_cap(&self) -> Result<(), SupervisorError> {
+        let mut run = self.run.lock().map_err(|_| SupervisorError::Poisoned)?;
+        run.budget.approve_soft_limit();
+        Ok(())
+    }
+
+    /// What was spent and the run's limits, for the soft-limit checkpoint's text:
+    /// `(committed, soft limit, cap)`.
+    pub fn budget_status(&self) -> Result<(u64, Option<u64>, u64), SupervisorError> {
+        let run = self.run.lock().map_err(|_| SupervisorError::Poisoned)?;
+        Ok((
+            run.budget.committed(),
+            run.budget.soft_limit(),
+            run.budget.cap(),
+        ))
     }
 
     fn event(&self, run: &RunLog, body: EventBody) -> Event {
@@ -257,7 +292,8 @@ impl EventSink {
         Ok(())
     }
 
-    fn phase(&self) -> Result<Phase, SupervisorError> {
+    /// The run's phase now.
+    pub fn phase(&self) -> Result<Phase, SupervisorError> {
         Ok(self
             .run
             .lock()
@@ -297,6 +333,8 @@ struct State {
 struct Inner {
     config: SupervisorConfig,
     budget: BudgetConfig,
+    /// The soft limit for runs deployed from now on (TP-BUD-02), if any.
+    soft_limit: Mutex<Option<u64>>,
     driver: Arc<dyn RunDriver>,
     log: Arc<dyn EventLog>,
     clock: Arc<dyn Clock>,
@@ -332,6 +370,7 @@ impl Supervisor {
         Self(Arc::new(Inner {
             config,
             budget,
+            soft_limit: Mutex::new(None),
             driver,
             log,
             clock,
@@ -340,11 +379,32 @@ impl Supervisor {
         }))
     }
 
+    /// Sets the soft limit for runs deployed from now on (`None`: no soft limit). One at or over
+    /// the cap is none. Only drivers that can ask the user should run with one: a driver that
+    /// can't must end the run when it's reached.
+    pub fn set_soft_limit(&self, soft_micro_usd: Option<u64>) {
+        let mut soft = self
+            .0
+            .soft_limit
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *soft = soft_micro_usd;
+    }
+
     /// Logs `run.queued`, then starts the run now or queues it behind the concurrency limit.
     pub fn deploy(&self, request: RunRequest) -> Result<(), SupervisorError> {
         let mut state = self.lock()?;
         if state.known.contains_key(&request.run_id) {
             return Err(SupervisorError::DuplicateRun(request.run_id));
+        }
+        let mut budget = RunBudget::new(self.0.budget.per_run_cap_micro_usd);
+        let soft = *self
+            .0
+            .soft_limit
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(soft) = soft {
+            budget = budget.with_soft_limit(soft);
         }
         let sink = EventSink {
             run: Arc::new(Mutex::new(RunLog {
@@ -352,7 +412,8 @@ impl Supervisor {
                 span_id: SpanId::from(format!("{}:invoke_agent", request.run_id).as_str()),
                 state: Lifecycle::idle(),
                 next_seq: 1,
-                budget: RunBudget::new(self.0.budget.per_run_cap_micro_usd),
+                budget,
+                warned_soft: false,
             })),
             log: self.0.log.clone(),
             clock: self.0.clock.clone(),

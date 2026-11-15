@@ -23,7 +23,7 @@ pub mod fs;
 mod runner;
 
 pub use checkpoint::{Answer, CheckpointDesk, DeskError, MAX_NOTE_CHARS};
-pub use runner::{IdSource, MAX_DETAIL_CHARS, ToolAnswer, ToolRunner};
+pub use runner::{BudgetAnswer, IdSource, MAX_DETAIL_CHARS, ToolAnswer, ToolRunner};
 
 use corral_core::domain::ActionClass;
 use corral_policy::AllowToken;
