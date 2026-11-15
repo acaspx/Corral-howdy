@@ -81,7 +81,8 @@ if [ ! -x "$evals_bin" ]; then
 else
   r="$(new_repo)"
   mkdir -p "$r/evals/safety" "$r/evals/reports/baselines"
-  cp "$repo_root/evals/safety/"*.yaml "$r/evals/safety/"
+  # The whole folder: scenarios read their fixtures from fixtures/ next to them.
+  cp -R "$repo_root/evals/safety/." "$r/evals/safety/"
   "$evals_bin" --suite gate --scenarios "$r/evals/safety" --report "$r/evals/reports/baselines/main.json" >/dev/null
   sed -i.bak 's/"pending"/"passed"/' "$r/evals/reports/baselines/main.json"; rm "$r"/evals/reports/baselines/*.bak
   commit "$r"
@@ -109,7 +110,7 @@ rm -f "$r/.git/objects/${blob:0:2}/${blob:2}"   # the base version can no longer
 expect "TP-CI-11 scope guard: an unreadable base file fails instead of passing" 1 guard "$r" "$NONE"
 
 if [ -x "$evals_bin" ]; then
-  r="$(new_repo)"; mkdir -p "$r/evals/safety"; cp "$repo_root/evals/safety/"*.yaml "$r/evals/safety/"; commit "$r"
+  r="$(new_repo)"; mkdir -p "$r/evals/safety"; cp -R "$repo_root/evals/safety/." "$r/evals/safety/"; commit "$r"
   expect "TP-CI-12 eval gate: an unknown base ref fails instead of comparing against nothing" 1 \
     env CORRAL_EVALS_BIN="$evals_bin" bash -c "cd '$r' && bash '$ci/eval_gate.sh' no-such-ref"
   expect "TP-CI-13 eval gate: an all-zero base (first push of a branch) runs without a baseline" 0 \
