@@ -1,11 +1,15 @@
 //! Corral's eval runner (`docs/05-evals.md`).
 //!
-//! M0 scope: load every scenario under `evals/scenarios/` and `evals/safety/` (recursively),
-//! validate it against a strict schema (ID format, unique IDs, no unknown keys anywhere), and write
-//! a JSON report compared against a baseline. Scenarios can't be *executed* until the
-//! `FakeAdapter` exists (milestone M1), so for now they report as `pending`. The gate still fails
-//! on invalid, duplicate or missing scenarios, and on any regression against the baseline.
+//! Loads every scenario under `evals/scenarios/` and `evals/safety/` (recursively), validates it
+//! against a strict schema (ID format, unique IDs, no unknown keys anywhere), runs it on the
+//! FakeAdapter through the real policy, gate, desk and tool gateway ([`exec`], M2), and writes a
+//! JSON report compared against a baseline. The gate fails on invalid, duplicate or missing
+//! scenarios, on a failure, on a pending safety scenario (TP-EVAL-09), and on any regression
+//! against the baseline.
 
+pub mod exec;
+
+pub use exec::{Outcome, Profiles, execute_all};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -174,6 +178,9 @@ pub struct Scenario {
     pub steps: Vec<Step>,
     /// Expectations checked against the event log.
     pub expect: Expect,
+    /// The folder the scenario came from; its fixtures are in `fixtures/` there.
+    #[serde(skip)]
+    pub dir: PathBuf,
 }
 
 /// Outcome of one scenario.
@@ -213,6 +220,22 @@ pub struct Report {
     pub regressions: Vec<String>,
     /// Whether the gate passed.
     pub gate_passed: bool,
+    /// Why each failed or pending scenario didn't pass, by ID.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub notes: BTreeMap<String, String>,
+}
+
+impl Report {
+    /// Adds each outcome's reason, for scenarios that didn't pass.
+    pub fn attach_notes(&mut self, outcomes: &[Outcome]) {
+        for o in outcomes {
+            if o.result.status != Status::Passed
+                && let Some(reason) = &o.reason
+            {
+                self.notes.insert(o.result.id.clone(), reason.clone());
+            }
+        }
+    }
 }
 
 /// True if `id` looks like `EV-<AREA>-<NN>`, e.g. `EV-SAFE-03`.
@@ -231,10 +254,11 @@ pub fn is_valid_id(id: &str) -> bool {
 
 /// Parses and validates one scenario from YAML text.
 pub fn parse_scenario(path: &Path, text: &str) -> Result<Scenario, EvalError> {
-    let scenario: Scenario = serde_yaml_ng::from_str(text).map_err(|e| EvalError::Invalid {
+    let mut scenario: Scenario = serde_yaml_ng::from_str(text).map_err(|e| EvalError::Invalid {
         path: path.to_path_buf(),
         message: e.to_string(),
     })?;
+    scenario.dir = path.parent().map(Path::to_path_buf).unwrap_or_default();
     if !is_valid_id(&scenario.id) {
         return Err(EvalError::Invalid {
             path: path.to_path_buf(),
@@ -343,20 +367,6 @@ pub fn load_all(dirs: &[PathBuf]) -> Result<Vec<Scenario>, EvalError> {
     Ok(out)
 }
 
-/// Runs the scenarios. In M0 nothing is executable yet, so every valid scenario is `Pending`.
-pub fn run(scenarios: &[Scenario]) -> Vec<ScenarioResult> {
-    let mut results: Vec<ScenarioResult> = scenarios
-        .iter()
-        .map(|s| ScenarioResult {
-            id: s.id.clone(),
-            title: s.title.clone(),
-            status: Status::Pending,
-        })
-        .collect();
-    results.sort_by(|a, b| a.id.cmp(&b.id));
-    results
-}
-
 /// Builds the report, comparing against an optional baseline.
 /// The gate fails on any failed scenario or any regression: a scenario that passed in the baseline
 /// and doesn't pass now, or any baseline scenario that disappeared, whatever its status.
@@ -378,6 +388,12 @@ pub fn build_report(
         *summary.entry(key.to_string()).or_default() += 1;
     }
     summary.insert("total".into(), results.len());
+    let executed = summary["passed"] + summary["failed"];
+    summary.insert("executed".into(), executed);
+    // A safety scenario that couldn't run is a hole in the gate, not a pass (TP-EVAL-09).
+    let pending_safety = results
+        .iter()
+        .any(|r| r.status == Status::Pending && r.id.starts_with("EV-SAFE-"));
 
     let regressions: Vec<String> = baseline
         .map(|b| {
@@ -393,13 +409,14 @@ pub fn build_report(
         .unwrap_or_default();
 
     let failed = summary.get("failed").copied().unwrap_or(0);
-    let gate_passed = failed == 0 && regressions.is_empty();
+    let gate_passed = failed == 0 && regressions.is_empty() && !pending_safety;
     Report {
         suite,
         scenarios: results,
         summary,
         regressions,
         gate_passed,
+        notes: BTreeMap::new(),
     }
 }
 
@@ -419,6 +436,21 @@ pub fn markdown_summary(report: &Report) -> String {
         n("failed"),
         n("pending"),
     );
+    s.push_str(&format!(
+        "\n{} of {} executed.\n",
+        n("executed"),
+        n("total")
+    ));
+    for r in &report.scenarios {
+        if r.status == Status::Passed {
+            continue;
+        }
+        let why = report
+            .notes
+            .get(&r.id)
+            .map_or(String::new(), |n| format!(": {n}"));
+        s.push_str(&format!("- {} {:?}{why}\n", r.id, r.status));
+    }
     if !report.regressions.is_empty() {
         s.push_str(&format!(
             "\nRegressions: {}\n",
@@ -427,7 +459,7 @@ pub fn markdown_summary(report: &Report) -> String {
     }
     if n("pending") > 0 {
         s.push_str(
-            "\nPending scenarios become runnable when the FakeAdapter lands (milestone M1).\n",
+            "\nPending scenarios couldn't run yet; a pending safety scenario fails the gate.\n",
         );
     }
     s

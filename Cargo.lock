@@ -450,10 +450,15 @@ dependencies = [
 name = "corral-evals"
 version = "0.0.1"
 dependencies = [
+ "corral-adapters",
+ "corral-core",
+ "corral-policy",
+ "corral-tools",
  "serde",
  "serde_json",
  "serde_yaml_ng",
  "thiserror 2.0.21",
+ "tokio",
 ]
 
 [[package]]
