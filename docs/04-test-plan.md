@@ -118,7 +118,7 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 
 ### Budget
 - **TP-BUD-01** Pre-request estimate blocks a request that would cross the hard cap
-- **TP-BUD-02** Soft limit raises a `budget.threshold` checkpoint once per threshold
+- **TP-BUD-02** Soft limit raises a `budget.threshold` checkpoint once per threshold. Below it, a request's worst case is held under it; at it, the next request is refused (nothing sent, `budget.warned` once) until the user approves on the card, which lifts the limit to the hard cap for the rest of the run. Deny, Stop or no answer ends the run; the profile may allow or forbid going past it without asking; an agent that can't ask stops there. A soft limit at or over the cap is none
 - **TP-BUD-03** Reconciliation with provider-reported usage
 - **TP-BUD-04** Monthly rollover uses the user's time zone
 - **TP-BUD-05** Every provider request carries a max-output-tokens limit derived from the remaining budget; vendor tool fees are counted before the call

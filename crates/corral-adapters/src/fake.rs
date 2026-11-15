@@ -15,14 +15,16 @@
 //!
 //! The eval runner builds these scripts from scenario files (M2).
 
-use corral_core::budget::{Price, RequestEstimate, input_token_bound};
+use corral_core::budget::{BudgetError, Price, RequestEstimate, input_token_bound};
 use corral_core::event::{
     EventBody, FailureReason, ModelDelta, ModelRequest, ModelResponse, RunCompleted, RunFailed,
     UsageReported,
 };
-use corral_core::supervisor::{CancelToken, EventSink, RunDriver, RunFuture, RunRequest};
+use corral_core::supervisor::{
+    CancelToken, EventSink, RunDriver, RunFuture, RunRequest, SupervisorError,
+};
 use corral_policy::Policy;
-use corral_tools::{CheckpointDesk, IdSource, ToolAnswer, ToolGateway, ToolRunner};
+use corral_tools::{BudgetAnswer, CheckpointDesk, IdSource, ToolAnswer, ToolGateway, ToolRunner};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -62,6 +64,9 @@ pub enum FakeStep {
     },
     /// Takes this long and ignores Stop.
     Stubborn(Duration),
+    /// Ends this model turn (its response and usage) and asks the model again, through the
+    /// budget meter: at the soft limit, the run waits for the user (TP-BUD-02).
+    Request,
 }
 
 /// What a scripted agent does, in order.
@@ -115,6 +120,11 @@ impl FakeScript {
     /// Takes time and ignores Stop.
     pub fn stubborn(self, duration: Duration) -> Self {
         self.step(FakeStep::Stubborn(duration))
+    }
+
+    /// Ends this model turn and asks the model again.
+    pub fn request(self) -> Self {
+        self.step(FakeStep::Request)
     }
 
     /// The steps, in order.
@@ -227,12 +237,7 @@ async fn play(
     estimate: &RequestEstimate,
     tools: Option<&Tools>,
 ) {
-    let request = ModelRequest {
-        provider: "fake".into(),
-        model: "fake-1".into(),
-    };
-    // On a refusal the core has already ended the run (budget_hard_cap); nothing is "sent".
-    if sink.request_model(request, estimate).is_err() {
+    if !ask_model(sink, cancel, estimate, tools).await {
         return;
     }
     let mut text = String::new();
@@ -299,6 +304,25 @@ async fn play(
                 return;
             }
             FakeStep::Stubborn(duration) => tokio::time::sleep(*duration).await,
+            FakeStep::Request => {
+                let turn = emit(
+                    sink,
+                    EventBody::ModelResponse(ModelResponse {
+                        text: std::mem::take(&mut text),
+                        finish_reason: Some("tool_calls".into()),
+                    }),
+                ) && emit(
+                    sink,
+                    EventBody::UsageReported(UsageReported {
+                        input_tokens: std::mem::take(&mut input),
+                        output_tokens: std::mem::take(&mut output),
+                        cost_micro_usd: std::mem::take(&mut cost),
+                    }),
+                );
+                if !turn || !ask_model(sink, cancel, estimate, tools).await {
+                    return;
+                }
+            }
         }
     }
     let finished = emit(
@@ -320,6 +344,48 @@ async fn play(
             sink,
             EventBody::RunCompleted(RunCompleted { summary: None }),
         );
+    }
+}
+
+/// Asks the budget meter for a model request. `false`: the run has ended or must stop.
+///
+/// At the soft limit an agent with tools asks the user (a `budget.threshold` checkpoint) and
+/// tries again if they approve; one without can't ask, so it stops there. On any other refusal
+/// the core has already ended the run (`budget_hard_cap`); nothing is "sent".
+async fn ask_model(
+    sink: &EventSink,
+    cancel: &CancelToken,
+    estimate: &RequestEstimate,
+    tools: Option<&Tools>,
+) -> bool {
+    let mut asked = false;
+    loop {
+        let request = ModelRequest {
+            provider: "fake".into(),
+            model: "fake-1".into(),
+        };
+        match sink.request_model(request, estimate) {
+            Ok(_) => return true,
+            Err(SupervisorError::Budget(refusal @ BudgetError::SoftLimit { .. })) => {
+                // Asked once and still held: something's wrong, so stop rather than ask forever.
+                let tools = tools.filter(|_| !asked);
+                asked = true;
+                let Some(tools) = tools else {
+                    emit(
+                        sink,
+                        EventBody::RunFailed(RunFailed {
+                            reason: FailureReason::BudgetHardCap,
+                            message: refusal.to_string(),
+                        }),
+                    );
+                    return false;
+                };
+                if tools.runner.past_soft_limit(sink, cancel).await == BudgetAnswer::Stop {
+                    return false;
+                }
+            }
+            Err(_) => return false,
+        }
     }
 }
 
