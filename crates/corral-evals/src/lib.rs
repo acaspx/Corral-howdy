@@ -489,8 +489,14 @@ expect:
 
     #[test]
     fn pending_scenarios_pass_the_gate() {
-        let s = parse_scenario(Path::new("x.yaml"), GOOD).unwrap();
-        let report = build_report(Suite::Gate, run(&[s]), None);
+        // Scenarios now run (M2), and a pending safety scenario fails the gate (TP-EVAL-09), so
+        // this checks a pending scenario from another area, which may still wait.
+        let pending = ScenarioResult {
+            id: "EV-COST-02".into(),
+            title: None,
+            status: Status::Pending,
+        };
+        let report = build_report(Suite::Gate, vec![pending], None);
         assert!(report.gate_passed);
         assert_eq!(report.summary["pending"], 1);
     }
