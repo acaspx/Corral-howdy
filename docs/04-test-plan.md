@@ -116,6 +116,14 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-CHK-07** (core) While a checkpoint waits, the agent's card shows it, drawn only from `checkpoint.opened` (class, risk, title, detail; cleaned and capped at 120 and 2,000 characters), with Approve and Deny; the oldest waiting checkpoint shows first; once it's answered or the run stops, it leaves the card
 - **TP-CHK-08** The checkpoint rides on the roster card (`roster-checkpoint-v1.json`); Approve and Deny come back as `approveCheckpoint` and `denyCheckpoint` with the checkpoint's ID; only click or keyboard can approve from a card (never Touch ID or voice); a note over 4 KB, an unknown scope or extra fields are refused; Rust answers only the checkpoint that's on that agent's card
 
+### Loop detector (protected)
+- **TP-LOOP-01** From the profile's `loop_limit`-th identical call in a run (5 by default), each one asks before it runs, even when the policy allows it; the reason and the card say it's the same call N times
+- **TP-LOOP-02** Only the same tool with the same arguments counts, whatever order the argument keys come in
+- **TP-LOOP-03** An allow-for-run grant doesn't skip the loop check
+- **TP-LOOP-04** A denied call stays denied, never upgraded to an ask; an asking class keeps its risk and says why
+- **TP-LOOP-05** A new run starts counting from zero
+- **TP-LOOP-06** `loop_limit` is from 2 to 1,000
+
 ### Budget
 - **TP-BUD-01** Pre-request estimate blocks a request that would cross the hard cap
 - **TP-BUD-02** Soft limit raises a `budget.threshold` checkpoint once per threshold. Below it, a request's worst case is held under it; at it, the next request is refused (nothing sent, `budget.warned` once) until the user approves on the card, which lifts the limit to the hard cap for the rest of the run. Deny, Stop or no answer ends the run; the profile may allow or forbid going past it without asking; an agent that can't ask stops there. A soft limit at or over the cap is none
