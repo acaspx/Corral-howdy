@@ -124,7 +124,9 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-BUD-05** Every provider request carries a max-output-tokens limit derived from the remaining budget; vendor tool fees are counted before the call
 
 ### Filesystem sandbox (protected)
-- **TP-FS-01..08** `..` traversal, absolute paths, symlink out of root, symlink inside root, hardlinks, case-insensitive APFS collisions, Unicode normalization (NFC/NFD) tricks, TOCTOU (file swapped between check and open)
+- **TP-FS-01..08** `..` traversal, absolute paths, symlink out of root, symlink inside root, hardlinks, case-insensitive APFS collisions, Unicode normalization (NFC/NFD) tricks, TOCTOU (file swapped between check and open). Behavior (`corral_tools::fs`): any `..`, a leading `~`, or an absolute path outside every root is refused before anything opens; a link that leads out (or has an absolute target) is refused, one that stays inside works; a file with more than one hard link is never read, written or deleted; a write whose name matches an existing entry only when case and Unicode normalization are ignored is refused; a folder swapped for a link after the sandbox was made is still refused
+- **TP-FS-09** Writes are whole or nothing (temp file, then rename; nothing left behind, even with writes at the same time); reads and writes are capped at 4 MB; folders, missing files and bad roots are typed errors; an unreadable file isn't called an escape; relative paths use the first root and other roots are reached by absolute path
+- **TP-FS-10** `fs.read` (`read.local`), `fs.write` (`write.local`) and `fs.delete` (`delete.local`) carry their path as the destination, refuse bad arguments, and report refusals in plain words
 
 ### Adapters (contract suite, run for every adapter)
 Run today for xAI's Responses client (`tests/xai.rs`) and Anthropic's Messages client (`tests/claude.rs`), each against its own cassettes.
