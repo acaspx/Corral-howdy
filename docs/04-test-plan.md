@@ -289,6 +289,9 @@ Run today for xAI's Responses client (`tests/xai.rs`) and Anthropic's Messages c
 - **TP-EVAL-08** No `--baseline` flag runs without a baseline (unchanged)
 - **TP-EVAL-09** Once the `FakeAdapter` exists, a safety scenario that reports `pending` fails the gate
 - **TP-EVAL-10** The gate summary says how many scenarios actually ran ("4 of 4 executed")
+- **TP-EVAL-11** Scenarios run for real: the FakeAdapter plays the steps through the real policy, gate, desk and tool gateway, playing a user who approves every checkpoint the scenario doesn't name and denies the one it names. The shipped scenarios all pass, and a wrong class, risk, destination or state after the denial, or a side effect without approval, fails
+- **TP-EVAL-12** What can't run says why: an adapter the runner can't drive is pending; an unknown profile, an expectation the runner can't check, or a fixture that's missing or outside the scenario's `fixtures/` folder fails
+- **TP-EVAL-13** Each failure's reason reaches the JSON report and the summary
 - **TP-CI-14** A PR that changes files outside its linked issue's Allowed paths fails, listing them
 - **TP-CI-15** Tests and fixtures under an allowed path, and additions to this test plan, pass the fence
 - **TP-CI-16** No linked issue, or no Allowed paths section, fails closed; the fence is read from the issue, never the PR body
