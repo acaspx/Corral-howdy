@@ -15,6 +15,11 @@ serde_json.workspace = true
 thiserror.workspace = true
 # Checkpoints wait for an answer, a timeout or Stop.
 tokio = { version = "1", features = ["sync", "time", "macros"] }
+# The filesystem sandbox opens everything beneath a directory handle, so a path can't escape the
+# agent's folder through `..` or a symlink, even if the folder changes under it (TOCTOU).
+cap-std = "3"
+# Names are compared case- and normalization-insensitively, as APFS does (TP-FS-06..07).
+unicode-normalization = "0.1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros"] }
