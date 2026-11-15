@@ -10,10 +10,11 @@
 
 use crate::ToolGateway;
 use crate::checkpoint::{CheckpointDesk, Outcome};
+use corral_core::budget::usd;
 use corral_core::domain::ActionClass;
 use corral_core::event::{
-    CancelledBy, CheckpointOpened, CheckpointResolved, EventBody, PolicyDecided, PolicyDecision,
-    Resolution, RunCancelled, ToolRequested, ToolResult, ToolStarted,
+    CancelledBy, CheckpointOpened, CheckpointResolved, EventBody, FailureReason, PolicyDecided,
+    PolicyDecision, Resolution, RunCancelled, RunFailed, ToolRequested, ToolResult, ToolStarted,
 };
 use corral_core::ids::{CheckpointId, ToolCallId};
 use corral_core::supervisor::{CancelToken, EventSink};
@@ -70,6 +71,17 @@ enum Waited {
     Answered(Outcome),
     Expired,
     Stopped,
+    /// The desk refused the checkpoint (an ID already waiting).
+    Unopened,
+}
+
+/// What the agent does at its soft limit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BudgetAnswer {
+    /// Approved (or allowed by the profile): requests go on, up to the hard cap.
+    GoOn,
+    /// The run has ended.
+    Stop,
 }
 
 impl ToolRunner {
@@ -112,21 +124,7 @@ impl ToolRunner {
             action = action.to(destination);
         }
         let verdict = self.gate.check(ToolCall { action, args });
-        let decision = match &verdict {
-            Verdict::Allow(_) => PolicyDecision::Allow,
-            Verdict::Ask(pending) => PolicyDecision::Ask {
-                risk: pending.risk(),
-                reason: pending.reason().to_owned(),
-            },
-            Verdict::Deny { reason } => PolicyDecision::Deny {
-                reason: reason.clone(),
-            },
-        };
-        let decided = EventBody::PolicyDecided(PolicyDecided {
-            tool_call_id: id.clone(),
-            decision,
-        });
-        if sink.emit(decided).is_err() {
+        if !decided(sink, &id, &verdict) {
             return ToolAnswer::Stopped;
         }
         match verdict {
@@ -144,53 +142,13 @@ impl ToolRunner {
         sink: &EventSink,
         cancel: &CancelToken,
     ) -> ToolAnswer {
-        let checkpoint_id = CheckpointId::from((self.ids)());
         let class = pending.call().action.class;
-        let opened = EventBody::CheckpointOpened(CheckpointOpened {
-            checkpoint_id: checkpoint_id.clone(),
-            tool_call_id: id.clone(),
-            action_class: class,
-            risk: pending.risk(),
-            title: title(class).to_owned(),
-            detail: detail(pending.call()),
-        });
-        // On the desk before it's shown, so it can be answered as soon as it is.
-        let Ok(mut reply) = self.desk.open(checkpoint_id.clone(), pending) else {
-            return ToolAnswer::Denied {
-                reason: "Corral couldn't open a checkpoint for this, so it didn't run.".into(),
-                note: None,
-            };
-        };
-        if sink.emit(opened).is_err() {
-            self.desk.withdraw(&checkpoint_id);
-            return ToolAnswer::Stopped;
-        }
+        let text = detail(pending.call());
+        let (checkpoint_id, waited) = self.wait(&id, class, text, pending, sink, cancel).await;
         let profile = self.gate.profile();
-        let waited = tokio::select! {
-            // Stop first: a Stop and an answer at the same moment never runs the call.
-            biased;
-            () = cancel.cancelled() => Waited::Stopped,
-            // A closed channel means nobody can answer any more: treat it as no answer.
-            answer = &mut reply => answer.map_or(Waited::Expired, Waited::Answered),
-            () = tokio::time::sleep(profile.checkpoint_timeout) => Waited::Expired,
-        };
-        let waited = match waited {
-            Waited::Answered(outcome) => Waited::Answered(outcome),
-            // An answer that took the checkpoint just now is in the channel; the run still stops.
-            Waited::Stopped => {
-                self.desk.withdraw(&checkpoint_id);
-                return ToolAnswer::Stopped;
-            }
-            Waited::Expired if self.desk.withdraw(&checkpoint_id) => Waited::Expired,
-            Waited::Expired => reply.try_recv().map_or(Waited::Expired, Waited::Answered),
-        };
         let (resolution, then) = match waited {
             Waited::Answered(Outcome::Approved { token, scope }) => {
-                let resolution = match scope {
-                    Scope::Once => Resolution::Approved,
-                    Scope::ForRun => Resolution::AllowedForRun,
-                };
-                (resolution, Then::Run(token))
+                (approved(scope), Then::Run(token))
             }
             Waited::Answered(Outcome::Denied { note }) => (
                 Resolution::Denied { note: note.clone() },
@@ -209,13 +167,15 @@ impl ToolRunner {
                     OnTimeout::CancelRun => Then::CancelRun,
                 },
             ),
+            Waited::Unopened => {
+                return ToolAnswer::Denied {
+                    reason: "Corral couldn't open a checkpoint for this, so it didn't run.".into(),
+                    note: None,
+                };
+            }
             Waited::Stopped => return ToolAnswer::Stopped,
         };
-        let resolved = EventBody::CheckpointResolved(CheckpointResolved {
-            checkpoint_id,
-            resolution,
-        });
-        if sink.emit(resolved).is_err() {
+        if !resolve(sink, checkpoint_id, resolution) {
             return ToolAnswer::Stopped;
         }
         match then {
@@ -223,14 +183,145 @@ impl ToolRunner {
             Then::Run(token) => self.run(id, token, sink).await,
             Then::Answer(answer) => answer,
             Then::CancelRun => {
-                // If the log refuses this the run has ended anyway; either way the agent stops.
-                let cancelled = sink.emit(EventBody::RunCancelled(RunCancelled {
-                    by: CancelledBy::CheckpointExpired,
-                }));
-                drop(cancelled);
+                end(
+                    sink,
+                    EventBody::RunCancelled(RunCancelled {
+                        by: CancelledBy::CheckpointExpired,
+                    }),
+                );
                 ToolAnswer::Stopped
             }
         }
+    }
+
+    /// The run reached its soft limit (TP-BUD-02): asks whether to go on, as a
+    /// `budget.threshold` checkpoint the policy decides on. Going on lifts the limit to the hard
+    /// cap. Deny, Stop or no answer ends the run; an unanswered soft limit never means spend
+    /// more, whatever the profile's `on_timeout` says.
+    pub async fn past_soft_limit(&self, sink: &EventSink, cancel: &CancelToken) -> BudgetAnswer {
+        let Ok((committed, soft, cap)) = sink.budget_status() else {
+            return BudgetAnswer::Stop;
+        };
+        let soft = soft.unwrap_or(cap);
+        let id = ToolCallId::from((self.ids)());
+        let call = ToolCall {
+            action: Action::new(ActionClass::BudgetThreshold, "budget.soft_limit"),
+            args: json!({
+                "spent_micro_usd": committed,
+                "soft_limit_micro_usd": soft,
+                "cap_micro_usd": cap,
+            }),
+        };
+        let verdict = self.gate.check(call);
+        if !decided(sink, &id, &verdict) {
+            return BudgetAnswer::Stop;
+        }
+        let pending = match verdict {
+            Verdict::Allow(_) => return go_on(sink),
+            Verdict::Deny { .. } => {
+                end(
+                    sink,
+                    EventBody::RunFailed(RunFailed {
+                        reason: FailureReason::BudgetHardCap,
+                        message: format!(
+                            "This run reached its {} soft limit, and its profile doesn't allow going past it.",
+                            usd(soft)
+                        ),
+                    }),
+                );
+                return BudgetAnswer::Stop;
+            }
+            Verdict::Ask(pending) => pending,
+        };
+        let text = format!(
+            "This run has used {}; its soft limit is {}.\nApprove to let it go on, up to its {} cap.",
+            usd(committed),
+            usd(soft),
+            usd(cap)
+        );
+        let class = ActionClass::BudgetThreshold;
+        let (checkpoint_id, waited) = self.wait(&id, class, text, pending, sink, cancel).await;
+        let (resolution, then) = match waited {
+            Waited::Answered(Outcome::Approved { scope, .. }) => (approved(scope), None),
+            Waited::Answered(Outcome::Denied { note }) => {
+                (Resolution::Denied { note }, Some(CancelledBy::User))
+            }
+            Waited::Expired => (Resolution::Expired, Some(CancelledBy::CheckpointExpired)),
+            Waited::Unopened => {
+                end(
+                    sink,
+                    EventBody::RunFailed(RunFailed {
+                        reason: FailureReason::BudgetHardCap,
+                        message: format!(
+                            "This run reached its {} soft limit, and Corral couldn't ask you about going on.",
+                            usd(soft)
+                        ),
+                    }),
+                );
+                return BudgetAnswer::Stop;
+            }
+            Waited::Stopped => return BudgetAnswer::Stop,
+        };
+        if !resolve(sink, checkpoint_id, resolution) {
+            return BudgetAnswer::Stop;
+        }
+        match then {
+            None if cancel.is_cancelled() => BudgetAnswer::Stop,
+            None => go_on(sink),
+            Some(by) => {
+                end(sink, EventBody::RunCancelled(RunCancelled { by }));
+                BudgetAnswer::Stop
+            }
+        }
+    }
+
+    /// Opens a checkpoint for `id` and waits for the user, a timeout or Stop. Returns the
+    /// checkpoint's ID and how the wait ended; the caller logs `checkpoint.resolved`.
+    async fn wait(
+        &self,
+        id: &ToolCallId,
+        class: ActionClass,
+        detail: String,
+        pending: PendingApproval,
+        sink: &EventSink,
+        cancel: &CancelToken,
+    ) -> (CheckpointId, Waited) {
+        let checkpoint_id = CheckpointId::from((self.ids)());
+        let opened = EventBody::CheckpointOpened(CheckpointOpened {
+            checkpoint_id: checkpoint_id.clone(),
+            tool_call_id: id.clone(),
+            action_class: class,
+            risk: pending.risk(),
+            title: title(class).to_owned(),
+            detail,
+        });
+        // On the desk before it's shown, so it can be answered as soon as it is.
+        let Ok(mut reply) = self.desk.open(checkpoint_id.clone(), pending) else {
+            return (checkpoint_id, Waited::Unopened);
+        };
+        if sink.emit(opened).is_err() {
+            self.desk.withdraw(&checkpoint_id);
+            return (checkpoint_id, Waited::Stopped);
+        }
+        let waited = tokio::select! {
+            // Stop first: a Stop and an answer at the same moment never runs the call.
+            biased;
+            () = cancel.cancelled() => Waited::Stopped,
+            // A closed channel means nobody can answer any more: treat it as no answer.
+            answer = &mut reply => answer.map_or(Waited::Expired, Waited::Answered),
+            () = tokio::time::sleep(self.gate.profile().checkpoint_timeout) => Waited::Expired,
+        };
+        let waited = match waited {
+            Waited::Answered(outcome) => Waited::Answered(outcome),
+            // An answer that took the checkpoint just now is in the channel; the run still stops.
+            Waited::Stopped | Waited::Unopened => {
+                self.desk.withdraw(&checkpoint_id);
+                Waited::Stopped
+            }
+            Waited::Expired if self.desk.withdraw(&checkpoint_id) => Waited::Expired,
+            Waited::Expired => reply.try_recv().map_or(Waited::Expired, Waited::Answered),
+        };
+        (checkpoint_id, waited)
     }
 
     /// Runs an allowed call and logs its result.
@@ -269,6 +360,57 @@ impl ToolRunner {
         }
         answer
     }
+}
+
+/// Logs `policy.decided` for `id`. `false`: the run has ended.
+fn decided(sink: &EventSink, id: &ToolCallId, verdict: &Verdict) -> bool {
+    let decision = match verdict {
+        Verdict::Allow(_) => PolicyDecision::Allow,
+        Verdict::Ask(pending) => PolicyDecision::Ask {
+            risk: pending.risk(),
+            reason: pending.reason().to_owned(),
+        },
+        Verdict::Deny { reason } => PolicyDecision::Deny {
+            reason: reason.clone(),
+        },
+    };
+    sink.emit(EventBody::PolicyDecided(PolicyDecided {
+        tool_call_id: id.clone(),
+        decision,
+    }))
+    .is_ok()
+}
+
+/// Logs `checkpoint.resolved`. `false`: the run has ended.
+fn resolve(sink: &EventSink, checkpoint_id: CheckpointId, resolution: Resolution) -> bool {
+    sink.emit(EventBody::CheckpointResolved(CheckpointResolved {
+        checkpoint_id,
+        resolution,
+    }))
+    .is_ok()
+}
+
+fn approved(scope: Scope) -> Resolution {
+    match scope {
+        Scope::Once => Resolution::Approved,
+        Scope::ForRun => Resolution::AllowedForRun,
+    }
+}
+
+/// Lifts the soft limit to the cap.
+fn go_on(sink: &EventSink) -> BudgetAnswer {
+    if sink.raise_to_cap().is_ok() {
+        BudgetAnswer::GoOn
+    } else {
+        BudgetAnswer::Stop
+    }
+}
+
+/// Logs the event that ends the run. If the log refuses it, the run has ended anyway; either way
+/// the agent stops.
+fn end(sink: &EventSink, terminal: EventBody) {
+    let ended = sink.emit(terminal);
+    drop(ended);
 }
 
 /// What happens after a checkpoint is resolved.
