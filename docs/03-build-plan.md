@@ -128,7 +128,7 @@ Goal: the safety core, proven before any real agent can touch it.
 3. ✅ `PolicyGate` + `Decision::Allow` capability token required by `ToolGateway` (2026-11-14: `Gate`, `AllowToken`, `ToolGateway` with class checks, output cap and taint)
 4. Checkpoint lifecycle: open → resolve (approve / deny / edit / allow-for-run) → timeout behavior (core ✅ 2026-11-14: `ToolRunner` and `CheckpointDesk`, driven by the FakeAdapter; hover card ✅: the approval box with Approve and Deny over IPC; still to do: Edit, allow-for-run on the card, Touch ID for critical)
 5. Budget meter: pre-request estimate, hard cap, soft-limit checkpoint, reconciliation
-6. Filesystem sandbox (canonicalization, symlink escapes)
+6. Filesystem sandbox (canonicalization, symlink escapes) (✅ 2026-11-14: `corral_tools::fs` with `fs.read`, `fs.write` and `fs.delete`; not registered for any agent until M3)
 7. Loop detector (repeat tool + args → pause)
 8. Safety eval suite v1 on fake agents (injection-shaped scenarios) (✅ 2026-11-14: the runner executes scenarios on the FakeAdapter through the real policy, desk and gateway; a pending safety scenario fails the gate; EV-SAFE-01..05 and 26 pass)
 
