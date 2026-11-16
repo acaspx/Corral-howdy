@@ -126,7 +126,7 @@ Goal: the safety core, proven before any real agent can touch it.
 1. ✅ Action class enum (exhaustive) + profile TOML schema + default profiles (2026-11-13)
 2. ✅ Pure `decide(profile, action, ctx)` + table-driven tests for every class × decision; allow-for-run, destination pinning and taint included (2026-11-13; 37 of 37 mutants caught)
 3. ✅ `PolicyGate` + `Decision::Allow` capability token required by `ToolGateway` (2026-11-14: `Gate`, `AllowToken`, `ToolGateway` with class checks, output cap and taint)
-4. Checkpoint lifecycle: open → resolve (approve / deny / edit / allow-for-run) → timeout behavior (core ✅ 2026-11-14: `ToolRunner` and `CheckpointDesk`, driven by the FakeAdapter; hover card ✅: the approval box with Approve and Deny over IPC; still to do: Edit, allow-for-run on the card, Touch ID for critical)
+4. Checkpoint lifecycle: open → resolve (approve / deny / edit / allow-for-run) → timeout behavior (core ✅ 2026-11-14: `ToolRunner` and `CheckpointDesk`, driven by the FakeAdapter; hover card ✅: the approval box with Approve and Deny over IPC; allow-for-run on the card ✅ 2026-11-15; still to do: Edit, Touch ID for critical)
 5. Budget meter: pre-request estimate, hard cap, soft-limit checkpoint, reconciliation (soft limit ✅ 2026-11-15: a `budget.threshold` checkpoint on the card; none is set in the app until agents can ask, M3)
 6. Filesystem sandbox (canonicalization, symlink escapes) (✅ 2026-11-14: `corral_tools::fs` with `fs.read`, `fs.write` and `fs.delete`; not registered for any agent until M3)
 7. Loop detector (repeat tool + args → pause)

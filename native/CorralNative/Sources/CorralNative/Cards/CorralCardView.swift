@@ -98,6 +98,9 @@ public struct CorralCardView: View {
                     Spacer(minLength: 0)
                 }
                 .padding(.top, 2)
+                if let approval = model.approval, let title = approval.forRunTitle {
+                    forRunButton(title, approval: approval)
+                }
                 if let hint = model.approval?.approveHint(pinned: pinned, expanded: expanded) {
                     Text(hint)
                         .font(.caption)
@@ -129,6 +132,21 @@ public struct CorralCardView: View {
             expanded = false
             guardrail = CorralInputGuard(shownAt: ProcessInfo.processInfo.systemUptime)
         }
+    }
+
+    /// "Allow for this run": a quiet link under the buttons, under the same rules and guard as
+    /// Approve.
+    private func forRunButton(_ title: String, approval: CorralCardModel.Approval) -> some View {
+        let enabled = approval.canApprove(pinned: pinned, expanded: expanded)
+        return Button(title) {
+            guard enabled, guardrail.accepts(at: ProcessInfo.processInfo.systemUptime) else { return }
+            onButton(.allowForRun(checkpoint: approval.checkpointID))
+        }
+        .buttonStyle(.plain)
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(Self.maroon)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.45)
     }
 
     private func isEnabled(_ button: CorralCardModel.Button) -> Bool {
