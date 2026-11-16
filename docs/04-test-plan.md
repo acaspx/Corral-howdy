@@ -115,6 +115,7 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-CHK-06** Stop while a checkpoint waits ends the run and takes it off the desk; a later answer does nothing, and Stop wins over an approval that arrives at the same moment
 - **TP-CHK-07** (core) While a checkpoint waits, the agent's card shows it, drawn only from `checkpoint.opened` (class, risk, title, detail; cleaned and capped at 120 and 2,000 characters), with Approve and Deny; the oldest waiting checkpoint shows first; once it's answered or the run stops, it leaves the card
 - **TP-CHK-08** The checkpoint rides on the roster card (`roster-checkpoint-v1.json`); Approve and Deny come back as `approveCheckpoint` and `denyCheckpoint` with the checkpoint's ID; only click or keyboard can approve from a card (never Touch ID or voice); a note over 4 KB, an unknown scope or extra fields are refused; Rust answers only the checkpoint that's on that agent's card
+- **TP-CHK-09** The approval box offers "Allow for this run" for normal and high-risk checkpoints (high: "this destination only"), never for critical ones or a budget limit; it's enabled under the same rules as Approve and sends `approveCheckpoint` with scope `forRun`
 
 ### Loop detector (protected)
 - **TP-LOOP-01** From the profile's `loop_limit`-th identical call in a run (5 by default), each one asks before it runs, even when the policy allows it; the reason and the card say it's the same call N times
