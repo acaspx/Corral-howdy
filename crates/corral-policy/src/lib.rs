@@ -30,7 +30,10 @@
 
 use corral_core::domain::{ActionClass, Risk};
 use serde::Deserialize;
+use serde_json::Value;
 use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -128,7 +131,15 @@ pub enum PolicyError {
     /// A checkpoint timeout that isn't like `30m`, `90s` or `2h`, or is zero or over a week.
     #[error("checkpoint_timeout must be like 30m, 90s or 2h, from 1s to 168h: {0}")]
     BadDuration(String),
+    /// A loop limit under 2 or over 1,000.
+    #[error("loop_limit must be from 2 to 1,000 (got {0})")]
+    BadLoopLimit(u32),
 }
+
+/// How many identical calls a run makes before each further one asks (EV-COST-02).
+pub const DEFAULT_LOOP_LIMIT: u32 = 5;
+/// The range a profile's `loop_limit` may take.
+pub const LOOP_LIMITS: std::ops::RangeInclusive<u32> = 2..=1_000;
 
 /// One agent's policy profile (`[profiles.<name>]` in a manifest).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -142,6 +153,8 @@ pub struct Profile {
     pub checkpoint_timeout: Duration,
     /// What happens when it isn't answered.
     pub on_timeout: OnTimeout,
+    /// From this many identical calls in a run on, each asks before it runs (T9).
+    pub loop_limit: u32,
 }
 
 impl Default for Profile {
@@ -152,6 +165,7 @@ impl Default for Profile {
             rules: HashMap::new(),
             checkpoint_timeout: Duration::from_secs(30 * 60),
             on_timeout: OnTimeout::Deny,
+            loop_limit: DEFAULT_LOOP_LIMIT,
         }
     }
 }
@@ -169,6 +183,8 @@ struct ProfileFile {
     checkpoint_timeout: Option<String>,
     #[serde(default)]
     on_timeout: Option<OnTimeout>,
+    #[serde(default)]
+    loop_limit: Option<u32>,
 }
 
 #[derive(Deserialize)]
@@ -203,6 +219,11 @@ impl Profile {
                 None => defaults.checkpoint_timeout,
             },
             on_timeout: file.on_timeout.unwrap_or(defaults.on_timeout),
+            loop_limit: match file.loop_limit {
+                Some(n) if LOOP_LIMITS.contains(&n) => n,
+                Some(n) => return Err(PolicyError::BadLoopLimit(n)),
+                None => defaults.loop_limit,
+            },
         })
     }
 
@@ -545,6 +566,8 @@ pub struct PendingApproval {
     risk: Risk,
     reason: String,
     run: Arc<Mutex<RunGrants>>,
+    /// How many identical calls the run has made, when that's why it asks.
+    repeated: Option<u32>,
 }
 
 /// An approval the gesture wasn't enough for. The checkpoint stays open.
@@ -565,6 +588,12 @@ impl PendingApproval {
     /// Why it asks.
     pub fn reason(&self) -> &str {
         &self.reason
+    }
+
+    /// How many identical calls the run has made, when it asks because of that (the loop
+    /// detector).
+    pub fn repeated(&self) -> Option<u32> {
+        self.repeated
     }
 
     /// The call waiting.
@@ -621,6 +650,8 @@ pub enum Verdict {
 pub struct Gate {
     policy: Policy,
     run: Arc<Mutex<RunGrants>>,
+    /// Identical calls so far, by fingerprint (the loop detector).
+    calls: Mutex<HashMap<u64, u32>>,
 }
 
 impl Gate {
@@ -629,25 +660,52 @@ impl Gate {
         Self {
             policy,
             run: Arc::default(),
+            calls: Mutex::default(),
         }
     }
 
-    /// Decides one call.
+    /// Decides one call. From the profile's `loop_limit`-th identical call in the run on, a
+    /// call the policy would allow or ask about asks because of the repetition (T9); a denied
+    /// call stays denied.
     pub fn check(&self, call: ToolCall) -> Verdict {
+        let seen = self.count(&call);
+        let looping = (seen >= self.policy.profile().loop_limit).then_some(seen);
         let decision = self.policy.decide(&call.action, &lock(&self.run));
+        let ask = |risk: Risk, reason: String, call: ToolCall| {
+            Verdict::Ask(PendingApproval {
+                reason: match looping {
+                    Some(n) => format!(
+                        "{} has run with the same arguments {n} times in this run. Corral asks before it runs again, in case the agent is stuck in a loop.",
+                        call.action.tool
+                    ),
+                    None => reason,
+                },
+                call: Box::new(call),
+                risk,
+                run: Arc::clone(&self.run),
+                repeated: looping,
+            })
+        };
         match decision {
-            Decision::Allow => Verdict::Allow(AllowToken {
+            Decision::Allow if looping.is_none() => Verdict::Allow(AllowToken {
                 call,
                 run: Arc::clone(&self.run),
             }),
-            Decision::Ask { risk, reason } => Verdict::Ask(PendingApproval {
-                call: Box::new(call),
-                risk,
-                reason,
-                run: Arc::clone(&self.run),
-            }),
+            Decision::Allow => ask(risk_of(&call.action), String::new(), call),
+            Decision::Ask { risk, reason } => ask(risk, reason, call),
             Decision::Deny { reason } => Verdict::Deny { reason },
         }
+    }
+
+    /// Counts `call` and returns how many identical calls the run has made, this one included.
+    fn count(&self, call: &ToolCall) -> u32 {
+        let mut calls = self
+            .calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let seen = calls.entry(fingerprint(call)).or_insert(0);
+        *seen = seen.saturating_add(1);
+        *seen
     }
 
     /// The profile this run is decided under (for its checkpoint timeout).
@@ -658,6 +716,39 @@ impl Gate {
     /// The first untrusted source this run read, if any.
     pub fn tainted_by(&self) -> Option<String> {
         lock(&self.run).tainted_by().map(str::to_owned)
+    }
+}
+
+/// The same tool with the same arguments, whatever order their keys come in.
+fn fingerprint(call: &ToolCall) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    call.action.tool.hash(&mut hasher);
+    canonical(&call.args, &mut hasher);
+    hasher.finish()
+}
+
+/// Hashes `value` with object keys in sorted order, tagging each kind so `"1"` and `1` differ.
+fn canonical(value: &Value, hasher: &mut DefaultHasher) {
+    match value {
+        Value::Null => 0_u8.hash(hasher),
+        Value::Bool(b) => (1_u8, b).hash(hasher),
+        Value::Number(n) => (2_u8, n.to_string()).hash(hasher),
+        Value::String(s) => (3_u8, s).hash(hasher),
+        Value::Array(items) => {
+            (4_u8, items.len()).hash(hasher);
+            for item in items {
+                canonical(item, hasher);
+            }
+        }
+        Value::Object(map) => {
+            (5_u8, map.len()).hash(hasher);
+            let mut entries: Vec<(&String, &Value)> = map.iter().collect();
+            entries.sort_by(|a, b| a.0.cmp(b.0));
+            for (key, item) in entries {
+                key.hash(hasher);
+                canonical(item, hasher);
+            }
+        }
     }
 }
 

@@ -134,6 +134,8 @@ Goal: the safety core, proven before any real agent can touch it.
 
 **Exit:** TP-POL-*, TP-FS-*, TP-BUD-* green; **EV-SAFE gate = 100% recall** on the must-catch set; EV-COST-01..03 passing.
 
+Loop detector (item 7) ✅ 2026-11-15: in the policy gate; from the `loop_limit`-th identical call on (5 by default), each one waits at a checkpoint (TP-LOOP-01..06, EV-COST-02).
+
 ## M3: First real provider, xAI Grok (~1.5 weeks)
 1. Keychain secrets store + settings UI stub
 2. `openai_responses` client: streaming, tool calls, usage, errors, retries with backoff
