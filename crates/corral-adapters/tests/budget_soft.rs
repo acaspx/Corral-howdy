@@ -308,3 +308,29 @@ async fn tp_bud_02_a_provider_agent_stops_at_the_soft_limit_sending_nothing() {
     assert_eq!(failed.reason, FailureReason::BudgetHardCap);
     assert!(failed.message.contains("soft limit"), "{}", failed.message);
 }
+
+#[tokio::test(start_paused = true)]
+async fn tp_chk_12_a_spend_limit_checkpoint_cant_be_edited() {
+    let w = world("", true);
+    let cp = waiting(&w).await;
+    assert_eq!(
+        w.desk.answer(
+            &cp.checkpoint_id,
+            Answer::Edit {
+                how: Approval::Click,
+                args: serde_json::json!({"cap_micro_usd": 100_000_000}),
+            }
+        ),
+        Err(corral_tools::DeskError::NotEditable)
+    );
+    assert_eq!(
+        w.desk.waiting(),
+        std::slice::from_ref(&cp.checkpoint_id),
+        "still waiting"
+    );
+    w.desk
+        .answer(&cp.checkpoint_id, Answer::Deny { note: None })
+        .expect("denied");
+    idle(&w).await;
+    assert_eq!(w.log.count("model.request"), 1);
+}
