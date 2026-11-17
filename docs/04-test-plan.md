@@ -93,7 +93,7 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-POL-03** `unknown` class → deny
 - **TP-POL-04** Allow-for-run expires at run end and never persists
 - **TP-POL-05** Checkpoint timeout → `on_timeout` behavior (deny / cancel_run)
-- **TP-POL-06** Edit-args approval executes the *edited* args, and the trace records both versions
+- **TP-POL-06** Edit-args approval executes the *edited* args, and the trace records both versions (`tool.requested` keeps the agent's, `checkpoint.resolved` the edited ones)
 - **TP-POL-07** Denial note is delivered to the agent as a tool result
 - **TP-POL-08** Identical low-risk asks within a run are batched into one checkpoint
 - **TP-POL-09** Risk tier → required gesture (click / no-voice / Touch ID)
@@ -116,6 +116,9 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-CHK-07** (core) While a checkpoint waits, the agent's card shows it, drawn only from `checkpoint.opened` (class, risk, title, detail; cleaned and capped at 120 and 2,000 characters), with Approve and Deny; the oldest waiting checkpoint shows first; once it's answered or the run stops, it leaves the card
 - **TP-CHK-08** The checkpoint rides on the roster card (`roster-checkpoint-v1.json`); Approve and Deny come back as `approveCheckpoint` and `denyCheckpoint` with the checkpoint's ID; only click or keyboard can approve from a card (never Touch ID or voice); a note over 4 KB, an unknown scope or extra fields are refused; Rust answers only the checkpoint that's on that agent's card
 - **TP-CHK-09** The approval box offers "Allow for this run" for normal and high-risk checkpoints (high: "this destination only"), never for critical ones or a budget limit; it's enabled under the same rules as Approve and sends `approveCheckpoint` with scope `forRun`
+- **TP-CHK-10** An edit approves that one call: the next call asks again, whether it goes to the edited destination or the original one; the tool and its class can't change, and the destination is read again by the tool from the edited arguments
+- **TP-CHK-11** An edit needs the gesture an approval would (voice never for high, Touch ID for critical); a refused edit leaves the checkpoint open with the original call
+- **TP-CHK-12** Edited arguments over 16 KB of JSON are refused and the checkpoint stays open; a spend-limit checkpoint can't be edited; an edit is single use like any answer, and one after Stop does nothing
 
 ### Loop detector (protected)
 - **TP-LOOP-01** From the profile's `loop_limit`-th identical call in a run (5 by default), each one asks before it runs, even when the policy allows it; the reason and the card say it's the same call N times
