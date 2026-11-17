@@ -200,6 +200,7 @@ Contents, top to bottom:
 - Voice can't press Approve on high or critical actions.
 - Approve uses the checkpoint's single-use nonce.
 - Deny optionally takes a note that is sent to the agent: while a checkpoint waits, the card's field reads "Deny with a note for Scout", and Return sends Deny with it. Return never approves.
+- Under the buttons, a quiet "Allow for this run" link approves for the rest of the run, under the same rules and guard as Approve. High risk reads "Allow for this run (this destination only)", because the core pins the grant to the destination. Critical checkpoints (Touch ID every time) and a budget limit (answered once) don't offer it. (2026-11-15)
 - A new checkpoint replacing the shown one starts collapsed and re-arms the 300 ms guard, so a click meant for the old one can't approve the new one.
 - Until Touch ID is wired to the card, a critical checkpoint's Approve stays disabled with "Touch ID approval isn't ready yet. Deny, or let it wait." (2026-11-14)
 

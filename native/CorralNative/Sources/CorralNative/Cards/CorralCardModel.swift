@@ -21,6 +21,8 @@ public struct CorralCardModel: Equatable, Sendable {
         case approve(checkpoint: String, touchID: Bool)
         /// Deny the waiting checkpoint.
         case deny(checkpoint: String)
+        /// Approve it for the rest of the run (in the approval box, not the button row).
+        case allowForRun(checkpoint: String)
 
         public var title: String {
             switch self {
@@ -30,6 +32,7 @@ public struct CorralCardModel: Equatable, Sendable {
             case .open(let app): "Open \(app)"
             case .approve(_, let touchID): touchID ? "Approve with Touch ID" : "Approve"
             case .deny: "Deny"
+            case .allowForRun: "Allow for this run"
             }
         }
     }
@@ -72,6 +75,18 @@ public struct CorralCardModel: Equatable, Sendable {
         /// Whether Approve can be pressed now.
         public func canApprove(pinned: Bool, expanded: Bool) -> Bool {
             approveHint(pinned: pinned, expanded: expanded) == nil
+        }
+
+        /// "Allow for this run" under the buttons, or nil where it isn't offered: a critical
+        /// action needs Touch ID every time, and a budget limit is answered once. Rust pins a
+        /// high-risk grant to the destination, so the card says so.
+        public var forRunTitle: String? {
+            guard classLabel != "budget.threshold" else { return nil }
+            return switch risk {
+            case .normal: "Allow for this run"
+            case .high: "Allow for this run (this destination only)"
+            case .critical: nil
+            }
         }
 
         /// Why Approve can't be pressed yet, or nil when it can.
@@ -177,6 +192,7 @@ public struct CorralCardModel: Equatable, Sendable {
         case .open: .openLinked(id: agentID)
         case .approve(let checkpoint, _): .approveCheckpoint(id: agentID, checkpoint: checkpoint, forRun: false)
         case .deny(let checkpoint): .denyCheckpoint(id: agentID, checkpoint: checkpoint, note: nil)
+        case .allowForRun(let checkpoint): .approveCheckpoint(id: agentID, checkpoint: checkpoint, forRun: true)
         }
     }
 
