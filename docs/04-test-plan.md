@@ -119,6 +119,8 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-CHK-10** An edit approves that one call: the next call asks again, whether it goes to the edited destination or the original one; the tool and its class can't change, and the destination is read again by the tool from the edited arguments
 - **TP-CHK-11** An edit needs the gesture an approval would (voice never for high, Touch ID for critical); a refused edit leaves the checkpoint open with the original call
 - **TP-CHK-12** Edited arguments over 16 KB of JSON are refused and the checkpoint stays open; a spend-limit checkpoint can't be edited; an edit is single use like any answer, and one after Stop does nothing
+- **TP-CHK-13** A waiting call's top-level text and number arguments become labeled fields on its card; booleans, null, nested values, and text or keys with hidden or control characters are read-only, cleaned and cut; no fields for arguments that aren't an object, are over 8 KB or 20 keys, have nothing editable, or have no `tool.requested` (a spend limit); the fields go when the checkpoint is answered
+- **TP-CHK-14** The core merges a card's changes into the agent's arguments: only editable keys, text stays text, a number field needs a number, edited text must be plain; no changes, a read-only or unknown key, or a checkpoint the card doesn't show is refused
 
 ### Loop detector (protected)
 - **TP-LOOP-01** From the profile's `loop_limit`-th identical call in a run (5 by default), each one asks before it runs, even when the policy allows it; the reason and the card say it's the same call N times
