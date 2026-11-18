@@ -197,6 +197,7 @@ public enum CorralIntentWire {
         var scope: String? = nil
         var how: String? = nil
         var note: String? = nil
+        var changes: [String: String]? = nil
     }
 
     public static func encode(_ intent: CorralIntent) -> Data? {
@@ -219,6 +220,8 @@ public enum CorralIntentWire {
                         scope: forRun ? "forRun" : "once", how: "click")
         case .denyCheckpoint(let id, let checkpoint, let note):
             body = Body(kind: "denyCheckpoint", id: id, checkpoint: checkpoint, note: note)
+        case .editCheckpoint(let id, let checkpoint, let changes):
+            body = Body(kind: "editCheckpoint", id: id, checkpoint: checkpoint, how: "click", changes: changes)
         }
         // Encoding plain strings can't fail in practice; if it ever does, the tap is dropped
         // rather than sending Rust something malformed.

@@ -9,6 +9,10 @@
 // fields, with the presentation rules from docs/07 §8.2. High-risk Approve needs a pinned card and
 // the whole detail shown; critical needs Touch ID, which the card can't do yet. The policy still
 // checks every gesture in Rust; these rules only keep Approve from being pressed too easily.
+//
+// Edit… (TP-CHK-16) opens the call's arguments as fields, under the same rules as Approve. The
+// sheet sends back only the fields the user changed; Rust merges them into the agent's arguments
+// and checks them, so a read-only value can't change from here.
 
 import Foundation
 
@@ -23,6 +27,8 @@ public struct CorralCardModel: Equatable, Sendable {
         case deny(checkpoint: String)
         /// Approve it for the rest of the run (in the approval box, not the button row).
         case allowForRun(checkpoint: String)
+        /// Approve the edited call, from the edit sheet: only the fields that changed.
+        case approveEdited(checkpoint: String, changes: [String: String])
 
         public var title: String {
             switch self {
@@ -33,6 +39,7 @@ public struct CorralCardModel: Equatable, Sendable {
             case .approve(_, let touchID): touchID ? "Approve with Touch ID" : "Approve"
             case .deny: "Deny"
             case .allowForRun: "Allow for this run"
+            case .approveEdited: "Approve edited"
             }
         }
     }
@@ -51,6 +58,8 @@ public struct CorralCardModel: Equatable, Sendable {
         public var classLabel: String
         public var risk: CorralRunCard.Checkpoint.Risk
         public var riskLabel: String
+        /// The call's arguments, for the edit sheet.
+        public var fields: [CorralRunCard.Field]
 
         init(_ checkpoint: CorralRunCard.Checkpoint) {
             checkpointID = checkpoint.id
@@ -64,6 +73,45 @@ public struct CorralCardModel: Equatable, Sendable {
             case .high: "High risk"
             case .critical: "Critical"
             }
+            fields = checkpoint.fields
+        }
+
+        /// Whether Edit… is offered: at least one field can change.
+        public var editable: Bool { fields.contains { $0.kind != .fixed } }
+
+        /// What the sheet sends: the editable fields whose text differs from the agent's.
+        public func changes(_ draft: [String: String]) -> [String: String] {
+            var changed: [String: String] = [:]
+            for field in fields where field.kind != .fixed {
+                if let typed = draft[field.key], typed != field.value { changed[field.key] = typed }
+            }
+            return changed
+        }
+
+        /// Why "Approve edited" can't be pressed yet, or nil when it can. Approve's rules first:
+        /// the sheet shows every field, so only pinning and Touch ID still apply.
+        public func editHint(_ draft: [String: String], pinned: Bool) -> String? {
+            if let hint = approveHint(pinned: pinned, expanded: true) { return hint }
+            let changed = changes(draft)
+            if changed.isEmpty { return "Change a field to approve the edited action." }
+            for field in fields where field.kind == .number {
+                if let typed = changed[field.key], !Self.isNumber(typed) { return "\(field.label) needs a number." }
+            }
+            return nil
+        }
+
+        /// The button the sheet sends, or nil when nothing changed.
+        public func approveEdited(_ draft: [String: String]) -> Button? {
+            let changed = changes(draft)
+            return changed.isEmpty ? nil : .approveEdited(checkpoint: checkpointID, changes: changed)
+        }
+
+        /// A JSON number, finite: what Rust will take. Rust checks again.
+        static func isNumber(_ text: String) -> Bool {
+            let trimmed = text.trimmingCharacters(in: .whitespaces)
+            let pattern = "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"
+            guard trimmed.range(of: pattern, options: .regularExpression) != nil else { return false }
+            return Double(trimmed)?.isFinite == true
         }
 
         /// Whether the detail is too long to show whole at first.
@@ -193,6 +241,8 @@ public struct CorralCardModel: Equatable, Sendable {
         case .approve(let checkpoint, _): .approveCheckpoint(id: agentID, checkpoint: checkpoint, forRun: false)
         case .deny(let checkpoint): .denyCheckpoint(id: agentID, checkpoint: checkpoint, note: nil)
         case .allowForRun(let checkpoint): .approveCheckpoint(id: agentID, checkpoint: checkpoint, forRun: true)
+        case .approveEdited(let checkpoint, let changes):
+            .editCheckpoint(id: agentID, checkpoint: checkpoint, changes: changes)
         }
     }
 

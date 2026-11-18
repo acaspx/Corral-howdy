@@ -48,6 +48,9 @@ public enum CorralIntent: Equatable, Sendable {
     /// Rust answers only the checkpoint that card shows, and the policy checks the gesture.
     case approveCheckpoint(id: String, checkpoint: String, forRun: Bool)
     case denyCheckpoint(id: String, checkpoint: String, note: String?)
+    /// Approve edited, from a card's edit sheet: only the fields the user changed. Rust merges
+    /// them into the agent's arguments and checks them; the policy checks the gesture.
+    case editCheckpoint(id: String, checkpoint: String, changes: [String: String])
 }
 
 /// Springs drops between layouts so the shape morphs instead of jumping.
