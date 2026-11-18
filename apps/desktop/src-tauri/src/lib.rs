@@ -13,6 +13,8 @@ pub mod bridge;
 pub mod native;
 #[cfg(all(target_os = "macos", feature = "native"))]
 pub mod surface;
+#[cfg(any(test, all(target_os = "macos", feature = "native")))]
+pub mod touch_id;
 
 pub mod keys;
 pub mod linked;

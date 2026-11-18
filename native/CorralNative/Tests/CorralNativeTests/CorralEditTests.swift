@@ -115,7 +115,7 @@ func editHints() throws {
     }
     let critical = try approval(email, risk: "critical")
     #expect(critical.editHint(["to": "me@example.test"], pinned: true)
-            == "Touch ID approval isn't ready yet. Deny, or let it wait.")
+            == "A critical action can't be edited yet. Approve it with Touch ID, or deny.")
     let normal = try approval(email, risk: "normal")
     #expect(normal.editHint(["to": "me@example.test"], pinned: false) == nil)
 }
