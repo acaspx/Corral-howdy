@@ -9,7 +9,7 @@
 //! (EV-SAFE-03); the agent is told why and carries on.
 
 use crate::ToolGateway;
-use crate::checkpoint::{CheckpointDesk, Outcome};
+use crate::checkpoint::{CheckpointDesk, Locate, Outcome};
 use corral_core::budget::usd;
 use corral_core::domain::ActionClass;
 use corral_core::event::{
@@ -151,12 +151,24 @@ impl ToolRunner {
             )),
             None => detail(pending.call()),
         };
-        let (checkpoint_id, waited) = self.wait(&id, class, text, pending, sink, cancel).await;
+        // An edit's destination is read by the tool from the edited arguments.
+        let gateway = Arc::clone(&self.gateway);
+        let tool = pending.call().action.tool.clone();
+        let locate = Box::new(move |args: &Value| gateway.destination_of(&tool, args));
+        let (checkpoint_id, waited) = self
+            .wait(&id, class, text, pending, locate, sink, cancel)
+            .await;
         let profile = self.gate.profile();
         let (resolution, then) = match waited {
             Waited::Answered(Outcome::Approved { token, scope }) => {
                 (approved(scope), Then::Run(token))
             }
+            Waited::Answered(Outcome::Edited { token }) => (
+                Resolution::Edited {
+                    args: token.call().args.clone(),
+                },
+                Then::Run(token),
+            ),
             Waited::Answered(Outcome::Denied { note }) => (
                 Resolution::Denied { note: note.clone() },
                 Then::Answer(ToolAnswer::Denied {
@@ -247,9 +259,17 @@ impl ToolRunner {
             usd(cap)
         );
         let class = ActionClass::BudgetThreshold;
-        let (checkpoint_id, waited) = self.wait(&id, class, text, pending, sink, cancel).await;
+        let locate = Box::new(|_: &Value| None);
+        let (checkpoint_id, waited) = self
+            .wait(&id, class, text, pending, locate, sink, cancel)
+            .await;
         let (resolution, then) = match waited {
             Waited::Answered(Outcome::Approved { scope, .. }) => (approved(scope), None),
+            // The policy never lets a spend limit be edited; if it ever did, stop rather than
+            // spend more.
+            Waited::Answered(Outcome::Edited { .. }) => {
+                (Resolution::Denied { note: None }, Some(CancelledBy::User))
+            }
             Waited::Answered(Outcome::Denied { note }) => {
                 (Resolution::Denied { note }, Some(CancelledBy::User))
             }
@@ -284,12 +304,14 @@ impl ToolRunner {
 
     /// Opens a checkpoint for `id` and waits for the user, a timeout or Stop. Returns the
     /// checkpoint's ID and how the wait ended; the caller logs `checkpoint.resolved`.
+    #[allow(clippy::too_many_arguments)] // Private, and each argument is one part of the checkpoint.
     async fn wait(
         &self,
         id: &ToolCallId,
         class: ActionClass,
         detail: String,
         pending: PendingApproval,
+        locate: Locate,
         sink: &EventSink,
         cancel: &CancelToken,
     ) -> (CheckpointId, Waited) {
@@ -303,7 +325,7 @@ impl ToolRunner {
             detail,
         });
         // On the desk before it's shown, so it can be answered as soon as it is.
-        let Ok(mut reply) = self.desk.open(checkpoint_id.clone(), pending) else {
+        let Ok(mut reply) = self.desk.open(checkpoint_id.clone(), pending, locate) else {
             return (checkpoint_id, Waited::Unopened);
         };
         if sink.emit(opened).is_err() {

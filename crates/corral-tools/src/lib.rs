@@ -22,7 +22,7 @@ mod checkpoint;
 pub mod fs;
 mod runner;
 
-pub use checkpoint::{Answer, CheckpointDesk, DeskError, MAX_NOTE_CHARS};
+pub use checkpoint::{Answer, CheckpointDesk, DeskError, MAX_EDIT_BYTES, MAX_NOTE_CHARS};
 pub use runner::{BudgetAnswer, IdSource, MAX_DETAIL_CHARS, ToolAnswer, ToolRunner};
 
 use corral_core::domain::ActionClass;

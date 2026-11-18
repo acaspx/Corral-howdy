@@ -579,6 +579,25 @@ pub struct Refused {
     pub reason: String,
 }
 
+/// Why an edited approval wasn't taken.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EditRefusal {
+    /// The gesture isn't enough for the risk, edited or not (TP-POL-09).
+    Gesture,
+    /// This checkpoint can't be edited: its arguments are the core's, not the agent's (a spend
+    /// limit).
+    NotEditable,
+}
+
+/// An edited approval that wasn't taken. The checkpoint stays open with the original call.
+#[derive(Debug)]
+pub struct EditRefused {
+    /// The checkpoint, still waiting.
+    pub pending: PendingApproval,
+    /// Why.
+    pub why: EditRefusal,
+}
+
 impl PendingApproval {
     /// How much is at stake.
     pub fn risk(&self) -> Risk {
@@ -620,6 +639,44 @@ impl PendingApproval {
         }
         Ok(AllowToken {
             call: *self.call,
+            run: self.run,
+        })
+    }
+
+    /// Whether the user may change this call's arguments before approving it. A spend-limit
+    /// checkpoint can't be edited: its numbers are the core's.
+    pub fn editable(&self) -> bool {
+        self.call.action.class != ActionClass::BudgetThreshold
+    }
+
+    /// Approves the call with the user's edited `args` instead of the agent's (TP-POL-06). The
+    /// tool and its class can't change, so the risk and the gesture it needs stay the same;
+    /// `destination` is the one the tool reads from `args`, never one the user or the model
+    /// names. An edit approves this call only: the run gets no grant. Refused (and still open,
+    /// with the original call) if the gesture isn't enough or the checkpoint isn't editable.
+    pub fn approve_edited(
+        self,
+        how: Approval,
+        args: Value,
+        destination: Option<String>,
+    ) -> Result<AllowToken, EditRefused> {
+        if !self.editable() {
+            return Err(EditRefused {
+                pending: self,
+                why: EditRefusal::NotEditable,
+            });
+        }
+        if !can_approve(self.risk, how) {
+            return Err(EditRefused {
+                pending: self,
+                why: EditRefusal::Gesture,
+            });
+        }
+        let mut call = *self.call;
+        call.action.destination = destination;
+        call.args = args;
+        Ok(AllowToken {
+            call,
             run: self.run,
         })
     }
