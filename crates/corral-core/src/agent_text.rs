@@ -71,6 +71,14 @@ impl AgentText {
     }
 }
 
+/// Whether `text` is plain: no control characters except line breaks, and no bidi controls or
+/// invisible format characters. Plain text is drawn exactly as it is, so a card may let the user
+/// edit it (TP-CHK-13).
+pub fn is_plain(text: &str) -> bool {
+    text.chars()
+        .all(|c| c == '\n' || !(c.is_control() || is_invisible(c)))
+}
+
 /// Bidi controls and invisible format characters.
 fn is_invisible(c: char) -> bool {
     matches!(
