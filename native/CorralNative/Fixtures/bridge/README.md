@@ -16,6 +16,8 @@ Rust → Swift:
 - `roster-checkpoint-v1.json`: a drop waiting on a checkpoint (M2). Its card carries the
   approval box, drawn only from the core's `checkpoint.opened` (title, the exact detail, class and
   risk), and the buttons Approve and Deny.
+- `roster-edit-v1.json`: the same, with the call's arguments as `fields` for the edit sheet (the
+  core's `RunCard.edit`): `text` and `number` can change, `fixed` is shown read-only.
 - `notify-v1.json` (`corral_native_notify`): a checkpoint notification. Rust chooses the buttons
   (high and critical risks get no inline Approve); Swift only draws them.
 - `authenticate-v1.json` (`corral_native_authenticate`): a Touch ID prompt. Rust asks; Swift reports.
@@ -29,5 +31,7 @@ Swift → Rust, through the intent callback:
   `approveCheckpoint` and `denyCheckpoint` answer the checkpoint on a card. They carry the
   checkpoint's ID, which is single use; Rust checks it's the one on that drop's card, and the
   policy checks the gesture (click or keyboard; Touch ID and voice never come this way).
+  `editCheckpoint` is the edit sheet's Approve edited: only the fields that changed, key to the
+  text typed. Rust merges them into the agent's arguments and checks them.
 
-TP-BRIDGE-01..04, TP-SKEL-03..05, TP-LOGO-09, TP-LINK-03..05, TP-CHK-08 and TP-HOVER-06, 08 (docs/04-test-plan.md).
+TP-BRIDGE-01..04, TP-SKEL-03..05, TP-LOGO-09, TP-LINK-03..05, TP-CHK-08, TP-CHK-15..16 and TP-HOVER-06, 08 (docs/04-test-plan.md).

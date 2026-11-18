@@ -123,6 +123,8 @@ final class PlaygroundModel: ObservableObject {
             note("approveCheckpoint \(name(of: id)) \(checkpoint)\(forRun ? " for the run" : "")")
         case .denyCheckpoint(let id, let checkpoint, let note):
             self.note("denyCheckpoint \(name(of: id)) \(checkpoint)\(note.map { ": \($0)" } ?? "")")
+        case .editCheckpoint(let id, let checkpoint, let changes):
+            note("editCheckpoint \(name(of: id)) \(checkpoint): \(changes.keys.sorted().joined(separator: ", "))")
         }
     }
 

@@ -39,12 +39,14 @@ use corral_core::controls::{ControlError, CorralControls};
 use corral_core::corral_view::{AgentCard, CorralTracker};
 use corral_core::event::Event;
 use corral_core::ids::{AgentId, CheckpointId};
-use corral_core::run_card::RunCards;
+use corral_core::run_card::{EditError, RunCards};
 use corral_core::supervisor::{EventLog, RunDriver, Supervisor, SupervisorConfig, WatchedLog};
+use corral_policy::Approval;
 use corral_secrets::{Provider, SecretStore};
 use corral_store::Store;
 use corral_tools::{Answer, CheckpointDesk};
-use std::collections::HashMap;
+use serde_json::Value;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
@@ -108,6 +110,22 @@ impl Corral {
         }
         if let Err(e) = self.desk.answer(checkpoint, answer) {
             eprintln!("corral: the answer on {agent}'s card wasn't taken: {e}");
+        }
+    }
+
+    /// Approves the edited call from `agent`'s edit sheet (TP-CHK-15): the core merges the
+    /// changed fields into the agent's arguments and checks them, then the desk and the policy
+    /// treat it like any answer. A refusal is logged; the card follows the log either way.
+    fn edit(
+        &self,
+        agent: &AgentId,
+        checkpoint: &CheckpointId,
+        changes: &BTreeMap<String, String>,
+        how: Approval,
+    ) {
+        match self.feed.edited_args(agent, checkpoint, changes) {
+            Ok(args) => self.answer(agent, checkpoint, Answer::Edit { how, args }),
+            Err(e) => eprintln!("corral: the edit on {agent}'s card wasn't taken: {e}"),
         }
     }
 
@@ -365,6 +383,20 @@ impl CorralFeed {
         views.cards.shows_checkpoint(agent, checkpoint)
     }
 
+    /// The agent's arguments with the card's changes merged in (the core decides, from the log).
+    fn edited_args(
+        &self,
+        agent: &AgentId,
+        checkpoint: &CheckpointId,
+        changes: &BTreeMap<String, String>,
+    ) -> Result<Value, EditError> {
+        let Ok(views) = self.views.lock() else {
+            eprintln!("corral: the corral view is poisoned, so no edit can be taken");
+            return Err(EditError::NotShown);
+        };
+        views.cards.edited_args(agent, checkpoint, changes)
+    }
+
     /// Wraps `log` so every event it accepts updates the corral. Give the result to the
     /// supervisor as its event log.
     pub fn watch(self: &Arc<Self>, log: Arc<dyn EventLog>) -> Arc<dyn EventLog> {
@@ -563,6 +595,12 @@ fn on_intent(slot: &OnceLock<Corral>, result: Result<Intent, BridgeError>) {
             checkpoint,
             note,
         } => corral.answer(&agent, &checkpoint, Answer::Deny { note }),
+        Intent::EditCheckpoint {
+            agent,
+            checkpoint,
+            changes,
+            how,
+        } => corral.edit(&agent, &checkpoint, &changes, how),
         Intent::OpenAgent(_)
         | Intent::Deploy(_)
         | Intent::SummonPromptBar

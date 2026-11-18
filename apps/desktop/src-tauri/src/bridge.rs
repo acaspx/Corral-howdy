@@ -9,9 +9,13 @@ use corral_core::controls::MAX_PROMPT_BYTES;
 use corral_core::corral_view::{CorralView, DropState};
 use corral_core::domain::{ActionClass, Risk};
 use corral_core::ids::{AgentId, CheckpointId};
-use corral_core::run_card::{CardAction, CardCheckpoint, CardStatus, RunCard, RunCards};
+use corral_core::run_card::{
+    CardAction, CardCheckpoint, CardField, CardStatus, EDIT_MAX_FIELDS, FIELD_KEY_MAX_CHARS,
+    FieldKind, RunCard, RunCards,
+};
 use corral_policy::{Approval, Scope};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// Must equal `corralNativeABIVersion` in `CorralBridge.swift`.
 pub const ABI_VERSION: u32 = 2;
@@ -25,6 +29,9 @@ pub const MAX_ID_LEN: usize = 64;
 pub const MAX_INTENT_BYTES: usize = 16 * 1024;
 /// Largest denial note Rust takes from a card; the desk keeps the first 1,000 characters.
 pub const MAX_NOTE_BYTES: usize = 4 * 1024;
+/// The longest key an edit may name: a field's key is at most `FIELD_KEY_MAX_CHARS` characters,
+/// four bytes each at most.
+pub const MAX_EDIT_KEY_BYTES: usize = 4 * FIELD_KEY_MAX_CHARS;
 
 /// A ranked roster snapshot for the corral: what Rust sends (`roster-v1.json`), with each shown
 /// drop's run card when it has one (`roster-cards-v1.json`, SK-6).
@@ -100,6 +107,10 @@ pub struct CheckpointSnapshot {
     pub detail: String,
     /// Whether the core cut the detail to fit.
     pub detail_truncated: bool,
+    /// The call's arguments as fields, when the card may edit them (TP-CHK-13). Swift's edit
+    /// sheet draws these and sends back only what changed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fields: Option<Vec<FieldSnapshot>>,
 }
 
 impl From<&CardCheckpoint> for CheckpointSnapshot {
@@ -111,6 +122,47 @@ impl From<&CardCheckpoint> for CheckpointSnapshot {
             title: checkpoint.title.as_str().to_owned(),
             detail: checkpoint.detail.as_str().to_owned(),
             detail_truncated: checkpoint.detail.is_truncated(),
+            fields: None,
+        }
+    }
+}
+
+/// One argument on the edit sheet, from the core's `RunCard.edit`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FieldSnapshot {
+    /// The argument's key: an edit names it.
+    pub key: String,
+    /// The key as words.
+    pub label: String,
+    /// `text`, `number` or `fixed` (shown, not editable).
+    pub kind: FieldKindWire,
+    /// The value as text.
+    pub value: String,
+}
+
+/// What the sheet may do with a field, as Swift's `CorralRunCard.Field.Kind`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FieldKindWire {
+    /// Editable text.
+    Text,
+    /// An editable number.
+    Number,
+    /// Read-only.
+    Fixed,
+}
+
+impl From<&CardField> for FieldSnapshot {
+    fn from(field: &CardField) -> Self {
+        Self {
+            key: field.key.clone(),
+            label: field.label.clone(),
+            kind: match field.kind {
+                FieldKind::Text => FieldKindWire::Text,
+                FieldKind::Number => FieldKindWire::Number,
+                FieldKind::Fixed => FieldKindWire::Fixed,
+            },
+            value: field.value.clone(),
         }
     }
 }
@@ -190,7 +242,16 @@ impl From<&RunCard> for CardSnapshot {
             answer_truncated: card.answer.as_ref().is_some_and(|a| a.is_truncated()),
             error: card.error.as_ref().map(|e| e.as_str().to_owned()),
             actions: card.actions.iter().map(|a| (*a).into()).collect(),
-            checkpoint: card.checkpoint.as_ref().map(CheckpointSnapshot::from),
+            checkpoint: card
+                .checkpoint
+                .as_ref()
+                .map(|checkpoint| CheckpointSnapshot {
+                    fields: card
+                        .edit
+                        .as_ref()
+                        .map(|fields| fields.iter().map(FieldSnapshot::from).collect()),
+                    ..CheckpointSnapshot::from(checkpoint)
+                }),
         }
     }
 }
@@ -477,6 +538,19 @@ pub enum Intent {
         /// What to tell the agent.
         note: Option<String>,
     },
+    /// Approve the edited call from a card's edit sheet: the fields the user changed, key to the
+    /// text typed. The core merges them into the agent's arguments and checks them; the policy
+    /// checks the gesture.
+    EditCheckpoint {
+        /// The drop whose card it was.
+        agent: AgentId,
+        /// The checkpoint shown.
+        checkpoint: CheckpointId,
+        /// The changed fields.
+        changes: BTreeMap<String, String>,
+        /// The gesture.
+        how: Approval,
+    },
 }
 
 /// How a card's Approve was pressed.
@@ -600,6 +674,12 @@ enum IntentWire {
         #[serde(default)]
         note: Option<String>,
     },
+    EditCheckpoint {
+        id: String,
+        checkpoint: String,
+        changes: BTreeMap<String, String>,
+        how: CardGesture,
+    },
 }
 
 /// Why something crossing the bridge was refused.
@@ -632,6 +712,12 @@ pub enum BridgeError {
     /// A denial note over [`MAX_NOTE_BYTES`].
     #[error("note is {0} bytes; the limit is {MAX_NOTE_BYTES}")]
     NoteTooLong(usize),
+    /// An edit changing no fields or more than the card can show, or naming a key no field can
+    /// have.
+    #[error(
+        "an edit must change 1 to {EDIT_MAX_FIELDS} fields, each with a key of at most {MAX_EDIT_KEY_BYTES} bytes"
+    )]
+    BadEdit,
     /// A roster that couldn't be encoded.
     #[error("roster encode failed: {0}")]
     Encode(serde_json::Error),
@@ -717,10 +803,7 @@ pub fn decode_intent(bytes: &[u8]) -> Result<Intent, BridgeError> {
                 ScopeWire::Once => Scope::Once,
                 ScopeWire::ForRun => Scope::ForRun,
             },
-            how: match how {
-                CardGesture::Click => Approval::Click,
-                CardGesture::Keyboard => Approval::Keyboard,
-            },
+            how: gesture(how),
         }),
         IntentWire::DenyCheckpoint {
             id,
@@ -738,6 +821,32 @@ pub fn decode_intent(bytes: &[u8]) -> Result<Intent, BridgeError> {
                 note,
             })
         }
+        IntentWire::EditCheckpoint {
+            id,
+            checkpoint,
+            changes,
+            how,
+        } => {
+            if changes.is_empty()
+                || changes.len() > EDIT_MAX_FIELDS
+                || changes.keys().any(|key| key.len() > MAX_EDIT_KEY_BYTES)
+            {
+                return Err(BridgeError::BadEdit);
+            }
+            Ok(Intent::EditCheckpoint {
+                agent: agent_id(id)?,
+                checkpoint: CheckpointId::from(ident(checkpoint)?),
+                changes,
+                how: gesture(how),
+            })
+        }
+    }
+}
+
+fn gesture(how: CardGesture) -> Approval {
+    match how {
+        CardGesture::Click => Approval::Click,
+        CardGesture::Keyboard => Approval::Keyboard,
     }
 }
 

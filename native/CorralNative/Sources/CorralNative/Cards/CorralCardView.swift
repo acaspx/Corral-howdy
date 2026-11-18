@@ -6,6 +6,9 @@
 // buttons, and the task field (which takes a Deny note while a checkpoint waits). Paper stays
 // light in dark mode, like a sheet of paper on the desk. Everything shown comes from
 // `CorralCardModel`; this view decides nothing.
+//
+// Edit… swaps the approval box for the edit sheet: one labeled field per argument, read-only ones
+// greyed, then Approve edited and Cancel. It only keeps the draft; the model says what to send.
 
 import AppKit
 import SwiftUI
@@ -29,6 +32,9 @@ public struct CorralCardView: View {
     @State private var text = ""
     /// Whether the approval box shows the whole detail. Starts collapsed for every checkpoint.
     @State private var expanded = false
+    /// Whether the edit sheet is open, and what's typed in it, by key.
+    @State private var editing = false
+    @State private var draft: [String: String] = [:]
     @State private var guardrail = CorralInputGuard(shownAt: ProcessInfo.processInfo.systemUptime)
     @FocusState private var fieldFocused: Bool
 
@@ -77,7 +83,11 @@ public struct CorralCardView: View {
                 .foregroundStyle(Self.ink.opacity(0.6))
 
             if let approval = model.approval {
-                approvalBox(approval)
+                if editing {
+                    editSheet(approval)
+                } else {
+                    approvalBox(approval)
+                }
             }
 
             if let answer = model.answer {
@@ -89,11 +99,17 @@ public struct CorralCardView: View {
                     .foregroundStyle(Self.maroon)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if !model.buttons.isEmpty {
+            if editing, let approval = model.approval {
+                editButtons(approval)
+            } else if !model.buttons.isEmpty {
                 HStack(spacing: 8) {
                     ForEach(Array(model.buttons.enumerated()), id: \.element) { index, button in
                         cardButton(button, primary: index == 0 && button.isPrimary,
                                    enabled: isEnabled(button))
+                    }
+                    // Critical actions wait for Touch ID, edited or not.
+                    if let approval = model.approval, approval.editable, approval.risk != .critical {
+                        editButton(approval)
                     }
                     Spacer(minLength: 0)
                 }
@@ -108,7 +124,7 @@ public struct CorralCardView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            if let placeholder = model.fieldPlaceholder {
+            if let placeholder = model.fieldPlaceholder, !editing {
                 taskField(placeholder)
             }
         }
@@ -130,8 +146,148 @@ public struct CorralCardView: View {
             // A new checkpoint under the pointer: start collapsed and re-arm the 300 ms guard,
             // so a click meant for the old one can't approve the new one.
             expanded = false
+            editing = false
+            draft = [:]
             guardrail = CorralInputGuard(shownAt: ProcessInfo.processInfo.systemUptime)
         }
+    }
+
+    /// "Edit…" in the button row, under Approve's rules and guard: a high-risk call needs a
+    /// pinned card and the whole detail shown first.
+    private func editButton(_ approval: CorralCardModel.Approval) -> some View {
+        let enabled = approval.canApprove(pinned: pinned, expanded: expanded)
+        return Button {
+            guard enabled, guardrail.accepts(at: ProcessInfo.processInfo.systemUptime) else { return }
+            // Start from the agent's values. Keys are unique (the decoder drops repeats), but
+            // keep the first rather than trap if one ever slips through.
+            draft = Dictionary(approval.fields.filter { $0.kind != .fixed }.map { ($0.key, $0.value) },
+                               uniquingKeysWith: { first, _ in first })
+            editing = true
+        } label: {
+            Text("Edit…")
+                .font(.callout.weight(.semibold))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .foregroundStyle(Self.ink)
+                .background(Capsule().fill(Self.ink.opacity(0.07)))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.45)
+        .accessibilityHint("Change the action before approving it")
+    }
+
+    /// The edit sheet: the core's title, then one row per argument. Text and numbers are fields;
+    /// read-only values are shown greyed, as the core cleaned and cut them.
+    private func editSheet(_ approval: CorralCardModel.Approval) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("NEEDS YOUR APPROVAL · EDIT")
+                .font(.caption2.weight(.semibold))
+                .tracking(1.1)
+                .foregroundStyle(Self.maroon)
+            Text(approval.title)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(Self.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(approval.fields, id: \.key) { field in
+                        fieldRow(field)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(height: Self.sheetHeight(approval.fields))
+            HStack(spacing: 6) {
+                chip(approval.classLabel)
+                chip(approval.riskLabel)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Self.maroon.opacity(0.3)))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Edit before approving: \(approval.title), \(approval.riskLabel)")
+    }
+
+    private func fieldRow(_ field: CorralRunCard.Field) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(field.label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Self.ink.opacity(0.6))
+            switch field.kind {
+            case .fixed:
+                Text(field.value)
+                    .font(.system(.callout, design: .monospaced))
+                    .foregroundStyle(Self.ink.opacity(0.45))
+                    .lineLimit(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityLabel("\(field.label), can't be changed: \(field.value)")
+            case .text, .number:
+                TextField(field.label, text: $draft[field: field.key], axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(field.kind == .number ? Font.body.monospacedDigit() : Font.body)
+                    .foregroundStyle(Self.ink)
+                    .lineLimit(1...6)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Self.ink.opacity(0.04)))
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Self.ink.opacity(0.1)))
+            }
+        }
+    }
+
+    /// Approve edited and Cancel, with why Approve edited can't be pressed yet.
+    @ViewBuilder
+    private func editButtons(_ approval: CorralCardModel.Approval) -> some View {
+        let hint = approval.editHint(draft, pinned: pinned)
+        HStack(spacing: 8) {
+            Button {
+                guard hint == nil, guardrail.accepts(at: ProcessInfo.processInfo.systemUptime),
+                      let button = approval.approveEdited(draft) else { return }
+                editing = false
+                onButton(button)
+            } label: {
+                Text("Approve edited")
+                    .font(.callout.weight(.semibold))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .foregroundStyle(Color.white)
+                    .background(Capsule().fill(Self.maroon))
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(hint != nil)
+            .opacity(hint == nil ? 1 : 0.45)
+            Button("Cancel") {
+                editing = false
+                draft = [:]
+            }
+            .buttonStyle(.plain)
+            .font(.callout.weight(.semibold))
+            .foregroundStyle(Self.ink.opacity(0.7))
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 2)
+        if let hint {
+            Text(hint)
+                .font(.caption)
+                .foregroundStyle(Self.ink.opacity(0.6))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// A rough height for the sheet's fields: they fit up to 300 pt, then scroll.
+    static func sheetHeight(_ fields: [CorralRunCard.Field]) -> CGFloat {
+        let rows = fields.reduce(CGFloat(0)) { total, field in
+            let lines = field.value.split(separator: "\n", omittingEmptySubsequences: false)
+                .reduce(0) { $0 + max(1, ($1.count + 37) / 38) }
+            let shown = field.kind == .fixed ? min(lines, 3) : min(lines, 6)
+            return total + 18 + CGFloat(shown) * 20 + 14
+        }
+        return min(300, rows)
     }
 
     /// "Allow for this run": a quiet link under the buttons, under the same rules and guard as
@@ -296,5 +452,14 @@ public struct CorralCardView: View {
         guard !task.isEmpty else { return }
         text = ""
         onTask(task)
+    }
+}
+
+private extension Dictionary where Key == String, Value == String {
+    /// A field's text in the edit sheet's draft, for a `TextField` binding. The draft starts with
+    /// every editable field, so a missing key reads as empty.
+    subscript(field key: String) -> String {
+        get { self[key] ?? "" }
+        set { self[key] = newValue }
     }
 }

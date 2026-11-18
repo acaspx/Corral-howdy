@@ -10,6 +10,10 @@
 // A waiting checkpoint (M2) brings its approval box: the core's title and the exact detail, with
 // the action class and risk. A checkpoint with a bad ID or a risk this build doesn't know is
 // dropped, never guessed at, and with it the card's Approve and Deny.
+//
+// The checkpoint can carry its call's arguments as fields (TP-CHK-15), for the edit sheet. The
+// core decides which can change; Swift shows anything odd read-only (hidden characters, a key too
+// long to match, a kind it doesn't know) and drops a list with repeated keys or too many fields.
 
 import Foundation
 
@@ -20,6 +24,64 @@ public struct CorralRunCard: Equatable, Sendable {
 
     public enum Action: String, Equatable, Sendable {
         case stop, sendBack, newTask, retry, approve, deny
+    }
+
+    /// One argument of a waiting call, for the edit sheet. The core decides which can change.
+    public struct Field: Equatable, Hashable, Sendable {
+        public enum Kind: String, Equatable, Hashable, Sendable { case text, number, fixed }
+
+        public static let maxFields = 20
+        public static let maxKeyLength = 40
+        public static let maxLabelLength = 60
+        public static let maxEditableLength = 8_192
+        public static let maxFixedLength = 200
+
+        /// The argument's key, exactly: an edit names it.
+        public var key: String
+        public var label: String
+        public var kind: Kind
+        /// Exact for text and numbers; cleaned and cut for read-only ones.
+        public var value: String
+
+        public init(key: String, label: String, kind: Kind, value: String) {
+            self.key = key
+            self.label = label
+            self.kind = kind
+            self.value = value
+        }
+
+        /// A field from the wire. Editable only if the key and value come through exactly.
+        init(_ wire: Wire) {
+            key = wire.key
+            label = CorralRunCard.clean(wire.label, max: Self.maxLabelLength).text
+            let cleanKey = CorralRunCard.clean(wire.key, max: Self.maxKeyLength)
+            let cleanValue = CorralRunCard.clean(wire.value, max: Self.maxEditableLength)
+            let exact = cleanKey.text == wire.key && !cleanKey.cut && !wire.key.contains("\n")
+                && cleanValue.text == wire.value && !cleanValue.cut
+            if let kind = Kind(rawValue: wire.kind), kind != .fixed, exact {
+                self.kind = kind
+                self.value = wire.value
+            } else {
+                kind = .fixed
+                self.value = CorralRunCard.clean(wire.value, max: Self.maxFixedLength).text
+            }
+        }
+
+        struct Wire: Decodable {
+            let key: String
+            let label: String
+            let kind: String
+            let value: String
+
+            init(from decoder: Decoder) throws {
+                try rejectUnknownKeys(decoder, allowed: ["key", "label", "kind", "value"])
+                let c = try decoder.container(keyedBy: AnyKey.self)
+                key = try c.decode(String.self, forKey: AnyKey("key"))
+                label = try c.decode(String.self, forKey: AnyKey("label"))
+                kind = try c.decode(String.self, forKey: AnyKey("kind"))
+                value = try c.decode(String.self, forKey: AnyKey("value"))
+            }
+        }
     }
 
     /// A checkpoint waiting on the user, from the core's `checkpoint.opened` only.
@@ -40,15 +102,18 @@ public struct CorralRunCard: Equatable, Sendable {
         public var detail: String
         /// Whether the core or the bridge cut the detail to fit.
         public var detailTruncated: Bool
+        /// The call's arguments, for the edit sheet. Empty when the card can't edit them.
+        public var fields: [Field]
 
         public init(id: String, actionClass: String, risk: Risk, title: String, detail: String,
-                    detailTruncated: Bool = false) {
+                    detailTruncated: Bool = false, fields: [Field] = []) {
             self.id = id
             self.actionClass = actionClass
             self.risk = risk
             self.title = title
             self.detail = detail
             self.detailTruncated = detailTruncated
+            self.fields = fields
         }
 
         /// A checkpoint from the wire, or nil for a bad ID or an unknown risk.
@@ -61,6 +126,9 @@ public struct CorralRunCard: Equatable, Sendable {
             let detail = CorralRunCard.clean(wire.detail, max: Self.maxDetailLength)
             self.detail = detail.text
             detailTruncated = wire.detailTruncated || detail.cut
+            let fields = (wire.fields ?? []).map(Field.init)
+            let unique = Set(fields.map(\.key)).count == fields.count
+            self.fields = unique && fields.count <= Field.maxFields ? fields : []
         }
 
         struct Wire: Decodable {
@@ -71,9 +139,10 @@ public struct CorralRunCard: Equatable, Sendable {
             let title: String
             let detail: String
             let detailTruncated: Bool
+            let fields: [Field.Wire]?
 
             init(from decoder: Decoder) throws {
-                try rejectUnknownKeys(decoder, allowed: ["id", "class", "risk", "title", "detail", "detailTruncated"])
+                try rejectUnknownKeys(decoder, allowed: ["id", "class", "risk", "title", "detail", "detailTruncated", "fields"])
                 let c = try decoder.container(keyedBy: AnyKey.self)
                 id = try c.decode(String.self, forKey: AnyKey("id"))
                 actionClass = try c.decode(String.self, forKey: AnyKey("class"))
@@ -81,6 +150,7 @@ public struct CorralRunCard: Equatable, Sendable {
                 title = try c.decode(String.self, forKey: AnyKey("title"))
                 detail = try c.decode(String.self, forKey: AnyKey("detail"))
                 detailTruncated = try c.decode(Bool.self, forKey: AnyKey("detailTruncated"))
+                fields = try c.decodeIfPresent([Field.Wire].self, forKey: AnyKey("fields"))
             }
         }
     }
