@@ -33,5 +33,7 @@ Swift → Rust, through the intent callback:
   policy checks the gesture (click or keyboard; Touch ID and voice never come this way).
   `editCheckpoint` is the edit sheet's Approve edited: only the fields that changed, key to the
   text typed. Rust merges them into the agent's arguments and checks them.
+  `approveWithTouchId` is a critical checkpoint's Approve: the card asks, Rust has Swift's prompt
+  ask macOS, and the result comes back as `authResult`, never from the card.
 
-TP-BRIDGE-01..04, TP-SKEL-03..05, TP-LOGO-09, TP-LINK-03..05, TP-CHK-08, TP-CHK-15..16 and TP-HOVER-06, 08 (docs/04-test-plan.md).
+TP-BRIDGE-01..04, TP-SKEL-03..05, TP-LOGO-09, TP-LINK-03..05, TP-CHK-08, TP-CHK-15..18 and TP-HOVER-06, 08 (docs/04-test-plan.md).

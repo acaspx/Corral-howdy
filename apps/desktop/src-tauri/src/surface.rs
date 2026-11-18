@@ -22,11 +22,12 @@
 //! corral's right-click menu. They never take tasks: their card's Open button opens the app's
 //! own site. The choice is kept in `linked-apps.json` ([`crate::linked`]).
 
-use crate::bridge::{BridgeError, Intent, RosterSnapshot};
+use crate::bridge::{AuthOutcome, BridgeError, Intent, RosterSnapshot};
 use crate::keys::Keys;
 use crate::linked::LinkedStore;
 use crate::logos::{LogoStore, fetch_missing};
 use crate::native;
+use crate::touch_id::{Finished, TouchIdDesk};
 use corral_adapters::catalog::{AgentRouter, agent_for, agents_for, corral_agents};
 use corral_adapters::linked::{LinkChange, LinkedApp, LinkedSettings};
 use corral_adapters::logos::{LogoId, ReqwestLogoFetcher};
@@ -39,9 +40,9 @@ use corral_core::controls::{ControlError, CorralControls};
 use corral_core::corral_view::{AgentCard, CorralTracker};
 use corral_core::event::Event;
 use corral_core::ids::{AgentId, CheckpointId};
-use corral_core::run_card::{EditError, RunCards};
+use corral_core::run_card::{EditError, RunCard, RunCards};
 use corral_core::supervisor::{EventLog, RunDriver, Supervisor, SupervisorConfig, WatchedLog};
-use corral_policy::Approval;
+use corral_policy::{Approval, Scope};
 use corral_secrets::{Provider, SecretStore};
 use corral_store::Store;
 use corral_tools::{Answer, CheckpointDesk};
@@ -95,9 +96,71 @@ pub struct Corral {
     /// Where tool calls wait for the user. Empty until agents get tools (M3): Grok and Claude
     /// still refuse tool calls, and the FakeAdapter isn't in the app.
     desk: Arc<CheckpointDesk>,
+    /// The Touch ID prompt for a critical checkpoint, if one is up (TP-CHK-17).
+    touch_id: Arc<Mutex<TouchIdDesk>>,
 }
 
 impl Corral {
+    /// "Approve with Touch ID" on `agent`'s card: if the card shows that critical checkpoint now,
+    /// Swift's prompt asks macOS (Touch ID, or the login password when Touch ID can't be used).
+    /// The prompt is shown after Swift's callback returns, never inside it.
+    fn ask_touch_id(&self, agent: &AgentId, checkpoint: &CheckpointId) {
+        let Some((card, name)) = self.feed.card_and_name(agent) else {
+            eprintln!("corral: {agent} has no card, so Touch ID wasn't asked");
+            return;
+        };
+        let request = {
+            let Ok(mut desk) = self.touch_id.lock() else {
+                eprintln!("corral: the Touch ID desk is poisoned, so Touch ID wasn't asked");
+                return;
+            };
+            match desk.begin(&card, checkpoint, &name) {
+                Ok(request) => request,
+                Err(e) => {
+                    eprintln!("corral: no Touch ID prompt for {agent}'s card: {e}");
+                    return;
+                }
+            }
+        };
+        let touch_id = Arc::clone(&self.touch_id);
+        let posted = self.feed.app.run_on_main_thread(move || {
+            if let Err(e) = native::authenticate(&request) {
+                eprintln!("corral: couldn't show the Touch ID prompt: {e}");
+                abandon(&touch_id);
+            }
+        });
+        if let Err(e) = posted {
+            eprintln!("corral: couldn't reach the main thread for Touch ID: {e}");
+            abandon(&self.touch_id);
+        }
+    }
+
+    /// A prompt's result. Only `ok` for the request that's up approves, with Touch ID, once; the
+    /// desk and the policy check it like any answer.
+    fn touch_id_result(&self, request: &str, outcome: AuthOutcome) {
+        let finished = {
+            let Ok(mut desk) = self.touch_id.lock() else {
+                eprintln!("corral: the Touch ID desk is poisoned, so the result was dropped");
+                return;
+            };
+            desk.finish(request, outcome)
+        };
+        match finished {
+            Finished::Approve { agent, checkpoint } => self.answer(
+                &agent,
+                &checkpoint,
+                Answer::Approve {
+                    how: Approval::TouchId,
+                    scope: Scope::Once,
+                },
+            ),
+            Finished::NotApproved { agent, outcome, .. } => eprintln!(
+                "corral: Touch ID didn't approve {agent}'s checkpoint ({outcome:?}); it's still waiting"
+            ),
+            Finished::Stale => eprintln!("corral: a Touch ID result for an old prompt was ignored"),
+        }
+    }
+
     /// Answers the checkpoint on `agent`'s card. Only the checkpoint that card shows now can be
     /// answered from it (TP-HOVER-06); the desk takes each one once, and the policy checks the
     /// gesture. A refusal is logged; the card follows the log either way.
@@ -295,6 +358,7 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
         }),
         keys,
         desk: Arc::new(CheckpointDesk::default()),
+        touch_id: Arc::new(Mutex::new(TouchIdDesk::default())),
     };
     // The slot is empty: this is its only writer, and `start` runs once.
     if corral_slot.set(corral.clone()).is_err() {
@@ -381,6 +445,23 @@ impl CorralFeed {
             return false;
         };
         views.cards.shows_checkpoint(agent, checkpoint)
+    }
+
+    /// `agent`'s card and the name its drop shows, for a Touch ID prompt.
+    fn card_and_name(&self, agent: &AgentId) -> Option<(RunCard, String)> {
+        let Ok(views) = self.views.lock() else {
+            eprintln!("corral: the corral view is poisoned, so no card can be read");
+            return None;
+        };
+        let card = views.cards.card(agent, self.clock.now_ms())?;
+        let name = views
+            .corral
+            .view()
+            .drops
+            .into_iter()
+            .find(|drop| drop.agent.id == *agent)
+            .map_or_else(|| agent.to_string(), |drop| drop.agent.name);
+        Some((card, name))
     }
 
     /// The agent's arguments with the card's changes merged in (the core decides, from the log).
@@ -601,14 +682,25 @@ fn on_intent(slot: &OnceLock<Corral>, result: Result<Intent, BridgeError>) {
             changes,
             how,
         } => corral.edit(&agent, &checkpoint, &changes, how),
+        Intent::ApproveWithTouchId { agent, checkpoint } => {
+            corral.ask_touch_id(&agent, &checkpoint);
+        }
+        Intent::AuthResult { request, outcome } => corral.touch_id_result(&request, outcome),
         Intent::OpenAgent(_)
         | Intent::Deploy(_)
         | Intent::SummonPromptBar
         | Intent::NotificationAction { .. }
-        | Intent::NotificationFailed { .. }
-        | Intent::AuthResult { .. } => {
+        | Intent::NotificationFailed { .. } => {
             eprintln!("corral: intent {intent:?} (handled in a later milestone)");
         }
+    }
+}
+
+/// Drops the prompt that's up: Swift couldn't show it.
+fn abandon(touch_id: &Mutex<TouchIdDesk>) {
+    match touch_id.lock() {
+        Ok(mut desk) => desk.abandon(),
+        Err(_) => eprintln!("corral: the Touch ID desk is poisoned; its prompt stays marked up"),
     }
 }
 

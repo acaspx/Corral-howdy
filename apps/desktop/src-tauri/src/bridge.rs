@@ -538,6 +538,14 @@ pub enum Intent {
         /// What to tell the agent.
         note: Option<String>,
     },
+    /// Approve a critical checkpoint with Touch ID: the card asks, Rust has Swift's prompt ask
+    /// macOS, and the result comes back as [`Intent::AuthResult`] (TP-CHK-18).
+    ApproveWithTouchId {
+        /// The drop whose card it was.
+        agent: AgentId,
+        /// The checkpoint shown.
+        checkpoint: CheckpointId,
+    },
     /// Approve the edited call from a card's edit sheet: the fields the user changed, key to the
     /// text typed. The core merges them into the agent's arguments and checks them; the policy
     /// checks the gesture.
@@ -680,6 +688,10 @@ enum IntentWire {
         changes: BTreeMap<String, String>,
         how: CardGesture,
     },
+    ApproveWithTouchId {
+        id: String,
+        checkpoint: String,
+    },
 }
 
 /// Why something crossing the bridge was refused.
@@ -821,6 +833,10 @@ pub fn decode_intent(bytes: &[u8]) -> Result<Intent, BridgeError> {
                 note,
             })
         }
+        IntentWire::ApproveWithTouchId { id, checkpoint } => Ok(Intent::ApproveWithTouchId {
+            agent: agent_id(id)?,
+            checkpoint: CheckpointId::from(ident(checkpoint)?),
+        }),
         IntentWire::EditCheckpoint {
             id,
             checkpoint,

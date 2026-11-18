@@ -51,6 +51,9 @@ public enum CorralIntent: Equatable, Sendable {
     /// Approve edited, from a card's edit sheet: only the fields the user changed. Rust merges
     /// them into the agent's arguments and checks them; the policy checks the gesture.
     case editCheckpoint(id: String, checkpoint: String, changes: [String: String])
+    /// Approve with Touch ID on a critical checkpoint: Rust has Swift's prompt ask macOS and
+    /// decides on the result, which comes back as an auth result, never from the card.
+    case approveWithTouchId(id: String, checkpoint: String)
 }
 
 /// Springs drops between layouts so the shape morphs instead of jumping.

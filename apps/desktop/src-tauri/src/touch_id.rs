@@ -10,6 +10,136 @@
 //! approves, and then the desk and the policy check it like any answer, with
 //! `Approval::TouchId`. One prompt is up at a time.
 
+use crate::bridge::{AuthOutcome, AuthRequest};
+use corral_core::agent_text::AgentText;
+use corral_core::domain::{ActionClass, Risk};
+use corral_core::ids::{AgentId, CheckpointId};
+use corral_core::run_card::RunCard;
+
+/// How much of the agent's name the prompt shows.
+const NAME_MAX_CHARS: usize = 40;
+
+/// Why no prompt was started.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum TouchIdError {
+    /// The card doesn't show that checkpoint now.
+    #[error("that card doesn't show that checkpoint now")]
+    NotShown,
+    /// Only critical actions ask for Touch ID.
+    #[error("only a critical action asks for Touch ID; approve this one with a click")]
+    NotCritical,
+    /// A prompt is already up.
+    #[error("a Touch ID prompt is already up")]
+    Busy,
+}
+
+/// What a prompt's result means.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Finished {
+    /// Authenticated: answer this checkpoint with `Approval::TouchId`, once.
+    Approve {
+        /// The card's agent.
+        agent: AgentId,
+        /// The checkpoint it showed.
+        checkpoint: CheckpointId,
+    },
+    /// Cancelled, not matched, or no way to authenticate on this Mac. The checkpoint waits.
+    NotApproved {
+        /// The card's agent.
+        agent: AgentId,
+        /// The checkpoint it showed.
+        checkpoint: CheckpointId,
+        /// What macOS said.
+        outcome: AuthOutcome,
+    },
+    /// No prompt with that request is up: a stale or repeated result. Ignored.
+    Stale,
+}
+
+#[derive(Debug)]
+struct Up {
+    request: String,
+    agent: AgentId,
+    checkpoint: CheckpointId,
+}
+
+/// The Touch ID prompt that's up, if any. One per app.
+#[derive(Debug, Default)]
+pub struct TouchIdDesk {
+    asked: u64,
+    up: Option<Up>,
+}
+
+impl TouchIdDesk {
+    /// Starts a prompt for `checkpoint` on `card`, whose agent is called `name`: only the critical
+    /// checkpoint the card shows now, and only when no prompt is up. The reason completes macOS's
+    /// sentence "Corral is trying to …" in the core's words.
+    pub fn begin(
+        &mut self,
+        card: &RunCard,
+        checkpoint: &CheckpointId,
+        name: &str,
+    ) -> Result<AuthRequest, TouchIdError> {
+        let shown = card
+            .checkpoint
+            .as_ref()
+            .filter(|shown| shown.id == *checkpoint)
+            .ok_or(TouchIdError::NotShown)?;
+        if shown.risk != Risk::Critical {
+            return Err(TouchIdError::NotCritical);
+        }
+        if self.up.is_some() {
+            return Err(TouchIdError::Busy);
+        }
+        self.asked += 1;
+        let request = format!("auth-{}", self.asked);
+        self.up = Some(Up {
+            request: request.clone(),
+            agent: card.agent.clone(),
+            checkpoint: shown.id.clone(),
+        });
+        Ok(AuthRequest::new(request, reason(shown.class, name)))
+    }
+
+    /// Drops the prompt that's up: Swift couldn't show it. A late result for it is stale.
+    pub fn abandon(&mut self) {
+        self.up = None;
+    }
+
+    /// Matches a prompt's result to the request it answers, once.
+    pub fn finish(&mut self, request: &str, outcome: AuthOutcome) -> Finished {
+        let Some(up) = self.up.take_if(|up| up.request == request) else {
+            return Finished::Stale;
+        };
+        match outcome {
+            AuthOutcome::Ok => Finished::Approve {
+                agent: up.agent,
+                checkpoint: up.checkpoint,
+            },
+            AuthOutcome::Cancelled | AuthOutcome::Failed | AuthOutcome::Unavailable => {
+                Finished::NotApproved {
+                    agent: up.agent,
+                    checkpoint: up.checkpoint,
+                    outcome,
+                }
+            }
+        }
+    }
+}
+
+/// "approve spending money for Scout": the core's title for the class, then the agent's name,
+/// cleaned and cut.
+fn reason(class: ActionClass, name: &str) -> String {
+    let title = corral_policy::title(class);
+    let mut chars = title.chars();
+    let what: String = chars
+        .next()
+        .map(|first| first.to_lowercase().chain(chars).collect())
+        .unwrap_or_default();
+    let name = AgentText::new(name, NAME_MAX_CHARS);
+    format!("approve {what} for {}", name.as_str())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
