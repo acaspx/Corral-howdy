@@ -102,7 +102,7 @@ func needsYouCard() throws {
     #expect(working.fieldIntent("hello", agentID: "a") == nil, "a working card has no field")
 }
 
-@Test("TP-HOVER-09 high-risk Approve needs a pinned card and the whole detail; normal doesn't; critical waits for Touch ID")
+@Test("TP-HOVER-09 high-risk Approve needs a pinned card and the whole detail; normal doesn't; critical asks for Touch ID")
 func approveRules() throws {
     let normal = try #require(try model(risk: "normal").approval)
     #expect(normal.canApprove(pinned: false, expanded: false))
@@ -128,8 +128,8 @@ func approveRules() throws {
     #expect(critical.buttons.first?.title == "Approve with Touch ID")
     let cp = try #require(critical.approval)
     #expect(cp.riskLabel == "Critical")
-    #expect(!cp.canApprove(pinned: true, expanded: true), "Touch ID on the card comes next")
-    #expect(cp.approveHint(pinned: true, expanded: true) == "Touch ID approval isn't ready yet. Deny, or let it wait.")
+    #expect(!cp.canApprove(pinned: false, expanded: true), "pinned first, like high risk")
+    #expect(cp.canApprove(pinned: true, expanded: true), "then macOS asks for Touch ID (TP-CHK-18)")
 }
 
 @Test("TP-CHK-08 Approve and Deny are encoded exactly as the fixtures Rust decodes")

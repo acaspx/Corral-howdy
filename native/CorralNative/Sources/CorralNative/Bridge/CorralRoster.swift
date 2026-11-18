@@ -222,6 +222,8 @@ public enum CorralIntentWire {
             body = Body(kind: "denyCheckpoint", id: id, checkpoint: checkpoint, note: note)
         case .editCheckpoint(let id, let checkpoint, let changes):
             body = Body(kind: "editCheckpoint", id: id, checkpoint: checkpoint, how: "click", changes: changes)
+        case .approveWithTouchId(let id, let checkpoint):
+            body = Body(kind: "approveWithTouchId", id: id, checkpoint: checkpoint)
         }
         // Encoding plain strings can't fail in practice; if it ever does, the tap is dropped
         // rather than sending Rust something malformed.

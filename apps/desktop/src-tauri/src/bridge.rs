@@ -538,6 +538,14 @@ pub enum Intent {
         /// What to tell the agent.
         note: Option<String>,
     },
+    /// Approve a critical checkpoint with Touch ID: the card asks, Rust has Swift's prompt ask
+    /// macOS, and the result comes back as [`Intent::AuthResult`] (TP-CHK-18).
+    ApproveWithTouchId {
+        /// The drop whose card it was.
+        agent: AgentId,
+        /// The checkpoint shown.
+        checkpoint: CheckpointId,
+    },
     /// Approve the edited call from a card's edit sheet: the fields the user changed, key to the
     /// text typed. The core merges them into the agent's arguments and checks them; the policy
     /// checks the gesture.
@@ -680,6 +688,10 @@ enum IntentWire {
         changes: BTreeMap<String, String>,
         how: CardGesture,
     },
+    ApproveWithTouchId {
+        id: String,
+        checkpoint: String,
+    },
 }
 
 /// Why something crossing the bridge was refused.
@@ -821,6 +833,10 @@ pub fn decode_intent(bytes: &[u8]) -> Result<Intent, BridgeError> {
                 note,
             })
         }
+        IntentWire::ApproveWithTouchId { id, checkpoint } => Ok(Intent::ApproveWithTouchId {
+            agent: agent_id(id)?,
+            checkpoint: CheckpointId::from(ident(checkpoint)?),
+        }),
         IntentWire::EditCheckpoint {
             id,
             checkpoint,
@@ -1988,6 +2004,50 @@ mod edit_tests {
         assert!(matches!(
             decode_intent(bad.to_string().as_bytes()),
             Err(BridgeError::BadId)
+        ));
+    }
+}
+
+#[cfg(test)]
+mod touch_id_tests {
+    use super::*;
+    use serde_json::json;
+
+    const TOUCH_ID: &str = include_str!(
+        "../../../../native/CorralNative/Fixtures/bridge/intent-approve-touch-id-v1.json"
+    );
+
+    #[test]
+    fn tp_chk_18_approve_with_touch_id_arrives_typed_as_the_fixture_shows() {
+        assert_eq!(
+            decode_intent(TOUCH_ID.as_bytes()).expect("intent"),
+            Intent::ApproveWithTouchId {
+                agent: AgentId::from("scout"),
+                checkpoint: CheckpointId::from("cp-1"),
+            }
+        );
+    }
+
+    #[test]
+    fn tp_chk_18_approve_with_touch_id_needs_valid_ids_and_nothing_else() {
+        for intent in [
+            json!({"kind": "approveWithTouchId", "id": "", "checkpoint": "cp-1"}),
+            json!({"kind": "approveWithTouchId", "id": "scout", "checkpoint": "cp\n1"}),
+        ] {
+            let bytes = json!({"v": 1, "intent": intent}).to_string();
+            assert!(
+                matches!(decode_intent(bytes.as_bytes()), Err(BridgeError::BadId)),
+                "{bytes}"
+            );
+        }
+        // The card asks; it can't say how it went. Only Swift's prompt reports that.
+        let bytes = json!({"v": 1, "intent": {
+            "kind": "approveWithTouchId", "id": "scout", "checkpoint": "cp-1", "outcome": "ok",
+        }})
+        .to_string();
+        assert!(matches!(
+            decode_intent(bytes.as_bytes()),
+            Err(BridgeError::Malformed(_))
         ));
     }
 }

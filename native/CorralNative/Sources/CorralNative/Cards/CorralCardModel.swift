@@ -7,7 +7,7 @@
 //
 // While a checkpoint waits, the card carries its approval box (`Approval`): only the core's
 // fields, with the presentation rules from docs/07 §8.2. High-risk Approve needs a pinned card and
-// the whole detail shown; critical needs Touch ID, which the card can't do yet. The policy still
+// the whole detail shown; critical has the same rules, then asks Rust for Touch ID (TP-CHK-18). The policy still
 // checks every gesture in Rust; these rules only keep Approve from being pressed too easily.
 //
 // Edit… (TP-CHK-16) opens the call's arguments as fields, under the same rules as Approve. The
@@ -91,6 +91,7 @@ public struct CorralCardModel: Equatable, Sendable {
         /// Why "Approve edited" can't be pressed yet, or nil when it can. Approve's rules first:
         /// the sheet shows every field, so only pinning and Touch ID still apply.
         public func editHint(_ draft: [String: String], pinned: Bool) -> String? {
+            if risk == .critical { return "A critical action can't be edited yet. Approve it with Touch ID, or deny." }
             if let hint = approveHint(pinned: pinned, expanded: true) { return hint }
             let changed = changes(draft)
             if changed.isEmpty { return "Change a field to approve the edited action." }
@@ -142,12 +143,10 @@ public struct CorralCardModel: Equatable, Sendable {
             switch risk {
             case .normal:
                 return nil
-            case .high:
+            case .high, .critical:
                 if !pinned { return "Click the drop to pin this card, then approve." }
                 if needsExpanding, !expanded { return "Show the whole action before approving." }
                 return nil
-            case .critical:
-                return "Touch ID approval isn't ready yet. Deny, or let it wait."
             }
         }
     }
@@ -238,7 +237,10 @@ public struct CorralCardModel: Equatable, Sendable {
         case .sendBack: .sendBack(id: agentID)
         case .retry: .retry(id: agentID)
         case .open: .openLinked(id: agentID)
-        case .approve(let checkpoint, _): .approveCheckpoint(id: agentID, checkpoint: checkpoint, forRun: false)
+        // A critical Approve asks Rust for Touch ID; Rust has macOS prompt and decides on the result.
+        case .approve(let checkpoint, let touchID):
+            touchID ? .approveWithTouchId(id: agentID, checkpoint: checkpoint)
+                    : .approveCheckpoint(id: agentID, checkpoint: checkpoint, forRun: false)
         case .deny(let checkpoint): .denyCheckpoint(id: agentID, checkpoint: checkpoint, note: nil)
         case .allowForRun(let checkpoint): .approveCheckpoint(id: agentID, checkpoint: checkpoint, forRun: true)
         case .approveEdited(let checkpoint, let changes):

@@ -126,7 +126,7 @@ Goal: the safety core, proven before any real agent can touch it.
 1. ✅ Action class enum (exhaustive) + profile TOML schema + default profiles (2026-11-13)
 2. ✅ Pure `decide(profile, action, ctx)` + table-driven tests for every class × decision; allow-for-run, destination pinning and taint included (2026-11-13; 37 of 37 mutants caught)
 3. ✅ `PolicyGate` + `Decision::Allow` capability token required by `ToolGateway` (2026-11-14: `Gate`, `AllowToken`, `ToolGateway` with class checks, output cap and taint)
-4. Checkpoint lifecycle: open → resolve (approve / deny / edit / allow-for-run) → timeout behavior (core ✅ 2026-11-14: `ToolRunner` and `CheckpointDesk`, driven by the FakeAdapter; hover card ✅: the approval box with Approve and Deny over IPC; allow-for-run on the card ✅ 2026-11-15; edit-then-approve in the core ✅ 2026-11-17; the card's edit fields in the core ✅ 2026-11-17; the edit sheet on the card ✅ 2026-11-17; still to do: Touch ID for critical)
+4. Checkpoint lifecycle: open → resolve (approve / deny / edit / allow-for-run) → timeout behavior (core ✅ 2026-11-14: `ToolRunner` and `CheckpointDesk`, driven by the FakeAdapter; hover card ✅: the approval box with Approve and Deny over IPC; allow-for-run on the card ✅ 2026-11-15; edit-then-approve in the core ✅ 2026-11-17; the card's edit fields in the core ✅ 2026-11-17; the edit sheet on the card ✅ 2026-11-17; Touch ID for critical on the card ✅ 2026-11-18)
 5. Budget meter: pre-request estimate, hard cap, soft-limit checkpoint, reconciliation (soft limit ✅ 2026-11-15: a `budget.threshold` checkpoint on the card; none is set in the app until agents can ask, M3)
 6. Filesystem sandbox (canonicalization, symlink escapes) (✅ 2026-11-14: `corral_tools::fs` with `fs.read`, `fs.write` and `fs.delete`; not registered for any agent until M3)
 7. Loop detector (repeat tool + args → pause)
@@ -184,7 +184,7 @@ Loop detector (item 7) ✅ 2026-11-15: in the policy gate; from the `loop_limit`
 1. Multi-display behavior (the level setting shipped early: desktop by default, chosen from the corral's right-click menu)
 2. Polish pass on glass motion against the brand spec
 3. Actionable notifications (Approve / Deny / Open) wired to the nonce-bound IPC
-4. Touch ID for critical checkpoints
+4. Touch ID for critical checkpoints (on the card ✅ 2026-11-18, in M2; still to do: from a notification)
 5. App Intents (Shortcuts: "Deploy Scout with …")
 6. WidgetKit widget: a read-only corral status glance (ship only if S1 says it's clean)
 

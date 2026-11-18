@@ -180,16 +180,22 @@ enum CorralBridge {
         case .success(let r): request = r
         }
         let context = LAContext()
-        context.localizedFallbackTitle = ""          // Touch ID only: no "Enter Password" button
+        context.localizedFallbackTitle = ""          // with Touch ID: no "Enter Password" button
         var error: NSError?
-        // Touch ID only: a critical approval needs the finger, not the login password. Without
-        // Touch ID, Rust is told `unavailable` and decides the fallback (ADR-001 open question).
-        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
+        // Touch ID when it can be used. When it can't (no sensor, a closed laptop, none enrolled,
+        // locked out), macOS asks for the login password in its own prompt instead (decided
+        // 2026-11-18). With neither, Rust is told `unavailable` and the checkpoint waits.
+        let policy: LAPolicy
+        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
+            policy = .deviceOwnerAuthenticationWithBiometrics
+        } else if context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) {
+            policy = .deviceOwnerAuthentication
+        } else {
             emit(data: CorralIntentWire.encodeAuthResult(request: request.request, outcome: .unavailable))
             return .ok
         }
         authContext = context                        // kept alive until the reply
-        context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: request.reason) { @Sendable success, error in
+        context.evaluatePolicy(policy, localizedReason: request.reason) { @Sendable success, error in
             let outcome = success ? CorralAuthOutcome.ok : CorralBridge.outcome(for: error)
             CorralBridge.onMain {
                 CorralBridge.authContext = nil

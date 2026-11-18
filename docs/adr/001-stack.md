@@ -119,9 +119,10 @@ Developer ID credentials are configured (Keychain or CI secrets only, never the 
 
 ## Open questions
 
-- **Touch ID unavailable** (no sensor, none enrolled, lockout): Swift reports `unavailable`. The
-  policy engine must choose the fallback, probably the login password via
-  `.deviceOwnerAuthentication` with a stronger confirmation. Decide in M2 (TP-POL-09).
+- ~~**Touch ID unavailable**~~ (no sensor, none enrolled, lockout): decided 2026-11-18. Swift
+  asks for Touch ID when it can be used and otherwise for the login password
+  (`.deviceOwnerAuthentication`), in macOS's own prompt; the password never reaches Corral. Only
+  a Mac with neither reports `unavailable`, and the checkpoint waits (TP-CHK-17).
 - ~~**CI for the native build**~~: done in SK-2a. The `native` CI job lints and tests the shell
   with `--features native`, next to the Swift contract tests.
 
