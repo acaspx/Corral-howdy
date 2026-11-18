@@ -34,7 +34,7 @@ use corral_adapters::logos::{LogoId, ReqwestLogoFetcher};
 use corral_adapters::messages::{MessagesConfig, MessagesDriver};
 use corral_adapters::responses::{ResponsesConfig, ResponsesDriver};
 use corral_adapters::transport::{ReqwestTransport, Transport};
-use corral_core::budget::BudgetConfig;
+use corral_core::budget::{BudgetConfig, SpendLedger};
 use corral_core::clock::{Clock, SystemClock};
 use corral_core::controls::{ControlError, CorralControls};
 use corral_core::corral_view::{AgentCard, CorralTracker};
@@ -390,6 +390,15 @@ fn supervisor(
         Ok(failed) => eprintln!("corral: marked {} unfinished runs as failed", failed.len()),
         Err(e) => eprintln!("corral: couldn't close out unfinished runs: {e}"),
     }
+    // This month's spend, so relaunching doesn't reset the monthly caps (TP-BUD-07). Failing to
+    // read it fails closed: counting from nothing could spend past a cap.
+    let ledger = Arc::new(SpendLedger::default());
+    let spends = store
+        .spend_since(clock.now_ms().saturating_sub(SPEND_LOOKBACK_MS))
+        .map_err(|e| format!("couldn't read this month's spend from the event store: {e}"))?;
+    for spend in spends {
+        ledger.seed(&spend.agent, spend.ts_ms, spend.cost_micro_usd);
+    }
     let transport = ReqwestTransport::new().map_err(|e| format!("no HTTPS client: {e}"))?;
     let keys = app.state::<Keys>().0.clone();
     let transport: Arc<dyn Transport> = Arc::new(transport);
@@ -403,16 +412,20 @@ fn supervisor(
     drivers.insert(agent_for(Provider::Xai).id, Arc::new(grok));
     drivers.insert(agent_for(Provider::Anthropic).id, Arc::new(claude));
     let driver = AgentRouter::new(drivers);
-    Ok(Supervisor::with_budget(
+    Ok(Supervisor::with_ledger(
         SupervisorConfig::default(),
         BudgetConfig {
             per_run_cap_micro_usd: RUN_CAP_MICRO_USD,
         },
+        ledger,
         Arc::new(driver),
         feed.watch(Arc::new(store)),
         clock,
     ))
 }
+
+/// How far back launch reads spend: past the start of this month in any time zone.
+const SPEND_LOOKBACK_MS: u64 = 32 * 24 * 60 * 60 * 1_000;
 
 /// Unique run and session ID suffixes: the start time plus a counter.
 fn id_source() -> Arc<dyn Fn() -> String + Send + Sync> {

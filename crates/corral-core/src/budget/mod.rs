@@ -16,8 +16,16 @@
 //! - The [`crate::supervisor::EventSink`] owns one [`RunBudget`] per run: `model.request` is
 //!   logged only through its `request_model`, and a refusal fails the run with `budget_hard_cap`.
 //!
-//! Money is in micro-USD (10^-6 USD), like `usage.reported`. Soft limits, the monthly and global
-//! caps and the versioned price table come later in M2 (TP-BUD-02..04).
+//! - **The monthly caps** ([`ledger`]): every request is also admitted under its agent's monthly
+//!   cap and the monthly cap for all agents together, through one [`SpendLedger`] shared by every
+//!   run (TP-BUD-03..04, TP-BUD-06..07).
+//!
+//! Money is in micro-USD (10^-6 USD), like `usage.reported`. The versioned price table comes with
+//! the first real provider (M3).
+
+pub mod ledger;
+
+pub use ledger::{LedgerConfig, LocalMonths, Month, MonthlyCap, SpendLedger};
 
 use crate::event::UsageReported;
 use std::collections::VecDeque;
@@ -145,6 +153,24 @@ pub enum BudgetError {
         /// The hard cap approval would lift it to.
         cap_micro_usd: u64,
     },
+    /// The request's worst case would cross a monthly cap.
+    #[error(
+        "{} would go over {} {} monthly spend cap ({} used this month). Raise the cap or wait until next month.",
+        match cap { MonthlyCap::Agent => "This agent", MonthlyCap::All => "Your agents together" },
+        match cap { MonthlyCap::Agent => "its", MonthlyCap::All => "the" },
+        usd(*cap_micro_usd),
+        usd(*committed_micro_usd)
+    )]
+    OverMonth {
+        /// Which cap.
+        cap: MonthlyCap,
+        /// The cap.
+        cap_micro_usd: u64,
+        /// Billed this month plus held for requests in flight.
+        committed_micro_usd: u64,
+        /// What the request needs at least: its input, tool fees and the smallest answer.
+        needed_micro_usd: u64,
+    },
     /// Something tried to log `model.request` without going through the meter.
     #[error("a model request must be admitted by the budget meter first")]
     NotAdmitted,
@@ -167,6 +193,24 @@ pub fn usd(micro_usd: u64) -> String {
 }
 
 /// One admitted request waiting for its usage.
+/// A request's usage, settled: the hold it gave back and what it was charged.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Settled {
+    /// The worst case that was held for it (0 if nothing was).
+    pub held_micro_usd: u64,
+    /// What it was charged: the billed cost, or tokens × price if that's more.
+    pub charged_micro_usd: u64,
+}
+
+/// The tightest room outside a run: a monthly cap, from the ledger.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Outer {
+    pub(crate) room_micro_usd: u64,
+    pub(crate) cap: MonthlyCap,
+    pub(crate) cap_micro_usd: u64,
+    pub(crate) committed_micro_usd: u64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Reservation {
     worst_case_micro_usd: u64,
@@ -251,28 +295,50 @@ impl RunBudget {
     /// then the cap), holding that worst case until its usage is reported. A refusal holds
     /// nothing.
     pub fn admit(&mut self, estimate: &RequestEstimate) -> Result<Admission, BudgetError> {
+        self.admit_under(estimate, None)
+    }
+
+    /// [`Self::admit`], also under `outer`: the tightest monthly cap's room. The run's own limits
+    /// are checked first.
+    pub(crate) fn admit_under(
+        &mut self,
+        estimate: &RequestEstimate,
+        outer: Option<Outer>,
+    ) -> Result<Admission, BudgetError> {
         let price = estimate.price;
         let committed = self.committed();
         let limit = self.limit();
-        let remaining = limit.saturating_sub(committed);
+        let run_remaining = limit.saturating_sub(committed);
         let fixed = price
             .input_cost(estimate.input_tokens)
             .saturating_add(estimate.tool_fees_micro_usd);
         let needed = fixed.saturating_add(price.output_cost(u64::from(MIN_OUTPUT_TOKENS)));
-        if needed > remaining && limit < self.cap_micro_usd {
+        if needed > run_remaining && limit < self.cap_micro_usd {
             return Err(BudgetError::SoftLimit {
                 limit_micro_usd: limit,
                 committed_micro_usd: committed,
                 cap_micro_usd: self.cap_micro_usd,
             });
         }
-        if needed > remaining {
+        if needed > run_remaining {
             return Err(BudgetError::OverCap {
                 cap_micro_usd: self.cap_micro_usd,
                 committed_micro_usd: committed,
                 needed_micro_usd: needed,
             });
         }
+        let remaining = match outer {
+            Some(outer) if needed > outer.room_micro_usd => {
+                return Err(BudgetError::OverMonth {
+                    cap: outer.cap,
+                    cap_micro_usd: outer.cap_micro_usd,
+                    committed_micro_usd: outer.committed_micro_usd,
+                    needed_micro_usd: needed,
+                });
+            }
+            Some(outer) => run_remaining.min(outer.room_micro_usd),
+            None => run_remaining,
+        };
         let ceiling = u64::from(estimate.max_output_tokens);
         let per_mtok = price.output_micro_usd_per_mtok;
         let affordable = if per_mtok == 0 {
@@ -303,16 +369,20 @@ impl RunBudget {
 
     /// Counts a request's billed usage, releasing the oldest reservation. A cost below what the
     /// tokens come to at the admitted price is charged at that price instead.
-    pub fn reconcile(&mut self, usage: &UsageReported) {
-        let floor = self.reservations.pop_front().map_or(0, |r| {
+    pub fn reconcile(&mut self, usage: &UsageReported) -> Settled {
+        let reservation = self.reservations.pop_front();
+        let floor = reservation.map_or(0, |r| {
             r.price
                 .input_cost(usage.input_tokens)
                 .saturating_add(r.price.output_cost(usage.output_tokens))
                 .saturating_add(r.tool_fees_micro_usd)
         });
-        self.spent_micro_usd = self
-            .spent_micro_usd
-            .saturating_add(usage.cost_micro_usd.max(floor));
+        let charged = usage.cost_micro_usd.max(floor);
+        self.spent_micro_usd = self.spent_micro_usd.saturating_add(charged);
+        Settled {
+            held_micro_usd: reservation.map_or(0, |r| r.worst_case_micro_usd),
+            charged_micro_usd: charged,
+        }
     }
 }
 

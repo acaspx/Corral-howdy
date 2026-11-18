@@ -18,12 +18,13 @@
 //! (TP-STORE-06).
 
 use corral_core::event::{Event, EventBody, EventError, EventKind, FailureReason, RunFailed};
-use corral_core::ids::{RunId, SpanId};
+use corral_core::ids::{AgentId, RunId, SpanId};
 use corral_core::supervisor::{EventLog, LogError};
 use rusqlite::{
     Connection, OpenFlags, OptionalExtension, Transaction, TransactionBehavior, params,
 };
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
@@ -56,6 +57,18 @@ CREATE TRIGGER IF NOT EXISTS events_no_delete BEFORE DELETE ON events
 
 const COLUMNS: &str =
     "run_id, seq, ts, kind, span_id, parent_span_id, payload_json, prev_hash, hash";
+
+/// One `usage.reported`, with whose run it was: what seeds the budget's monthly caps at launch
+/// (TP-BUD-07).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Spend {
+    /// The run's agent, from its `run.queued`.
+    pub agent: AgentId,
+    /// When the usage was reported.
+    pub ts_ms: u64,
+    /// What the provider billed.
+    pub cost_micro_usd: u64,
+}
 
 /// What went wrong in the store.
 #[derive(Debug, thiserror::Error)]
@@ -256,6 +269,69 @@ impl Store {
         ))?;
         let rows = stmt.query_map(params![run_id.as_str()], Row::read)?;
         rows.map(|row| row?.event()).collect()
+    }
+
+    /// Every `usage.reported` at or after `since_ms`, with its run's agent, in log order: one query
+    /// for those events and their runs' `run.queued`, projected in memory.
+    pub fn spend_since(&self, since_ms: u64) -> Result<Vec<Spend>, StoreError> {
+        let since = to_db(since_ms, "since")?;
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare_cached(&format!(
+            "SELECT {COLUMNS} FROM events \
+             WHERE (kind = 'usage.reported' AND ts >= ?1) \
+                OR (kind = 'run.queued' AND run_id IN \
+                    (SELECT run_id FROM events WHERE kind = 'usage.reported' AND ts >= ?1)) \
+             ORDER BY id"
+        ))?;
+        let rows = stmt.query_map(params![since], Row::read)?;
+        let mut agents: HashMap<RunId, AgentId> = HashMap::new();
+        let mut spends = Vec::new();
+        for row in rows {
+            let event = row?.event()?;
+            match event.body {
+                EventBody::RunQueued(queued) => {
+                    agents.insert(event.run_id, queued.agent_id);
+                }
+                EventBody::UsageReported(usage) => {
+                    // A run's `run.queued` is its first event, so it came first.
+                    let agent = agents.get(&event.run_id).cloned().ok_or_else(|| {
+                        StoreError::Corrupt(format!(
+                            "{} reported usage before it was queued",
+                            event.run_id
+                        ))
+                    })?;
+                    spends.push(Spend {
+                        agent,
+                        ts_ms: event.ts,
+                        cost_micro_usd: usage.cost_micro_usd,
+                    });
+                }
+                EventBody::RunStarted(_)
+                | EventBody::PlanUpdated(_)
+                | EventBody::ModelRequest(_)
+                | EventBody::ModelDelta(_)
+                | EventBody::ModelResponse(_)
+                | EventBody::ToolRequested(_)
+                | EventBody::PolicyDecided(_)
+                | EventBody::CheckpointOpened(_)
+                | EventBody::CheckpointResolved(_)
+                | EventBody::ToolStarted(_)
+                | EventBody::ToolResult(_)
+                | EventBody::BudgetWarned(_)
+                | EventBody::RunPaused(_)
+                | EventBody::RunResumed(_)
+                | EventBody::RunCompleted(_)
+                | EventBody::RunFailed(_)
+                | EventBody::RunCancelled(_)
+                | EventBody::SessionClosed(_) => {
+                    return Err(StoreError::Corrupt(format!(
+                        "the spend query returned {}",
+                        event.kind().as_str()
+                    )));
+                }
+            }
+        }
+        Ok(spends)
     }
 
     fn lock(&self) -> Result<MutexGuard<'_, Connection>, StoreError> {
