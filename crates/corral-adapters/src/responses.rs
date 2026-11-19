@@ -160,6 +160,7 @@ impl Conversation {
 impl ToolProtocol for ResponsesConfig {
     type Conversation = Conversation;
     type ToolDecoder = ResponseDecoder;
+    type Said = String;
 
     fn conversation(&self, prompt: &str) -> Conversation {
         Conversation::new(prompt)
@@ -181,7 +182,7 @@ impl ToolProtocol for ResponsesConfig {
         (decoder.said().to_owned(), decoder.take_calls())
     }
 
-    fn record(conversation: &mut Conversation, said: &str, results: &[(FunctionCall, String)]) {
+    fn record(conversation: &mut Conversation, said: &String, results: &[(FunctionCall, String)]) {
         conversation.said(said);
         for (call, output) in results {
             conversation.called(call, output);

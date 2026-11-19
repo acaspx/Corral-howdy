@@ -804,6 +804,13 @@ impl Gate {
     pub fn tainted_by(&self) -> Option<String> {
         lock(&self.run).tainted_by().map(str::to_owned)
     }
+
+    /// Marks this run as having read untrusted content from `source` when no tool call through
+    /// the gate brought it in: a provider's web search, which runs on its servers (T28,
+    /// TP-GATE-08). Taint only ever makes the run stricter, so this needs no token.
+    pub fn taint(&self, source: impl Into<String>) {
+        lock(&self.run).taint(source);
+    }
 }
 
 /// Whether an approval of this exact call is remembered for the run: normal risk only, and

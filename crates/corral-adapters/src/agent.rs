@@ -21,15 +21,21 @@
 //!   answer ends the run.
 //! - **A cap on turns** ([`DEFAULT_MAX_TURNS`]): a run that keeps calling tools without finishing
 //!   fails with a plain message instead of spending on.
+//! - **Provider-side tools** ([`ProviderTool`], M3 item 4) run on the provider's servers, where
+//!   Corral can't pause them, so they're decided once, when the agent is built: an API offers one
+//!   only if the agent's policy allows `provider_tools` ([`allows`]), and the default denies it.
+//!   What such a tool reads marks the run as having read untrusted content (T28), before any of
+//!   that turn's calls are decided. A turn the provider paused mid-way is sent back and resumed.
 
 use crate::messages::MessagesConfig;
 use crate::responses::ResponsesConfig;
 use crate::stream::{Failure, Protocol, StreamDecoder, StreamDriver, fail_run};
 use crate::transport::Transport;
 use corral_core::budget::RequestEstimate;
+use corral_core::domain::ActionClass;
 use corral_core::event::FailureReason;
 use corral_core::supervisor::{CancelToken, EventSink, RunDriver, RunFuture, RunRequest};
-use corral_policy::Policy;
+use corral_policy::{Action, Decision, Policy, RunGrants};
 use corral_secrets::SecretStore;
 use corral_tools::{
     BudgetAnswer, CheckpointDesk, IdSource, OfferedTool, ToolAnswer, ToolGateway, ToolRunner,
@@ -58,11 +64,36 @@ pub struct FunctionCall {
     pub arguments: String,
 }
 
+/// A tool that runs on the provider's servers rather than in Corral.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ProviderTool {
+    /// Searching the web. Read-only, but what it finds is untrusted.
+    WebSearch,
+}
+
+impl ProviderTool {
+    /// The tool's name in the trace and the policy, e.g. `web_search`.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::WebSearch => "web_search",
+        }
+    }
+}
+
+/// Whether `policy` lets an agent use `tool`. Only Allow does: the provider runs it without
+/// asking Corral, so there's no moment to ask the user.
+pub fn allows(policy: &Policy, tool: ProviderTool) -> bool {
+    let action = Action::new(ActionClass::ProviderTools, tool.name());
+    policy.decide(&action, &RunGrants::default()) == Decision::Allow
+}
+
 /// An API the agent loop can drive with tools: how a turn's request looks, how its calls are
 /// read, and how a turn goes back into the conversation.
 pub trait ToolProtocol: Protocol {
     /// Everything said so far in a run, in the API's own shape.
     type Conversation: Send + Sync;
+    /// What the model said in a turn, as the conversation keeps it.
+    type Said: Send;
     /// Reads one response, keeping its tool calls.
     type ToolDecoder: StreamDecoder + Send;
     /// A conversation that starts with the user's prompt.
@@ -82,14 +113,24 @@ pub trait ToolProtocol: Protocol {
     ) -> RequestEstimate;
     /// A decoder for a response to a request that offered tools.
     fn tool_decoder(&self) -> Self::ToolDecoder;
-    /// The response's text and its calls, once it's over.
-    fn take_turn(decoder: &mut Self::ToolDecoder) -> (String, Vec<FunctionCall>);
+    /// What the response said and the calls it made, once it's over.
+    fn take_turn(decoder: &mut Self::ToolDecoder) -> (Self::Said, Vec<FunctionCall>);
     /// Adds a turn: what the model said, each call it made and what came back.
     fn record(
         conversation: &mut Self::Conversation,
-        said: &str,
+        said: &Self::Said,
         results: &[(FunctionCall, String)],
     );
+    /// The provider paused the turn part-way, so it goes back as it is to be resumed.
+    fn paused(_decoder: &Self::ToolDecoder) -> bool {
+        false
+    }
+    /// The untrusted content a provider-side tool read in the response, if any.
+    fn untrusted(_decoder: &Self::ToolDecoder) -> Option<&'static str> {
+        None
+    }
+    /// Offers only the provider-side tools `keep` says yes to.
+    fn keep_provider_tools(&mut self, _keep: &dyn Fn(ProviderTool) -> bool) {}
 }
 
 /// What an agent's tool calls go through: its policy, its tools and the desk where checkpoints
@@ -121,13 +162,14 @@ pub type MessagesAgent = ToolAgent<MessagesConfig>;
 
 impl<P: ToolProtocol> ToolAgent<P> {
     /// An agent that sends through `transport`, reads keys from `keys`, and runs its tool calls
-    /// through `tools`.
+    /// through `tools`. Provider-side tools in `config` stay only if the policy allows them.
     pub fn new(
         transport: Arc<dyn Transport>,
         keys: Arc<dyn SecretStore>,
-        config: P,
+        mut config: P,
         tools: ToolSetup,
     ) -> Self {
+        config.keep_provider_tools(&|tool| allows(&tools.policy, tool));
         Self {
             stream: StreamDriver::new(transport, keys, config),
             tools,
@@ -190,8 +232,12 @@ impl<P: ToolProtocol> Agent<P> {
                 return;
             }
             let (said, calls) = P::take_turn(&mut decoder);
-            // No calls: the decoder logged run.completed (or run.failed).
-            if calls.is_empty() {
+            if let Some(source) = P::untrusted(&decoder) {
+                // Before this turn's calls are decided.
+                self.runner.taint(source);
+            }
+            // No calls and not paused: the decoder logged run.completed (or run.failed).
+            if calls.is_empty() && !P::paused(&decoder) {
                 return;
             }
             let mut results = Vec::with_capacity(calls.len());
