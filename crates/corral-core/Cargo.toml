@@ -14,6 +14,8 @@ serde_json.workspace = true
 thiserror.workspace = true
 # The supervisor: one task per run, timers for the 2-second force-drop.
 tokio = { version = "1", features = ["rt", "sync", "time", "macros"] }
+# The monthly caps: which calendar month a moment falls in, in the user's time zone (TP-BUD-04).
+jiff = "0.2"
 
 [dev-dependencies]
 # TP-LIFE-02 property tests. No fork or timeout features: tests stay in-process.

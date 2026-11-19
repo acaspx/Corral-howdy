@@ -25,7 +25,9 @@
 //! The [`EventLog`] is called from async tasks. The SQLite store is fast enough for M1; if it
 //! ever blocks noticeably, the call moves to `spawn_blocking`.
 
-use crate::budget::{Admission, BudgetConfig, BudgetError, RequestEstimate, RunBudget};
+use crate::budget::{
+    Admission, BudgetConfig, BudgetError, RequestEstimate, RunBudget, SpendLedger,
+};
 use crate::clock::Clock;
 use crate::event::{
     BudgetScope, BudgetWarned, CancelledBy, Event, EventBody, FailureReason, ModelRequest,
@@ -174,6 +176,8 @@ pub struct RecallReport {
 #[derive(Debug)]
 struct RunLog {
     run_id: RunId,
+    /// Whose run it is: its spend counts against this agent's month.
+    agent_id: AgentId,
     span_id: SpanId,
     state: Lifecycle,
     next_seq: u64,
@@ -188,6 +192,8 @@ pub struct EventSink {
     run: Arc<Mutex<RunLog>>,
     log: Arc<dyn EventLog>,
     clock: Arc<dyn Clock>,
+    /// This month's spend across every run (the monthly caps).
+    ledger: Arc<SpendLedger>,
 }
 
 impl EventSink {
@@ -214,7 +220,12 @@ impl EventSink {
         // A run that can't log a request now (cancelled, finished) is refused as such, not
         // charged.
         next(&run.state, &event)?;
-        let admission = match run.budget.admit(estimate) {
+        // Under the run's limits and both monthly caps at once, so racing runs can't overshoot.
+        let agent = run.agent_id.clone();
+        let admission = match self
+            .ledger
+            .admit(&agent, event.ts, &mut run.budget, estimate)
+        {
             Ok(admission) => admission,
             // The soft limit doesn't end the run: the driver asks the user (a
             // `budget.threshold` checkpoint) and calls `raise_to_cap` or stops.
@@ -244,6 +255,7 @@ impl EventSink {
         if let Err(e) = self.append(&mut run, event.body) {
             // Not logged, so not sent: give the reservation back.
             run.budget.release_last();
+            self.ledger.release(&agent, admission.worst_case_micro_usd);
             return Err(e);
         }
         Ok(admission)
@@ -287,7 +299,8 @@ impl EventSink {
         run.state = state;
         run.next_seq += 1;
         if let EventBody::UsageReported(usage) = &event.body {
-            run.budget.reconcile(usage);
+            let settled = run.budget.reconcile(usage);
+            self.ledger.settle(&run.agent_id, event.ts, settled);
         }
         Ok(())
     }
@@ -333,6 +346,8 @@ struct State {
 struct Inner {
     config: SupervisorConfig,
     budget: BudgetConfig,
+    /// The monthly caps, shared by every run.
+    ledger: Arc<SpendLedger>,
     /// The soft limit for runs deployed from now on (TP-BUD-02), if any.
     soft_limit: Mutex<Option<u64>>,
     driver: Arc<dyn RunDriver>,
@@ -359,7 +374,8 @@ impl Supervisor {
         Self::with_budget(config, BudgetConfig::default(), driver, log, clock)
     }
 
-    /// [`Self::new`] with these budget settings.
+    /// [`Self::new`] with these budget settings, and the default monthly caps in the Mac's time
+    /// zone.
     pub fn with_budget(
         config: SupervisorConfig,
         budget: BudgetConfig,
@@ -367,9 +383,24 @@ impl Supervisor {
         log: Arc<dyn EventLog>,
         clock: Arc<dyn Clock>,
     ) -> Self {
+        let ledger = Arc::new(SpendLedger::default());
+        Self::with_ledger(config, budget, ledger, driver, log, clock)
+    }
+
+    /// [`Self::with_budget`] with this ledger for the monthly caps (seeded from the log at
+    /// launch).
+    pub fn with_ledger(
+        config: SupervisorConfig,
+        budget: BudgetConfig,
+        ledger: Arc<SpendLedger>,
+        driver: Arc<dyn RunDriver>,
+        log: Arc<dyn EventLog>,
+        clock: Arc<dyn Clock>,
+    ) -> Self {
         Self(Arc::new(Inner {
             config,
             budget,
+            ledger,
             soft_limit: Mutex::new(None),
             driver,
             log,
@@ -377,6 +408,11 @@ impl Supervisor {
             state: Mutex::new(State::default()),
             idle: Notify::new(),
         }))
+    }
+
+    /// The ledger every run's spend counts in.
+    pub fn ledger(&self) -> &SpendLedger {
+        &self.0.ledger
     }
 
     /// Sets the soft limit for runs deployed from now on (`None`: no soft limit). One at or over
@@ -409,6 +445,7 @@ impl Supervisor {
         let sink = EventSink {
             run: Arc::new(Mutex::new(RunLog {
                 run_id: request.run_id.clone(),
+                agent_id: request.agent_id.clone(),
                 span_id: SpanId::from(format!("{}:invoke_agent", request.run_id).as_str()),
                 state: Lifecycle::idle(),
                 next_seq: 1,
@@ -417,6 +454,7 @@ impl Supervisor {
             })),
             log: self.0.log.clone(),
             clock: self.0.clock.clone(),
+            ledger: Arc::clone(&self.0.ledger),
         };
         sink.emit(EventBody::RunQueued(RunQueued {
             agent_id: request.agent_id.clone(),

@@ -137,8 +137,10 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 ### Budget
 - **TP-BUD-01** Pre-request estimate blocks a request that would cross the hard cap
 - **TP-BUD-02** Soft limit raises a `budget.threshold` checkpoint once per threshold. Below it, a request's worst case is held under it; at it, the next request is refused (nothing sent, `budget.warned` once) until the user approves on the card, which lifts the limit to the hard cap for the rest of the run. Deny, Stop or no answer ends the run; the profile may allow or forbid going past it without asking; an agent that can't ask stops there. A soft limit at or over the cap is none
-- **TP-BUD-03** Reconciliation with provider-reported usage
-- **TP-BUD-04** Monthly rollover uses the user's time zone
+- **TP-BUD-03** Reconciliation with provider-reported usage: the hold is replaced by the charged cost (the billed cost, or tokens × price if that's more) in the run and in the month; a request never sent gives its hold back
+- **TP-BUD-04** Monthly rollover uses the user's time zone: spend rolls over at local midnight on the first; a request in flight at midnight stays held and is billed to the month its usage arrives in; a clock that goes back never reopens an old month
+- **TP-BUD-06** The monthly caps hold across runs: an agent's runs together stay under its monthly cap ($25 by default) and all agents together under the global one ($100); the run cap binds first; the tightest cap sets the output limit; a worst case landing exactly on a cap is allowed; eight threads racing the same caps never add up past them; the refusal says which cap and what to do
+- **TP-BUD-07** This month's spend comes back from the log at launch: `Store::spend_since` returns every `usage.reported` since a moment with its run's agent, in log order, in one query; seeding keeps only the latest month
 - **TP-BUD-05** Every provider request carries a max-output-tokens limit derived from the remaining budget; vendor tool fees are counted before the call
 
 ### Filesystem sandbox (protected)

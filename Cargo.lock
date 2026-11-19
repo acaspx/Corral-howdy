@@ -471,6 +471,7 @@ dependencies = [
 name = "corral-core"
 version = "0.0.1"
 dependencies = [
+ "jiff",
  "proptest",
  "serde",
  "serde_json",

@@ -147,9 +147,11 @@ impl<P: Protocol> StreamDriver<P> {
                     Failure::Emit(FailureReason::BudgetHardCap, refusal.to_string())
                 }
                 // The core logged run.failed; nothing is sent.
-                SupervisorError::Budget(BudgetError::OverCap { .. } | BudgetError::NotAdmitted) => {
-                    Failure::Ended
-                }
+                SupervisorError::Budget(
+                    BudgetError::OverCap { .. }
+                    | BudgetError::OverMonth { .. }
+                    | BudgetError::NotAdmitted,
+                ) => Failure::Ended,
                 other @ (SupervisorError::Lifecycle(_)
                 | SupervisorError::Log(_)
                 | SupervisorError::DuplicateRun(_)
