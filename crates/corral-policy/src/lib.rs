@@ -10,6 +10,10 @@
 //! - **Allow for the rest of this run** lives in [`RunGrants`], never in the profile, so it ends
 //!   with the run (TP-POL-04). For high and critical classes a grant is pinned to the destination
 //!   it was given for (T21).
+//! - **Approve once per exact call** (TP-POL-08, T4): once the user approves a normal-risk
+//!   call, the exact same call (same tool, same arguments in any key order) doesn't ask again in
+//!   the run. High and critical calls, spend limits, edited calls and ways out on a tainted run
+//!   still ask, and so does every call from the loop detector's limit on.
 //! - **Taint** (T28): once a run has read untrusted content, grants on the classes that can send
 //!   data out (`net.write`, `comms.send`, `net.read.unlisted`) stop applying, and the checkpoint
 //!   names the untrusted source. Taint never clears within a run.
@@ -31,8 +35,8 @@
 use corral_core::domain::{ActionClass, Risk};
 use serde::Deserialize;
 use serde_json::Value;
-use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
+use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -405,6 +409,8 @@ struct Grant {
 pub struct RunGrants {
     grants: Vec<Grant>,
     tainted_by: Option<String>,
+    /// Normal-risk calls the user approved, by fingerprint (TP-POL-08).
+    approved: HashSet<u64>,
 }
 
 impl RunGrants {
@@ -634,8 +640,14 @@ impl PendingApproval {
                 reason: reason.into(),
             });
         }
-        if scope == Scope::ForRun {
-            lock(&self.run).allow_for_run(&self.call.action);
+        {
+            let mut run = lock(&self.run);
+            if scope == Scope::ForRun {
+                run.allow_for_run(&self.call.action);
+            }
+            if remembered(&self.call.action) {
+                run.approved.insert(fingerprint(&self.call));
+            }
         }
         Ok(AllowToken {
             call: *self.call,
@@ -725,9 +737,26 @@ impl Gate {
     /// call the policy would allow or ask about asks because of the repetition (T9); a denied
     /// call stays denied.
     pub fn check(&self, call: ToolCall) -> Verdict {
-        let seen = self.count(&call);
+        let print = fingerprint(&call);
+        let seen = self.count(print);
         let looping = (seen >= self.policy.profile().loop_limit).then_some(seen);
-        let decision = self.policy.decide(&call.action, &lock(&self.run));
+        let decision = {
+            let run = lock(&self.run);
+            match self.policy.decide(&call.action, &run) {
+                // The user approved this exact call already (TP-POL-08). A way out on a
+                // tainted run asks again: decide said why.
+                Decision::Ask { .. }
+                    if remembered(&call.action)
+                        && run.approved.contains(&print)
+                        && !(is_way_out(call.action.class) && run.tainted_by().is_some()) =>
+                {
+                    Decision::Allow
+                }
+                decision @ (Decision::Allow | Decision::Ask { .. } | Decision::Deny { .. }) => {
+                    decision
+                }
+            }
+        };
         let ask = |risk: Risk, reason: String, call: ToolCall| {
             Verdict::Ask(PendingApproval {
                 reason: match looping {
@@ -754,13 +783,14 @@ impl Gate {
         }
     }
 
-    /// Counts `call` and returns how many identical calls the run has made, this one included.
-    fn count(&self, call: &ToolCall) -> u32 {
+    /// Counts the call with fingerprint `print` and returns how many identical calls the run
+    /// has made, this one included.
+    fn count(&self, print: u64) -> u32 {
         let mut calls = self
             .calls
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let seen = calls.entry(fingerprint(call)).or_insert(0);
+        let seen = calls.entry(print).or_insert(0);
         *seen = seen.saturating_add(1);
         *seen
     }
@@ -774,6 +804,12 @@ impl Gate {
     pub fn tainted_by(&self) -> Option<String> {
         lock(&self.run).tainted_by().map(str::to_owned)
     }
+}
+
+/// Whether an approval of this exact call is remembered for the run: normal risk only, and
+/// never a spend limit, whose numbers are the core's.
+fn remembered(action: &Action) -> bool {
+    risk_of(action) == Risk::Normal && action.class != ActionClass::BudgetThreshold
 }
 
 /// The same tool with the same arguments, whatever order their keys come in.
