@@ -227,6 +227,7 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-PLACE-03** Clicking a drop does not take focus from the frontmost app
 - **TP-PLACE-04** The corral panel can become key (prompt bar, hover card keys) but never main
 - **TP-PLACE-05** Default placement uses the menu-bar display, not the key window's display
+- **TP-PLACE-06** The corral and the card act on the first click, even while another app is in front
 - **TP-SHAPE-08** Duplicate agent IDs are shown once, keeping the highest-ranked
 - **TP-SHAPE-09** The morph never traps on duplicate IDs
 - **TP-SHAPE-10** Morph timing follows real time: settle times at 60 Hz and 120 Hz are within 20%
@@ -258,6 +259,7 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-HOVER-08** The approval box renders only core checkpoint fields; agent text can't appear inside it; bidi and control characters are stripped; internationalized domains show as punycode
 - **TP-HOVER-09** High-risk Approve is disabled until the card is pinned and any truncated detail is expanded
 - **TP-HOVER-10** The done card shows the run's result: the agent's summary in its own labelled, length-capped box (agent text, T20), and outputs, pages read and approvals from core projections only. A follow-up stays in the same session; Send back closes it and offers Undo
+- **TP-HOVER-11** The card measures to a visible size (at least its 340 pt width), from SwiftUI rather than the hosting view's fitting size, which is 0×0 for a view that doesn't size its window; a longer card measures taller
 - **TP-TRACE-01** (Rust) `plan_view` builds subtasks from `plan.updated` events, falling back to top-level spans when no plan is published
 - **TP-TRACE-02** At most 3 columns; extra runs collapse into "+N more running"; needs-you columns sort first
 - **TP-TRACE-03** Each column's wire ends at its agent's drop (or the hidden bead) after a shape morph or a usage reorder

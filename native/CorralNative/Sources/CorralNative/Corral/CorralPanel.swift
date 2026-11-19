@@ -54,7 +54,7 @@ public final class CorralPanel: NSPanel {
         becomesKeyOnlyIfNeeded = true     // clicking a token doesn't steal focus from the user's app
         collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
         apply(level: corralLevel)
-        let host = NSHostingView(rootView: rootView)
+        let host = CorralHostingView(rootView: rootView)
         host.sizingOptions = []           // `place(canvas:)` owns the frame; SwiftUI must not resize the panel
         contentView = host
     }
