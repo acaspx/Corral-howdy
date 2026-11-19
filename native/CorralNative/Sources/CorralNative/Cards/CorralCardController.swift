@@ -69,7 +69,7 @@ public final class CorralCardController {
         self.corralPanel = corralPanel
         self.onIntent = onIntent
         panel = CorralCardPanel()
-        host = NSHostingView(rootView: AnyView(EmptyView()))
+        host = CorralHostingView(rootView: AnyView(EmptyView()))
         host.sizingOptions = []
         panel.contentView = host
         installMonitors()
@@ -178,7 +178,7 @@ public final class CorralCardController {
             )
             .id(id)
         )
-        let size = host.fittingSize
+        let size = Self.measure(host.rootView)
         panel.setFrame(frame(for: size, above: drop), display: true)
         if !panel.isVisible {
             panel.orderFrontRegardless()
@@ -192,6 +192,13 @@ public final class CorralCardController {
                 MainActor.assumeIsolated { self?.render() }
             }
         }
+    }
+
+    /// The size SwiftUI gives the card. Not `host.fittingSize`: the hosting view doesn't size its
+    /// window (`sizingOptions = []`), and then it reports 0×0, which opened the card invisible
+    /// (TP-HOVER-11).
+    static func measure(_ view: AnyView) -> CGSize {
+        NSHostingController(rootView: view).sizeThatFits(in: CGSize(width: 10_000, height: 10_000))
     }
 
     private func send(_ intent: CorralIntent) {
