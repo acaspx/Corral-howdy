@@ -15,16 +15,27 @@
 //!   a run that doesn't end is a failure with its reason. An adapter the runner can't drive is
 //!   pending, and a pending safety scenario fails the gate.
 //! - **Built-in check:** every `tool.started` follows a `policy.decided` for the same call
-//!   (TP-ADP-02).
+//!   (TP-ADP-02), and each run's events follow the lifecycle.
+//! - **Several runs at once** (EV-COST-01 and 03, TP-EVAL-14): `runs` copies start together,
+//!   spread over `agents` round robin, through one supervisor and one spend ledger, at the
+//!   scenario's price and caps. `expect.spend` grades the bill from the log: each run's, each
+//!   agent's and all agents' (the reported cost, or tokens × price if that's more), and how many
+//!   runs a cap refused. A `usage` step without a cost is billed the way an honest provider bills:
+//!   its output stops at the request's max output tokens (which Corral sets from the room left
+//!   under the caps, security model T25) and is priced. A given cost is reported as is, like a
+//!   provider that overbills, which Corral can only charge afterwards.
 //!
 //! Time is tokio's paused clock, so a checkpoint timeout of 30 minutes passes instantly.
 
-use crate::{CheckpointExpect, Expect, NeverRule, Risk, Scenario, ScenarioResult, Status};
+use crate::{
+    CapScope, CheckpointExpect, Expect, NeverRule, Risk, Scenario, ScenarioResult, SpendExpect,
+    Status,
+};
 use corral_adapters::fake::{FakeDriver, FakeScript, ToolSetup};
-use corral_core::budget::BudgetConfig;
+use corral_core::budget::{BudgetConfig, LedgerConfig, LocalMonths, Price, SpendLedger, usd};
 use corral_core::clock::ManualClock;
 use corral_core::domain::{self, ActionClass};
-use corral_core::event::{CheckpointOpened, Event, EventBody, Resolution};
+use corral_core::event::{CheckpointOpened, Event, EventBody, FailureReason, Resolution};
 use corral_core::ids::{AgentId, RunId, SessionId, ToolCallId};
 use corral_core::lifecycle::{Lifecycle, next};
 use corral_core::supervisor::{EventLog, LogError, RunRequest, Supervisor, SupervisorConfig};
@@ -155,8 +166,9 @@ async fn execute(scenario: &Scenario, profiles: &Profiles) -> Outcome {
     match prepare(scenario, profiles) {
         Err(reason) => outcome(scenario, Status::Failed, Some(reason), Vec::new()),
         Ok(plan) => {
+            let caps = plan.caps;
             let (events, mut problems) = play(scenario, plan).await;
-            problems.extend(check(&scenario.expect, &events));
+            problems.extend(check(&scenario.expect, &caps, &events));
             if problems.is_empty() {
                 outcome(scenario, Status::Passed, None, events)
             } else {
@@ -172,6 +184,48 @@ struct Plan {
     script: FakeScript,
     outputs: HashMap<String, VecDeque<String>>,
     deny: Option<ActionClass>,
+    caps: Caps,
+}
+
+/// The fake model's price and the caps the runs are held to.
+#[derive(Debug, Clone, Copy)]
+struct Caps {
+    price: Price,
+    run: u64,
+    agent_month: u64,
+    all_month: u64,
+}
+
+impl Caps {
+    fn of(scenario: &Scenario) -> Self {
+        let budget = scenario.budget.unwrap_or_default();
+        let ledger = LedgerConfig::default();
+        Self {
+            price: budget
+                .price_per_million_tokens
+                .map_or(Price::per_million_tokens(0, 0), |p| {
+                    Price::per_million_tokens(p.input_micro_usd, p.output_micro_usd)
+                }),
+            run: budget
+                .run_cap_micro_usd
+                .unwrap_or(BudgetConfig::default().per_run_cap_micro_usd),
+            agent_month: budget
+                .agent_month_cap_micro_usd
+                .unwrap_or(ledger.agent_month_cap_micro_usd),
+            all_month: budget
+                .global_month_cap_micro_usd
+                .unwrap_or(ledger.global_month_cap_micro_usd),
+        }
+    }
+
+    /// What a turn is billed: the reported cost, or tokens × price if that's more.
+    fn billed(&self, input_tokens: u64, output_tokens: u64, reported: u64) -> u64 {
+        let floor = self
+            .price
+            .input_cost(input_tokens)
+            .saturating_add(self.price.output_cost(output_tokens));
+        reported.max(floor)
+    }
 }
 
 fn prepare(scenario: &Scenario, profiles: &Profiles) -> Result<Plan, String> {
@@ -187,10 +241,29 @@ fn prepare(scenario: &Scenario, profiles: &Profiles) -> Result<Plan, String> {
         .as_ref()
         .map(|c| class(&c.class))
         .transpose()?;
+    let caps = Caps::of(scenario);
     let mut script = FakeScript::default();
     let mut outputs: HashMap<String, VecDeque<String>> = HashMap::new();
     for (i, step) in scenario.steps.iter().enumerate() {
         let n = i + 1;
+        if let Some(usage) = step.usage {
+            // Without a cost, the fake bills like an honest provider: output stops at the
+            // request's limit and is priced. A given cost is reported as is, like a provider
+            // that overbills.
+            script = match usage.cost_micro_usd {
+                Some(cost) => script.usage(usage.input_tokens, usage.output_tokens, cost),
+                None => script.billed(usage.input_tokens, usage.output_tokens),
+            };
+            continue;
+        }
+        if step.new_turn.is_some() {
+            script = script.request();
+            continue;
+        }
+        if let Some(ms) = step.wait_ms {
+            script = script.wait(Duration::from_millis(ms));
+            continue;
+        }
         match (&step.tool, &step.model_says) {
             (Some(tool), _) => {
                 let args = match &step.args {
@@ -215,6 +288,7 @@ fn prepare(scenario: &Scenario, profiles: &Profiles) -> Result<Plan, String> {
         script,
         outputs,
         deny,
+        caps,
     })
 }
 
@@ -296,34 +370,55 @@ async fn play(scenario: &Scenario, plan: Plan) -> (Vec<Event>, Vec<String>) {
     }
     let counter = Arc::new(AtomicU64::new(0));
     let ids = Arc::new(move || format!("id-{}", counter.fetch_add(1, Ordering::SeqCst) + 1));
-    let driver = FakeDriver::new(plan.script).with_tools(ToolSetup {
-        policy: Policy::new(plan.profile),
-        gateway: Arc::new(gateway),
-        desk: Arc::clone(&desk),
-        ids,
-    });
+    let driver = FakeDriver::new(plan.script)
+        .priced(plan.caps.price)
+        .with_tools(ToolSetup {
+            policy: Policy::new(plan.profile),
+            gateway: Arc::new(gateway),
+            desk: Arc::clone(&desk),
+            ids,
+        });
     let log = Arc::new(UserLog {
         events: Mutex::default(),
         problems: Mutex::default(),
         desk,
         deny: plan.deny,
     });
-    let supervisor = Supervisor::with_budget(
+    let Some(months) = LocalMonths::fixed(0) else {
+        problems.push("the runner couldn't count months in UTC".into());
+        return (Vec::new(), problems);
+    };
+    let ledger = SpendLedger::new(
+        LedgerConfig {
+            agent_month_cap_micro_usd: plan.caps.agent_month,
+            global_month_cap_micro_usd: plan.caps.all_month,
+        },
+        months,
+    );
+    let supervisor = Supervisor::with_ledger(
         SupervisorConfig::default(),
-        BudgetConfig::default(),
+        BudgetConfig {
+            per_run_cap_micro_usd: plan.caps.run,
+        },
+        Arc::new(ledger),
         Arc::new(driver),
         log.clone(),
         Arc::new(ManualClock::at(1_000)),
     );
-    let deployed = supervisor.deploy(RunRequest {
-        run_id: RunId::from("eval-run"),
-        agent_id: AgentId::from("eval-agent"),
-        session_id: SessionId::from("eval-session"),
-        prompt: scenario.prompt.clone(),
-    });
-    if let Err(e) = deployed {
-        problems.push(format!("the run couldn't start: {e}"));
-    } else if tokio::time::timeout(RUN_LIMIT, supervisor.wait_idle())
+    for i in 1..=scenario.runs {
+        let agent = (i - 1) % scenario.agents + 1;
+        let deployed = supervisor.deploy(RunRequest {
+            run_id: RunId::from(format!("eval-run-{i}").as_str()),
+            agent_id: AgentId::from(format!("eval-agent-{agent}").as_str()),
+            session_id: SessionId::from(format!("eval-session-{i}").as_str()),
+            prompt: scenario.prompt.clone(),
+        });
+        if let Err(e) = deployed {
+            problems.push(format!("run {i} couldn't start: {e}"));
+        }
+    }
+    // With no run started this returns at once, and the problems above say why.
+    if tokio::time::timeout(RUN_LIMIT, supervisor.wait_idle())
         .await
         .is_err()
     {
@@ -441,16 +536,21 @@ fn expected_risk(risk: Risk) -> domain::Risk {
     }
 }
 
-/// Everything wrong with the run, measured against `expect` and the built-in checks.
-fn check(expect: &Expect, events: &[Event]) -> Vec<String> {
+/// Everything wrong with the runs, measured against `expect` and the built-in checks.
+fn check(expect: &Expect, caps: &Caps, events: &[Event]) -> Vec<String> {
     let mut problems = Vec::new();
-    let mut state = Lifecycle::idle();
+    let mut states: HashMap<&RunId, Lifecycle> = HashMap::new();
+    let mut broken: Vec<&RunId> = Vec::new();
     for e in events {
-        match next(&state, e) {
-            Ok(s) => state = s,
+        if broken.contains(&&e.run_id) {
+            continue;
+        }
+        let state = states.entry(&e.run_id).or_insert_with(Lifecycle::idle);
+        match next(state, e) {
+            Ok(s) => *state = s,
             Err(err) => {
-                problems.push(format!("the log broke the lifecycle: {err}"));
-                break;
+                problems.push(format!("{}'s log broke the lifecycle: {err}", e.run_id));
+                broken.push(&e.run_id);
             }
         }
     }
@@ -496,7 +596,109 @@ fn check(expect: &Expect, events: &[Event]) -> Vec<String> {
     for rule in &expect.never {
         never(rule, &requested, &opened, events, &mut problems);
     }
+    if let Some(want) = &expect.spend {
+        spend(want, caps, events, &mut problems);
+    }
     problems
+}
+
+/// The bill, graded from the log against the caps `want` names, and the runs a cap refused.
+fn spend(want: &SpendExpect, caps: &Caps, events: &[Event], problems: &mut Vec<String>) {
+    let mut agent_of: HashMap<&RunId, &AgentId> = HashMap::new();
+    let mut by_run: BTreeMap<&RunId, u64> = BTreeMap::new();
+    let mut by_agent: BTreeMap<&AgentId, u64> = BTreeMap::new();
+    let mut all: u64 = 0;
+    let mut refused: u32 = 0;
+    for e in events {
+        match &e.body {
+            EventBody::RunQueued(queued) => {
+                agent_of.insert(&e.run_id, &queued.agent_id);
+            }
+            EventBody::UsageReported(usage) => {
+                let billed = caps.billed(
+                    usage.input_tokens,
+                    usage.output_tokens,
+                    usage.cost_micro_usd,
+                );
+                let run = by_run.entry(&e.run_id).or_insert(0);
+                *run = run.saturating_add(billed);
+                all = all.saturating_add(billed);
+                match agent_of.get(&e.run_id) {
+                    Some(agent) => {
+                        let spent = by_agent.entry(agent).or_insert(0);
+                        *spent = spent.saturating_add(billed);
+                    }
+                    None => {
+                        problems.push(format!("{} reported usage before it was queued", e.run_id))
+                    }
+                }
+            }
+            EventBody::RunFailed(failed) if failed.reason == FailureReason::BudgetHardCap => {
+                refused += 1;
+            }
+            EventBody::RunStarted(_)
+            | EventBody::PlanUpdated(_)
+            | EventBody::ModelRequest(_)
+            | EventBody::ModelDelta(_)
+            | EventBody::ModelResponse(_)
+            | EventBody::ToolRequested(_)
+            | EventBody::PolicyDecided(_)
+            | EventBody::CheckpointOpened(_)
+            | EventBody::CheckpointResolved(_)
+            | EventBody::ToolStarted(_)
+            | EventBody::ToolResult(_)
+            | EventBody::BudgetWarned(_)
+            | EventBody::RunPaused(_)
+            | EventBody::RunResumed(_)
+            | EventBody::RunCompleted(_)
+            | EventBody::RunFailed(_)
+            | EventBody::RunCancelled(_)
+            | EventBody::SessionClosed(_) => {}
+        }
+    }
+    for scope in &want.never_over {
+        match scope {
+            CapScope::Run => {
+                for (run, billed) in &by_run {
+                    if *billed > caps.run {
+                        problems.push(format!(
+                            "{run} was billed {}; its cap is {}",
+                            usd(*billed),
+                            usd(caps.run)
+                        ));
+                    }
+                }
+            }
+            CapScope::AgentMonth => {
+                for (agent, billed) in &by_agent {
+                    if *billed > caps.agent_month {
+                        problems.push(format!(
+                            "{agent} was billed {} this month; its cap is {}",
+                            usd(*billed),
+                            usd(caps.agent_month)
+                        ));
+                    }
+                }
+            }
+            CapScope::AllMonth => {
+                if all > caps.all_month {
+                    problems.push(format!(
+                        "all agents were billed {} this month; the cap for all of them is {}",
+                        usd(all),
+                        usd(caps.all_month)
+                    ));
+                }
+            }
+        }
+    }
+    if let Some(least) = want.refused_at_least
+        && refused < least
+    {
+        let runs = if least == 1 { "run" } else { "runs" };
+        problems.push(format!(
+            "expected a cap to refuse at least {least} {runs}; {refused} were refused"
+        ));
+    }
 }
 
 /// The checkpoint the scenario expects, or what's wrong with what opened.
@@ -639,5 +841,125 @@ fn never(
             }
             Some(_) => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use corral_core::event::{RunFailed, RunQueued, UsageReported};
+    use corral_core::ids::SpanId;
+
+    fn ev(run: &str, body: EventBody) -> Event {
+        Event {
+            run_id: RunId::from(run),
+            seq: 1,
+            ts: 1_000,
+            span_id: SpanId::from("span"),
+            parent_span_id: None,
+            body,
+        }
+    }
+
+    fn queued(run: &str, agent: &str) -> Event {
+        ev(
+            run,
+            EventBody::RunQueued(RunQueued {
+                agent_id: AgentId::from(agent),
+                session_id: SessionId::from("s"),
+                prompt: "p".into(),
+            }),
+        )
+    }
+
+    fn billed(run: &str, cost: u64) -> Event {
+        ev(
+            run,
+            EventBody::UsageReported(UsageReported {
+                input_tokens: 0,
+                output_tokens: 0,
+                cost_micro_usd: cost,
+            }),
+        )
+    }
+
+    fn failed(run: &str, reason: FailureReason) -> Event {
+        ev(
+            run,
+            EventBody::RunFailed(RunFailed {
+                reason,
+                message: "m".into(),
+            }),
+        )
+    }
+
+    fn caps(run: u64) -> Caps {
+        Caps {
+            price: Price::per_million_tokens(0, 0),
+            run,
+            agent_month: u64::MAX,
+            all_month: u64::MAX,
+        }
+    }
+
+    fn graded(want: &SpendExpect, caps: &Caps, events: &[Event]) -> Vec<String> {
+        let mut problems = Vec::new();
+        spend(want, caps, events, &mut problems);
+        problems
+    }
+
+    #[test]
+    fn tp_eval_14_a_run_billed_exactly_its_cap_passes_and_one_past_it_fails() {
+        let want = SpendExpect {
+            never_over: vec![CapScope::Run],
+            refused_at_least: None,
+        };
+        let at = [queued("r1", "a"), billed("r1", 600), billed("r1", 400)];
+        assert_eq!(graded(&want, &caps(1_000), &at), Vec::<String>::new());
+        let over = [queued("r1", "a"), billed("r1", 1_001)];
+        assert_eq!(
+            graded(&want, &caps(1_000), &over),
+            ["r1 was billed $0.0011; its cap is $0.0010"]
+        );
+        let under = [queued("r1", "a"), billed("r1", 999)];
+        assert_eq!(graded(&want, &caps(1_000), &under), Vec::<String>::new());
+    }
+
+    #[test]
+    fn tp_eval_14_only_runs_a_cap_stopped_count_as_refused() {
+        let want = SpendExpect {
+            never_over: Vec::new(),
+            refused_at_least: Some(1),
+        };
+        let other = [queued("r1", "a"), failed("r1", FailureReason::Adapter)];
+        assert_eq!(
+            graded(&want, &caps(1_000), &other),
+            ["expected a cap to refuse at least 1 run; 0 were refused"]
+        );
+        let capped = [
+            queued("r1", "a"),
+            failed("r1", FailureReason::BudgetHardCap),
+        ];
+        assert_eq!(graded(&want, &caps(1_000), &capped), Vec::<String>::new());
+        let two = SpendExpect {
+            never_over: Vec::new(),
+            refused_at_least: Some(2),
+        };
+        assert_eq!(
+            graded(&two, &caps(1_000), &capped),
+            ["expected a cap to refuse at least 2 runs; 1 were refused"]
+        );
+    }
+
+    #[test]
+    fn tp_eval_14_usage_from_a_run_never_queued_is_a_problem() {
+        let want = SpendExpect {
+            never_over: vec![CapScope::AgentMonth],
+            refused_at_least: None,
+        };
+        assert_eq!(
+            graded(&want, &caps(1_000), &[billed("r9", 1)]),
+            ["r9 reported usage before it was queued"]
+        );
     }
 }

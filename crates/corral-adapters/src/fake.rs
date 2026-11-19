@@ -15,7 +15,7 @@
 //!
 //! The eval runner builds these scripts from scenario files (M2).
 
-use corral_core::budget::{BudgetError, Price, RequestEstimate, input_token_bound};
+use corral_core::budget::{Admission, BudgetError, Price, RequestEstimate, input_token_bound};
 use corral_core::event::{
     EventBody, FailureReason, ModelDelta, ModelRequest, ModelResponse, RunCompleted, RunFailed,
     UsageReported,
@@ -47,6 +47,15 @@ pub enum FakeStep {
         output_tokens: u64,
         /// Cost in micro-USD.
         cost_micro_usd: u64,
+    },
+    /// Adds usage the way an honest provider bills it: output stops at the turn's admitted
+    /// max output tokens, and the cost is tokens × the fake's price. An explicit
+    /// [`FakeStep::Usage`] is reported as given instead, like a provider that overbills.
+    Billed {
+        /// Input tokens.
+        input_tokens: u64,
+        /// Output tokens the model would write, before the request's limit.
+        output_tokens: u64,
     },
     /// Asks to use a tool: through the gate with a [`ToolSetup`], refused without one.
     Tool {
@@ -98,6 +107,14 @@ impl FakeScript {
             input_tokens,
             output_tokens,
             cost_micro_usd,
+        })
+    }
+
+    /// Adds usage billed like an honest provider: see [`FakeStep::Billed`].
+    pub fn billed(self, input_tokens: u64, output_tokens: u64) -> Self {
+        self.step(FakeStep::Billed {
+            input_tokens,
+            output_tokens,
         })
     }
 
@@ -237,11 +254,11 @@ async fn play(
     estimate: &RequestEstimate,
     tools: Option<&Tools>,
 ) {
-    if !ask_model(sink, cancel, estimate, tools).await {
+    let Some(mut admitted) = ask_model(sink, cancel, estimate, tools).await else {
         return;
-    }
+    };
     let mut text = String::new();
-    let (mut input, mut output, mut cost) = (0_u64, 0_u64, 0_u64);
+    let mut turn = Turn::default();
     for step in script.steps() {
         if cancel.is_cancelled() {
             return;
@@ -267,9 +284,16 @@ async fn play(
                 output_tokens,
                 cost_micro_usd,
             } => {
-                input = input.saturating_add(*input_tokens);
-                output = output.saturating_add(*output_tokens);
-                cost = cost.saturating_add(*cost_micro_usd);
+                turn.input = turn.input.saturating_add(*input_tokens);
+                turn.output = turn.output.saturating_add(*output_tokens);
+                turn.cost = turn.cost.saturating_add(*cost_micro_usd);
+            }
+            FakeStep::Billed {
+                input_tokens,
+                output_tokens,
+            } => {
+                turn.billed_input = turn.billed_input.saturating_add(*input_tokens);
+                turn.billed_output = turn.billed_output.saturating_add(*output_tokens);
             }
             FakeStep::Tool { name, args } if let Some(tools) = tools => {
                 let answer = tools.runner.call(name, args.clone(), sink, cancel).await;
@@ -305,7 +329,7 @@ async fn play(
             }
             FakeStep::Stubborn(duration) => tokio::time::sleep(*duration).await,
             FakeStep::Request => {
-                let turn = emit(
+                let ended = emit(
                     sink,
                     EventBody::ModelResponse(ModelResponse {
                         text: std::mem::take(&mut text),
@@ -313,15 +337,17 @@ async fn play(
                     }),
                 ) && emit(
                     sink,
-                    EventBody::UsageReported(UsageReported {
-                        input_tokens: std::mem::take(&mut input),
-                        output_tokens: std::mem::take(&mut output),
-                        cost_micro_usd: std::mem::take(&mut cost),
-                    }),
+                    EventBody::UsageReported(
+                        std::mem::take(&mut turn).usage(&admitted, estimate.price),
+                    ),
                 );
-                if !turn || !ask_model(sink, cancel, estimate, tools).await {
+                if !ended {
                     return;
                 }
+                let Some(next) = ask_model(sink, cancel, estimate, tools).await else {
+                    return;
+                };
+                admitted = next;
             }
         }
     }
@@ -333,11 +359,7 @@ async fn play(
         }),
     ) && emit(
         sink,
-        EventBody::UsageReported(UsageReported {
-            input_tokens: input,
-            output_tokens: output,
-            cost_micro_usd: cost,
-        }),
+        EventBody::UsageReported(turn.usage(&admitted, estimate.price)),
     );
     if finished {
         emit(
@@ -347,7 +369,36 @@ async fn play(
     }
 }
 
-/// Asks the budget meter for a model request. `false`: the run has ended or must stop.
+/// One model turn's usage so far.
+#[derive(Debug, Default)]
+struct Turn {
+    input: u64,
+    output: u64,
+    cost: u64,
+    billed_input: u64,
+    billed_output: u64,
+}
+
+impl Turn {
+    /// What the turn reports: scripted usage as given, plus billed usage as an honest provider
+    /// bills it, its output stopped at the request's limit and priced at `price`.
+    fn usage(self, admitted: &Admission, price: Price) -> UsageReported {
+        let billed_output = self
+            .billed_output
+            .min(u64::from(admitted.max_output_tokens));
+        let billed = price
+            .input_cost(self.billed_input)
+            .saturating_add(price.output_cost(billed_output));
+        UsageReported {
+            input_tokens: self.input.saturating_add(self.billed_input),
+            output_tokens: self.output.saturating_add(billed_output),
+            cost_micro_usd: self.cost.saturating_add(billed),
+        }
+    }
+}
+
+/// Asks the budget meter for a model request: what it admitted, or `None` when the run has ended
+/// or must stop.
 ///
 /// At the soft limit an agent with tools asks the user (a `budget.threshold` checkpoint) and
 /// tries again if they approve; one without can't ask, so it stops there. On any other refusal
@@ -357,7 +408,7 @@ async fn ask_model(
     cancel: &CancelToken,
     estimate: &RequestEstimate,
     tools: Option<&Tools>,
-) -> bool {
+) -> Option<Admission> {
     let mut asked = false;
     loop {
         let request = ModelRequest {
@@ -365,7 +416,7 @@ async fn ask_model(
             model: "fake-1".into(),
         };
         match sink.request_model(request, estimate) {
-            Ok(_) => return true,
+            Ok(admitted) => return Some(admitted),
             Err(SupervisorError::Budget(refusal @ BudgetError::SoftLimit { .. })) => {
                 // Asked once and still held: something's wrong, so stop rather than ask forever.
                 let tools = tools.filter(|_| !asked);
@@ -378,13 +429,13 @@ async fn ask_model(
                             message: refusal.to_string(),
                         }),
                     );
-                    return false;
+                    return None;
                 };
                 if tools.runner.past_soft_limit(sink, cancel).await == BudgetAnswer::Stop {
-                    return false;
+                    return None;
                 }
             }
-            Err(_) => return false,
+            Err(_) => return None,
         }
     }
 }
