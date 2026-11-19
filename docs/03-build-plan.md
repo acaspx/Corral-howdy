@@ -49,7 +49,7 @@ Goal: add an xAI key, click Grok's drop, ask a question, watch the ring turn and
 2. **M2:** tools, the policy engine and checkpoints; approvals appear in the hover card
 3. **Rest of M3:** Grok's tools through the gate, nightly live smoke
 4. **M4:** the full corral UI: setup flow, prompt bar, trace tree, Compare
-5. **M5:** Claude Code and other CLI agents over ACP, Claude and Muse Spark APIs, OpenAI Agents
+5. **M5:** Claude Code, Devin and other CLI agents over ACP, Claude and Muse Spark APIs, OpenAI Agents
 
 ### Alongside
 | Work | Issue | When |
@@ -86,7 +86,7 @@ The core (M1–M2) is built and proven **with a fake agent before any real provi
 | S2 | UI end-to-end testing on macOS: what's the most reliable way to drive the real app in CI (WebDriver support, accessibility-API scripting, or Playwright against the frontend with a mocked IPC bridge)? | Test harness decision recorded in the test plan |
 | S3 | OpenAI Agents API: does it expose per-tool approval hooks or only up-front tool restriction? Same question for the Meta Model API's agent features and xAI server-side tools | ✅ Findings 2026-11-07: [spikes/S3-provider-approval-hooks.md](spikes/S3-provider-approval-hooks.md), ADR-013. Cassettes pending keys |
 | S5 | Liquid-glass corral on macOS 26: ~~compile `CorralGlass.metal` + `CorralGlassView`~~ (done 2026-11-07: builds and TP-SHAPE/TP-RANK pass in CI on `macos-26`); pick how system glass and the Metal pass combine (plan A: shader over glass layer, B: merged glass shapes in a `GlassEffectContainer` + Metal highlights, C: wallpaper fallback); tune tokens against the reference image; measure GPU frame time; check that polar morphs read well during usage reorders | Signed-off render at n = 0–8, token file, ADR-009/010 confirmed |
-| S4 | ACP client in Rust: drive Claude Code, Codex CLI and Gemini CLI through the Rust ACP crate; map their permission requests to checkpoints | Toy client + list of permission request shapes |
+| S4 | ACP client in Rust: drive Claude Code, Codex CLI, Gemini CLI and the Devin CLI through the Rust ACP crate; map their permission requests to checkpoints. For Devin also find out: which actions ask (Cognition documents shell commands; file edits?), whether Corral can set its permission mode, how its spend is reported (it bills in ACUs, not tokens) for the budget meter, and whether cloud Devin sessions (ACP over WebSocket, on Cognition's machines) ask before each action or only report `blocked` | Toy client + list of permission request shapes + a Devin note: gating level for local and cloud sessions, and how its spend maps to the budget |
 | S6 | Hover card + trace tree in SwiftUI: hover tracking in a non-activating panel (does `onContinuousHover` work without focus?), a second click-through panel for the tree, height budget on a 13" display with 3 columns, paper/veil materials over busy wallpapers, logo import (ImageIO, SVG rasterize) | Working prototype matching `corral-shape-preview.html`, token file update, panel layout decision |
 
 ---
@@ -170,7 +170,7 @@ Loop detector (item 7) ✅ 2026-11-15: in the policy gate; from the `loop_limit`
 1. `anthropic_messages` client + native agents on Claude models (client ✅ SK-7; tools through the shared agent loop ✅ 2026-11-19, pulled forward, TP-TOOL-16..18)
 2. Meta Model API (Muse Spark) through the OpenAI-compatible client (config + cassettes)
 3. `managed` adapter for the OpenAI Agents API (scope per Spike S3)
-4. `acp` adapter: spawn, process group, permission mapping, kill on cancel (per Spike S4)
+4. `acp` adapter: spawn, process group, permission mapping, kill on cancel (per Spike S4). Agents: Claude Code, Codex CLI, Gemini CLI and Devin (local sessions through the Devin CLI first; cloud sessions only if S4 shows they can be gated)
 5. Custom agent manifests: parser, import flow with permission diff, fuzzing
 6. MCP client in the tool gateway (stdio + streamable HTTP), each MCP tool mapped to an action class
 7. ~~"Linked app" cards for consumer Muse and dots (open-in-app only)~~ Done early (Linked apps, 2026-11-12); the "manual status" from the product brief is still to do

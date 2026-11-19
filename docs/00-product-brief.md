@@ -33,7 +33,7 @@ This drives the adapter design, so it is spelled out here (sources in the system
 - **Grok (xAI):** The public API is OpenAI-compatible, with a Responses API and server-side tools such as web search and code execution. Corral can run Grok agents directly with the user's xAI key.
 - **Muse (Meta):** Muse is a consumer agent that runs on its own Meta-hosted VM, with Meta's own approval layer. No official API lets a third party drive it. Developers *can* reach the same model family (Muse Spark) through the Meta Model API and Muse Code, so Corral can run **Muse Spark-powered agents** but cannot drive a user's consumer Muse.
 - **Dots (OpenAI):** Dots live inside ChatGPT and have no dots API endpoint. The developer path is OpenAI's Agents API (public beta). Corral can run **Agents API agents** but cannot drive a user's consumer dot.
-- **CLI agents** (Claude Code, Codex CLI, Gemini CLI, and others) speak the Agent Client Protocol (ACP) over stdio. Corral can host them as a client.
+- **CLI agents** (Claude Code, Codex CLI, Gemini CLI, Cognition's Devin CLI, and others) speak the Agent Client Protocol (ACP) over stdio. Corral can host them as a client.
 - **Custom agents:** the user defines a persona, model, tools and permissions in a manifest, and Corral runs it.
 
 Product rule: **Corral never automates a consumer agent through unofficial wrappers, scraped sessions or shared passwords.** When Meta or OpenAI publish an official control API, it becomes another adapter. Until then, consumer Muse and dots appear as "linked apps" (an open-in-app shortcut plus a manual status), clearly marked as not managed. Linked drops shipped on 2026-11-12, turned on from the corral's right-click menu; the manual status comes later.
