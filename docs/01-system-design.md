@@ -158,6 +158,8 @@ pub trait AgentAdapter: Send + Sync {
 
 The first client, `corral_adapters::responses` (SK-4), speaks the OpenAI Responses format to xAI. It sends `store: false`, so conversations stay off xAI's servers. It reports the provider's billed cost (`usage.cost_in_usd_ticks`, 10^-10 USD, rounded up to micro-USD). It retries 429 and 503 up to three attempts in all, honoring `Retry-After`. It never repeats a provider's 401 message, which echoes part of the key. HTTPS goes through `reqwest` with `native-tls`, which is Security.framework on macOS: the system trust store and no bundled crypto. Tests replay cassettes (`tests/cassettes/xai/`). `cargo run -p corral-adapters --example record_xai` records real exchanges on a Mac, so the same tests also run against what xAI actually sends.
 
+For an agent with tools (M3), `ResponsesConfig::turn_body` offers them as function tools under their wire names, one call at a time (`parallel_tool_calls: false`, so checkpoints come one by one), and carries the whole `Conversation` as input items: the prompt, the model's replies, each call exactly as the model made it, and each output. Nothing is stored at xAI, so every turn resends it, and the budget's estimate for a turn counts all of it plus the tools' descriptions. `ResponseDecoder::offering_tools` reads each finished `function_call` (capped at 1 MB of arguments) and ends the response without `run.completed`, so the agent loop can run the calls and ask again (TP-TOOL-04..06). Tools that run on xAI's servers are still refused.
+
 ### Custom agent manifest
 
 ```toml

@@ -141,7 +141,7 @@ Loop detector (item 7) ✅ 2026-11-15: in the policy gate; from the `loop_limit`
 2. `openai_responses` client: streaming, tool calls, usage, errors, retries with backoff (✅ SK-4, except tool calls, which come with item 3)
 3. `native` adapter: agent loop over the client, all local tools via the gate. In four PRs:
    1. ✅ Tools describe themselves to a model and go out under wire names (2026-11-18, TP-TOOL-01..03)
-   2. The Responses request offers the agent's tools and carries the conversation as input items; the decoder reads the model's function calls instead of failing the run
+   2. ✅ The Responses request offers the agent's tools and carries the conversation as input items; the decoder reads the model's function calls instead of failing the run (2026-11-18, TP-TOOL-04..06)
    3. The loop: each turn admitted by the budget, every call through `ToolRunner` (checkpoints on the card), results back to the model, Stop and the soft limit, a cap on turns
    4. In the app: Grok gets the file tools in `~/Corral/Grok`, random checkpoint IDs, and a soft limit
 4. Provider-side tools toggle (`provider_tools` permission)
