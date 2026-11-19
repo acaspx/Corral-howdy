@@ -152,3 +152,29 @@ fn tp_gate_03_a_token_can_taint_its_run_and_ways_out_ask_again() {
     };
     assert!(again.reason().contains("https://news.example/page"));
 }
+
+#[test]
+fn tp_gate_08_content_read_outside_a_tool_call_taints_the_run_too() {
+    // A provider's web search runs on its servers, so no token is involved (TP-PROV-09).
+    let g = gate();
+    let post = call(ActionClass::NetWrite, "http.post", Some("api.example"));
+    let Verdict::Ask(pending) = g.check(post.clone()) else {
+        panic!("asks");
+    };
+    pending
+        .approve(Approval::Click, Scope::ForRun)
+        .expect("approved");
+    assert!(matches!(g.check(post.clone()), Verdict::Allow(_)));
+
+    g.taint("web search results from Anthropic's servers");
+    g.taint("a later source");
+    assert_eq!(
+        g.tainted_by().as_deref(),
+        Some("web search results from Anthropic's servers"),
+        "the first source stays"
+    );
+    let Verdict::Ask(again) = g.check(post) else {
+        panic!("a way out asks again on a tainted run");
+    };
+    assert!(again.reason().contains("web search results"));
+}

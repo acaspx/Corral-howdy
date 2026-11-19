@@ -107,6 +107,7 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-GATE-05** Tool output for the model is capped (16 KB by default) on a character boundary, with a marker; the full output is kept for the trace (T30)
 - **TP-GATE-06** A tool that reads untrusted content taints its run through its token
 - **TP-GATE-07** A tool error is typed and doesn't taint the run
+- **TP-GATE-08** Content a run reads outside a tool call (a provider's web search) taints the run through the gate, with the same effect as a tool's taint: ways out ask again, and the first source stays
 - **TP-TOOL-01** A tool that can be offered to a model describes itself: a plain-words description (at most 1,024 characters) and a JSON schema for its arguments (an object, every argument described, no others allowed); the file tools' schemas match what they read
 - **TP-TOOL-02** Tools go out under a wire name of ASCII letters, digits, `_` and `-` (`fs.read` is `fs_read`); the gateway offers only tools with a spec, by name, and maps an offered wire name back to its tool; any other name is no tool
 - **TP-TOOL-03** No two tools share a wire name, and an offered tool's wire name is 1 to 64 characters; registering one that breaks either is refused
@@ -177,6 +178,15 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-ADP-07** With default profiles, no provider request includes a vendor-executed side-effecting tool (checked against cassette request bodies)
 - **TP-ADP-08** MCP servers on an agent are never forwarded as vendor-hosted MCP tools; they go through Corral's MCP client
 - **TP-ADP-09** A tool result returned to the model is capped (16 KB of text by default) with a marker saying how much was cut; the full output stays in the trace (T30)
+- **TP-PROV-01** Provider-side tools are decided before the run: an agent is offered web search only when its policy allows `provider_tools` (Allow, not Ask, since a search can't be paused); the default denies it (`tests/claude_search.rs`)
+- **TP-PROV-02** Claude's request offers Anthropic's basic web search (`web_search_20250305`, at most 5 per turn; the newer versions run code at Anthropic) after the agent's own tools, and not when one of those already has the name
+- **TP-PROV-03** The budget's estimate for a turn includes the most its searches can cost ($0.01 each)
+- **TP-PROV-04** Each search shows in the trace as `tool.requested` (class `provider_tools`, the query), `policy.decided` Allow, `tool.started` and `tool.result` (titles and links only); its cost is in `usage.reported`
+- **TP-PROV-05** The answer lists the sources it cites, each once, cleaned of control characters, at most ten
+- **TP-PROV-06** The assistant's blocks go back to Anthropic exactly as they came (encrypted results and citations included)
+- **TP-PROV-07** A failed search shows as a failed `tool.result` with its error code and reads nothing untrusted
+- **TP-PROV-08** Other tools that run at Anthropic (code execution, MCP, web fetch) stay refused, and so does search for an agent that wasn't given it
+- **TP-PROV-09** In the agent loop: without the policy the search isn't offered; a paused turn (`pause_turn`) is sent back as it came and resumed; after a search the run is tainted, so sending data out asks and names the search results
 - **TP-ACP-01..05** ACP: spawn, permission request → checkpoint, deny path, env scrubbing, process-group kill (no orphan processes after cancel)
 - **TP-ACP-06** An ACP agent whose permission mode Corral can't set reports `Partial` gating; a known bypass mode refuses to start
 - **TP-ACP-07** Killing Corral (SIGKILL) leaves no ACP agent processes or their children running
