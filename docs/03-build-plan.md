@@ -127,7 +127,7 @@ Goal: the safety core, proven before any real agent can touch it.
 2. ✅ Pure `decide(profile, action, ctx)` + table-driven tests for every class × decision; allow-for-run, destination pinning and taint included (2026-11-13; 37 of 37 mutants caught); approve once per exact call for normal risk ✅ 2026-11-18 (TP-POL-08)
 3. ✅ `PolicyGate` + `Decision::Allow` capability token required by `ToolGateway` (2026-11-14: `Gate`, `AllowToken`, `ToolGateway` with class checks, output cap and taint)
 4. Checkpoint lifecycle: open → resolve (approve / deny / edit / allow-for-run) → timeout behavior (core ✅ 2026-11-14: `ToolRunner` and `CheckpointDesk`, driven by the FakeAdapter; hover card ✅: the approval box with Approve and Deny over IPC; allow-for-run on the card ✅ 2026-11-15; edit-then-approve in the core ✅ 2026-11-17; the card's edit fields in the core ✅ 2026-11-17; the edit sheet on the card ✅ 2026-11-17; Touch ID for critical on the card ✅ 2026-11-18)
-5. Budget meter: pre-request estimate, hard cap, soft-limit checkpoint, reconciliation (soft limit ✅ 2026-11-15: a `budget.threshold` checkpoint on the card; none is set in the app until agents can ask, M3; monthly caps per agent and for all agents ✅ 2026-11-18, seeded from the store at launch)
+5. Budget meter: pre-request estimate, hard cap, soft-limit checkpoint, reconciliation (soft limit ✅ 2026-11-15: a `budget.threshold` checkpoint on the card; set at $0.10 in the app since Grok can ask, M3; monthly caps per agent and for all agents ✅ 2026-11-18, seeded from the store at launch)
 6. Filesystem sandbox (canonicalization, symlink escapes) (✅ 2026-11-14: `corral_tools::fs` with `fs.read`, `fs.write` and `fs.delete`; not registered for any agent until M3)
 7. Loop detector (repeat tool + args → pause)
 8. Safety eval suite v1 on fake agents (injection-shaped scenarios) (✅ 2026-11-14: the runner executes scenarios on the FakeAdapter through the real policy, desk and gateway; a pending safety scenario fails the gate; EV-SAFE-01..05 and 26 pass; the injection corpus EV-SAFE-01..20 and EV-SAFE-21 ✅ 2026-11-18)
@@ -142,8 +142,8 @@ Loop detector (item 7) ✅ 2026-11-15: in the policy gate; from the `loop_limit`
 3. `native` adapter: agent loop over the client, all local tools via the gate. In four PRs:
    1. ✅ Tools describe themselves to a model and go out under wire names (2026-11-18, TP-TOOL-01..03)
    2. ✅ The Responses request offers the agent's tools and carries the conversation as input items; the decoder reads the model's function calls instead of failing the run (2026-11-18, TP-TOOL-04..06)
-   3. ✅ The loop: each turn admitted by the budget, every call through `ToolRunner` (checkpoints on the card), results back to the model, Stop and the soft limit, a cap on turns (2026-11-18, TP-TOOL-07..12; `ResponsesAgent`, not yet used by the app)
-   4. In the app: Grok gets the file tools in `~/Corral/Grok`, random checkpoint IDs, and a soft limit
+   3. ✅ The loop: each turn admitted by the budget, every call through `ToolRunner` (checkpoints on the card), results back to the model, Stop and the soft limit, a cap on turns (2026-11-18, TP-TOOL-07..12; `ResponsesAgent`)
+   4. ✅ In the app: Grok gets the file tools in `~/Corral/Grok`, random checkpoint IDs, and a $0.10 soft limit (2026-11-18, TP-TOOL-13..14)
 4. Provider-side tools toggle (`provider_tools` permission)
 5. Record/replay cassettes for provider tests (no live keys in CI)
 6. Adapter contract suite runs against `fake` and `native+xai(cassette)`

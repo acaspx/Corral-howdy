@@ -119,6 +119,8 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-TOOL-10** A tool the model wasn't offered is denied without a checkpoint and never starts, and the model is told; arguments that aren't a JSON object run nothing, log no `tool.requested`, and the model is told
 - **TP-TOOL-11** A run that keeps calling tools stops at its turn limit (20 by default) with a plain message, and no request is sent past it
 - **TP-TOOL-12** When the next turn would pass the soft limit, it waits at a `budget.threshold` checkpoint on the card; Approve sends it, Deny ends the run with nothing more sent
+- **TP-TOOL-13** In the app, Grok's tools are the file tools over `~/Corral/Grok` (made if missing), on the app's checkpoint desk, under the default policy: reading is allowed, writing asks, deleting asks at high risk; paths outside the folder are refused; a folder that can't be made means no tools
+- **TP-TOOL-14** Tool-call and checkpoint IDs are 128 random bits as 32 hex characters, with no repeats
 - **TP-CHK-01** An Ask pauses the run at a checkpoint drawn only from core fields: the class, the risk, a title written by the core and the exact detail (tool, destination, arguments); nothing runs while it waits
 - **TP-CHK-02** Deny records the note (capped at 1,000 characters), runs nothing, and tells the agent, which carries on
 - **TP-CHK-03** Approve once runs that call and the next one asks again; approve for the run covers the same destination only (high and critical)
