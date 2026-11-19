@@ -2,6 +2,7 @@
 //! spent), and the UI only sees the result. No network here: a fake probe answers.
 
 use corral_adapters::transport::BoxFuture;
+use corral_adapters::verify::KeyMistake;
 use corral_adapters::verify::{KeyCheck, KeyCheckError, ModelsProbe, check_key};
 use corral_secrets::{Provider, Secret};
 use std::sync::Mutex;
@@ -130,5 +131,76 @@ async fn tp_setup_02_an_unreachable_provider_is_not_a_bad_key() {
             "{text}"
         );
         assert!(!text.contains(&KEY[8..20]), "the key leaked: {text}");
+    }
+}
+
+/// A key's ID, as a console's key list shows it (TP-SETUP-06). Made up.
+const KEY_ID: &str = "apikey_01PgqDx7Lm2NvR4tWz8yBc3K"; // gitleaks:allow (made-up key ID)
+
+/// Keys as a list shows them, with the middle left out (TP-SETUP-06). Made up.
+const SHORTENED: [&str; 2] = ["sk-ant-api03-Q7v...hJk1", "xai-Q7v2****hJk1"]; // gitleaks:allow (made-up)
+
+fn assert_no_part_of(key: &str, text: &str) {
+    for i in 0..=key.len() - 5 {
+        let part = &key[i..i + 5];
+        assert!(!text.contains(part), "`{text}` contains part of the key");
+    }
+}
+
+#[tokio::test]
+async fn tp_setup_06_a_key_id_is_caught_before_anything_is_sent() {
+    for provider in [
+        Provider::Anthropic,
+        Provider::Xai,
+        Provider::OpenAi,
+        Provider::Meta,
+    ] {
+        let probe = FakeProbe::answering(Ok(200));
+        let key = Secret::new(KEY_ID).expect("valid");
+        let err = check_key(&probe, provider, &key).await.expect_err("caught");
+        assert_eq!(err, KeyCheckError::NotTheKey(KeyMistake::KeyId));
+        assert!(probe.seen().is_empty(), "nothing is sent for {provider:?}");
+        assert_eq!(
+            err.to_string(),
+            "That's the key's ID, not the key. Copy the key itself, which you see when you create it."
+        );
+        assert_no_part_of(KEY_ID, &err.to_string());
+    }
+}
+
+#[tokio::test]
+async fn tp_setup_06_a_shortened_key_is_caught_before_anything_is_sent() {
+    for shortened in SHORTENED {
+        let probe = FakeProbe::answering(Ok(200));
+        let key = Secret::new(shortened).expect("valid");
+        let err = check_key(&probe, Provider::Anthropic, &key)
+            .await
+            .expect_err("caught");
+        assert_eq!(
+            err,
+            KeyCheckError::NotTheKey(KeyMistake::Shortened),
+            "{shortened}"
+        );
+        assert!(probe.seen().is_empty(), "nothing is sent for {shortened}");
+        assert_eq!(
+            err.to_string(),
+            "That's a shortened copy of the key, with the middle left out. Copy the whole key, which you see when you create it."
+        );
+        assert_no_part_of(shortened, &err.to_string());
+    }
+}
+
+#[tokio::test]
+async fn tp_setup_06_a_key_with_one_dot_or_star_is_still_checked() {
+    for key in ["sk-ant-api03-Q7v.2LmN9pRt4", "xai-Q7v2*LmN9pRt4"] {
+        // gitleaks:allow (made-up)
+        let probe = FakeProbe::answering(Ok(200));
+        let secret = Secret::new(key).expect("valid");
+        assert_eq!(
+            check_key(&probe, Provider::Anthropic, &secret).await,
+            Ok(KeyCheck::Accepted),
+            "{key}"
+        );
+        assert_eq!(probe.seen().len(), 1, "{key} is sent for its check");
     }
 }
