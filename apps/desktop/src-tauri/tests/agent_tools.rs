@@ -184,3 +184,32 @@ fn tp_tool_14_checkpoint_ids_are_random() {
     let many: HashSet<String> = (0..1_000).map(|_| next()).collect();
     assert_eq!(many.len(), 1_000, "no repeats");
 }
+
+#[tokio::test]
+async fn tp_tool_19_each_agent_reaches_only_its_own_folder() {
+    let home = Home::new();
+    let grok = agent_folder(&home.0, "Grok");
+    let claude = agent_folder(&home.0, "Claude");
+    assert_ne!(grok, claude);
+    let grok_tools = file_tools(&grok, Arc::new(CheckpointDesk::default())).expect("Grok");
+    file_tools(&claude, Arc::new(CheckpointDesk::default())).expect("Claude");
+    std::fs::write(claude.join("diary.md"), "Claude's own notes").expect("write");
+    let gate = Gate::new(grok_tools.policy.clone());
+    for path in [
+        "../Claude/diary.md".to_owned(),
+        claude.join("diary.md").display().to_string(),
+    ] {
+        let Verdict::Allow(token) = verdict(
+            &gate,
+            ActionClass::ReadLocal,
+            "fs.read",
+            json!({ "path": path }),
+        ) else {
+            panic!("reads are allowed");
+        };
+        assert!(
+            grok_tools.gateway.run(token).await.is_err(),
+            "Grok can't read {path}"
+        );
+    }
+}
