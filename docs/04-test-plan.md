@@ -163,7 +163,7 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-FS-10** `fs.read` (`read.local`), `fs.write` (`write.local`) and `fs.delete` (`delete.local`) carry their path as the destination, refuse bad arguments, and report refusals in plain words
 
 ### Adapters (contract suite, run for every adapter)
-Run today for xAI's Responses client (`tests/xai.rs`) and Anthropic's Messages client (`tests/claude.rs`), each against its own cassettes.
+The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_contract!` line per adapter runs TP-ADP-01, 02, 03, 05 and TP-BUD-01 (plus "no key in the log") for the fake agent, Grok with tools (`ResponsesAgent`), Grok text-only and Claude, against cassettes. A new adapter joins by implementing its `Subject` (how to make it answer, try a tool, stall and go over its cap). Each client also has its own tests for what only it does (`tests/xai.rs`, `tests/xai_agent.rs`, `tests/claude.rs`).
 - **TP-ADP-01** Streams `run.started` → … → exactly one terminal event
 - **TP-ADP-02** Every side effect is preceded by `policy.decided`
 - **TP-ADP-03** Cancel stops output within 2 s

@@ -146,7 +146,7 @@ Loop detector (item 7) ✅ 2026-11-15: in the policy gate; from the `loop_limit`
    4. ✅ In the app: Grok gets the file tools in `~/Corral/Grok`, random checkpoint IDs, and a $0.10 soft limit (2026-11-18, TP-TOOL-13..14)
 4. Provider-side tools toggle (`provider_tools` permission)
 5. Record/replay cassettes for provider tests (no live keys in CI)
-6. Adapter contract suite runs against `fake` and `native+xai(cassette)`
+6. Adapter contract suite runs against `fake` and `native+xai(cassette)` (✅ 2026-11-18: `tests/contract.rs`, also Grok text-only and Claude)
 
 **Exit:** contract suite green for xAI; nightly live smoke (protected env, $1 cap) green; EV-COST-04 (spend within 2% of provider-reported).
 
