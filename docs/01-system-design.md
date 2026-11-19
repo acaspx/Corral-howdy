@@ -136,7 +136,7 @@ pub trait AgentAdapter: Send + Sync {
 |---|---|---|---|
 | `native` (**primary**) | Corral | xAI Grok (Responses API), OpenAI-compatible endpoints, Anthropic Messages, Meta Model API (Muse Spark; it accepts the OpenAI and Anthropic SDK formats) | Full: Corral executes every local tool, so it gates every call |
 | `managed` | Vendor | OpenAI Agents API | Function tools return to Corral (`requires_action`) and are fully gated. Sessions default to environment `none`, so every side effect is a Corral function tool. Hosted sandboxes and the hosted browser are opt-in, with partial gating (Spike S3) |
-| `acp` | The CLI agent | Claude Code, Codex CLI, Gemini CLI, any ACP agent | ACP permission requests are mapped to Corral checkpoints. Corral is the ACP *client*. Gating is `Partial` unless Corral sets the agent's permission mode for the session, because a CLI agent's own settings can pre-approve tools (T22) |
+| `acp` | The CLI agent | Claude Code, Codex CLI, Gemini CLI, Devin CLI (local Devin sessions), any ACP agent | ACP permission requests are mapped to Corral checkpoints. Corral is the ACP *client*. Gating is `Partial` unless Corral sets the agent's permission mode for the session, because a CLI agent's own settings can pre-approve tools (T22) |
 | `a2a` (v1.1) | Remote agent | Agents exposing A2A v1.0 Agent Cards | A2A `input-required` task state → checkpoint |
 | `custom` | Corral (compiles to `native`) | User manifests | Same as native |
 | `fake` | Test script | Tests and evals | Scripted |
