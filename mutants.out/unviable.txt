@@ -1,0 +1,5 @@
+crates/corral-tools/src/lib.rs:116:9: replace Tool::spec -> Option<ToolSpec> with Some(Default::default())
+crates/corral-tools/src/lib.rs:213:9: replace ToolGateway::offered -> Vec<OfferedTool> with vec![Default::default()]
+crates/corral-tools/src/fs/mod.rs:370:9: replace <impl Tool for FsRead>::spec -> Option<ToolSpec> with Some(Default::default())
+crates/corral-tools/src/fs/mod.rs:412:9: replace <impl Tool for FsWrite>::spec -> Option<ToolSpec> with Some(Default::default())
+crates/corral-tools/src/fs/mod.rs:457:9: replace <impl Tool for FsDelete>::spec -> Option<ToolSpec> with Some(Default::default())

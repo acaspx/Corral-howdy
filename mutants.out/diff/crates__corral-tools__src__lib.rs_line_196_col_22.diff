@@ -1,0 +1,21 @@
+--- crates/corral-tools/src/lib.rs
++++ delete ! in ToolGateway::register
+@@ -188,17 +188,17 @@
+         let name = tool.name().to_owned();
+         if tool.class() == ActionClass::Unknown {
+             return Err(GatewayError::UnknownClass(name));
+         }
+         if self.tools.contains_key(&name) {
+             return Err(GatewayError::Duplicate(name));
+         }
+         let wire = wire_name(&name);
+-        let usable = !wire.is_empty() && wire.chars().count() <= MAX_WIRE_NAME_CHARS;
++        let usable =  /* ~ changed by cargo-mutants ~ */wire.is_empty() && wire.chars().count() <= MAX_WIRE_NAME_CHARS;
+         if tool.spec().is_some() && !usable {
+             return Err(GatewayError::BadWireName(name));
+         }
+         if let Some(other) = self.wire.get(&wire) {
+             return Err(GatewayError::WireClash {
+                 tool: name,
+                 other: other.clone(),
+             });

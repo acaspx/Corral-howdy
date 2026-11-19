@@ -21,7 +21,7 @@
 //! The sandbox only places files. Whether an agent may read, write or delete at all is the
 //! policy's decision; these tools run only with the gate's token.
 
-use crate::{BoxFuture, Tool, ToolError};
+use crate::{BoxFuture, Tool, ToolError, ToolSpec};
 use cap_std::ambient_authority;
 use cap_std::fs::{Dir, MetadataExt, OpenOptions};
 use corral_core::domain::ActionClass;
@@ -325,6 +325,30 @@ fn failed(e: FsError) -> ToolError {
     ToolError::Failed(e.to_string())
 }
 
+/// The schema for a call that takes string arguments, each described for the model.
+fn schema(args: &[(&str, &str)]) -> Value {
+    let properties: serde_json::Map<String, Value> = args
+        .iter()
+        .map(|(key, said)| {
+            (
+                (*key).to_owned(),
+                serde_json::json!({"type": "string", "description": said}),
+            )
+        })
+        .collect();
+    let required: Vec<&str> = args.iter().map(|(key, _)| *key).collect();
+    serde_json::json!({
+        "type": "object",
+        "properties": properties,
+        "required": required,
+        "additionalProperties": false,
+    })
+}
+
+/// What a `path` argument is, for the model.
+const PATH_SAID: &str = "A path inside your folder, such as notes/todo.md. Paths with .. or ~, \
+and paths outside your folder, are refused.";
+
 /// `fs.read`: reads a text file in the agent's folder (`read.local`).
 pub struct FsRead {
     sandbox: Arc<Sandbox>,
@@ -340,6 +364,13 @@ impl FsRead {
 impl Tool for FsRead {
     fn name(&self) -> &str {
         "fs.read"
+    }
+
+    fn spec(&self) -> Option<ToolSpec> {
+        Some(ToolSpec {
+            description: "Read a text file in your folder, up to 4 MB.".into(),
+            parameters: schema(&[("path", PATH_SAID)]),
+        })
     }
 
     fn class(&self) -> ActionClass {
@@ -377,6 +408,14 @@ impl Tool for FsWrite {
         "fs.write"
     }
 
+    fn spec(&self) -> Option<ToolSpec> {
+        Some(ToolSpec {
+            description: "Create or replace a text file in your folder, up to 4 MB. The user may be asked to approve \
+this first, and may say no.".into(),
+            parameters: schema(&[("path", PATH_SAID), ("content", "The whole new text of the file.")]),
+        })
+    }
+
     fn class(&self) -> ActionClass {
         ActionClass::WriteLocal
     }
@@ -412,6 +451,13 @@ impl FsDelete {
 impl Tool for FsDelete {
     fn name(&self) -> &str {
         "fs.delete"
+    }
+
+    fn spec(&self) -> Option<ToolSpec> {
+        Some(ToolSpec {
+            description: "Delete a file in your folder. The user is asked to approve this first, and may say no.".into(),
+            parameters: schema(&[("path", PATH_SAID)]),
+        })
     }
 
     fn class(&self) -> ActionClass {

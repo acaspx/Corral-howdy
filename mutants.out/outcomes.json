@@ -1,0 +1,1679 @@
+{
+  "outcomes": [
+    {
+      "scenario": "Baseline",
+      "summary": "Success",
+      "log_path": "log/baseline.log",
+      "diff_path": null,
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 13.693222838,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.702805938,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/lib.rs:72:5: replace wire_name -> String with String::new()",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/lib.rs",
+          "function": {
+            "function_name": "wire_name",
+            "return_type": "-> String",
+            "span": {
+              "start": {
+                "line": 69,
+                "column": 1
+              },
+              "end": {
+                "line": 81,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 72,
+              "column": 5
+            },
+            "end": {
+              "line": 80,
+              "column": 19
+            }
+          },
+          "replacement": "String::new()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__corral-tools__src__lib.rs_line_72_col_5.log",
+      "diff_path": "diff/crates__corral-tools__src__lib.rs_line_72_col_5.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.471694006,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.555241872,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/lib.rs:74:54: replace || with && in wire_name",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/lib.rs",
+          "function": {
+            "function_name": "wire_name",
+            "return_type": "-> String",
+            "span": {
+              "start": {
+                "line": 69,
+                "column": 1
+              },
+              "end": {
+                "line": 81,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 74,
+              "column": 54
+            },
+            "end": {
+              "line": 74,
+              "column": 56
+            }
+          },
+          "replacement": "&&",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__corral-tools__src__lib.rs_line_74_col_54.log",
+      "diff_path": "diff/crates__corral-tools__src__lib.rs_line_74_col_54.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 3.9192711239999998,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.555999754,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/lib.rs:74:42: replace || with && in wire_name",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/lib.rs",
+          "function": {
+            "function_name": "wire_name",
+            "return_type": "-> String",
+            "span": {
+              "start": {
+                "line": 69,
+                "column": 1
+              },
+              "end": {
+                "line": 81,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 74,
+              "column": 42
+            },
+            "end": {
+              "line": 74,
+              "column": 44
+            }
+          },
+          "replacement": "&&",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__corral-tools__src__lib.rs_line_74_col_42.log",
+      "diff_path": "diff/crates__corral-tools__src__lib.rs_line_74_col_42.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 3.6183774829999997,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.501636153,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/lib.rs:74:47: replace == with != in wire_name",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/lib.rs",
+          "function": {
+            "function_name": "wire_name",
+            "return_type": "-> String",
+            "span": {
+              "start": {
+                "line": 69,
+                "column": 1
+              },
+              "end": {
+                "line": 81,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 74,
+              "column": 47
+            },
+            "end": {
+              "line": 74,
+              "column": 49
+            }
+          },
+          "replacement": "!=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__corral-tools__src__lib.rs_line_74_col_47.log",
+      "diff_path": "diff/crates__corral-tools__src__lib.rs_line_74_col_47.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 3.313839488,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.501622661,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/lib.rs:74:59: replace == with != in wire_name",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/lib.rs",
+          "function": {
+            "function_name": "wire_name",
+            "return_type": "-> String",
+            "span": {
+              "start": {
+                "line": 69,
+                "column": 1
+              },
+              "end": {
+                "line": 81,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 74,
+              "column": 59
+            },
+            "end": {
+              "line": 74,
+              "column": 61
+            }
+          },
+          "replacement": "!=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__corral-tools__src__lib.rs_line_74_col_59.log",
+      "diff_path": "diff/crates__corral-tools__src__lib.rs_line_74_col_59.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.172517809,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.451442523,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/lib.rs:116:9: replace Tool::spec -> Option<ToolSpec> with Some(Default::default())",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/lib.rs",
+          "function": {
+            "function_name": "Tool::spec",
+            "return_type": "-> Option<ToolSpec>",
+            "span": {
+              "start": {
+                "line": 114,
+                "column": 5
+              },
+              "end": {
+                "line": 117,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 116,
+              "column": 9
+            },
+            "end": {
+              "line": 116,
+              "column": 13
+            }
+          },
+          "replacement": "Some(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__corral-tools__src__lib.rs_line_116_col_9.log",
+      "diff_path": "diff/crates__corral-tools__src__lib.rs_line_116_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.453987381,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/lib.rs:72:5: replace wire_name -> String with \"xyzzy\".into()",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/lib.rs",
+          "function": {
+            "function_name": "wire_name",
+            "return_type": "-> String",
+            "span": {
+              "start": {
+                "line": 69,
+                "column": 1
+              },
+              "end": {
+                "line": 81,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 72,
+              "column": 5
+            },
+            "end": {
+              "line": 80,
+              "column": 19
+            }
+          },
+          "replacement": "\"xyzzy\".into()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__corral-tools__src__lib.rs_line_72_col_5_001.log",
+      "diff_path": "diff/crates__corral-tools__src__lib.rs_line_72_col_5_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 17.86285822,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.454412059,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/lib.rs:189:25: replace == with != in ToolGateway::register",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/lib.rs",
+          "function": {
+            "function_name": "ToolGateway::register",
+            "return_type": "-> Result<(), GatewayError>",
+            "span": {
+              "start": {
+                "line": 185,
+                "column": 5
+              },
+              "end": {
+                "line": 209,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 189,
+              "column": 25
+            },
+            "end": {
+              "line": 189,
+              "column": 27
+            }
+          },
+          "replacement": "!=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__corral-tools__src__lib.rs_line_189_col_25.log",
+      "diff_path": "diff/crates__corral-tools__src__lib.rs_line_189_col_25.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 1.663676158,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.356471677,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/lib.rs:188:9: replace ToolGateway::register -> Result<(), GatewayError> with Ok(())",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/lib.rs",
+          "function": {
+            "function_name": "ToolGateway::register",
+            "return_type": "-> Result<(), GatewayError>",
+            "span": {
+              "start": {
+                "line": 185,
+                "column": 5
+              },
+              "end": {
+                "line": 209,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 188,
+              "column": 9
+            },
+            "end": {
+              "line": 208,
+              "column": 15
+            }
+          },
+          "replacement": "Ok(())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__corral-tools__src__lib.rs_line_188_col_9.log",
+      "diff_path": "diff/crates__corral-tools__src__lib.rs_line_188_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.01146622,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.301232767,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/lib.rs:196:39: replace && with || in ToolGateway::register",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/lib.rs",
+          "function": {
+            "function_name": "ToolGateway::register",
+            "return_type": "-> Result<(), GatewayError>",
+            "span": {
+              "start": {
+                "line": 185,
+                "column": 5
+              },
+              "end": {
+                "line": 209,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 196,
+              "column": 39
+            },
+            "end": {
+              "line": 196,
+              "column": 41
+            }
+          },
+          "replacement": "||",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__corral-tools__src__lib.rs_line_196_col_39.log",
+      "diff_path": "diff/crates__corral-tools__src__lib.rs_line_196_col_39.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 1.5185929649999999,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.453153963,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/lib.rs:196:22: delete ! in ToolGateway::register",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/lib.rs",
+          "function": {
+            "function_name": "ToolGateway::register",
+            "return_type": "-> Result<(), GatewayError>",
+            "span": {
+              "start": {
+                "line": 185,
+                "column": 5
+              },
+              "end": {
+                "line": 209,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 196,
+              "column": 22
+            },
+            "end": {
+              "line": 196,
+              "column": 23
+            }
+          },
+          "replacement": "",
+          "genre": "UnaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__corral-tools__src__lib.rs_line_196_col_22.log",
+      "diff_path": "diff/crates__corral-tools__src__lib.rs_line_196_col_22.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 1.818992781,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.453602197,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/lib.rs:196:63: replace <= with > in ToolGateway::register",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/lib.rs",
+          "function": {
+            "function_name": "ToolGateway::register",
+            "return_type": "-> Result<(), GatewayError>",
+            "span": {
+              "start": {
+                "line": 185,
+                "column": 5
+              },
+              "end": {
+                "line": 209,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 196,
+              "column": 63
+            },
+            "end": {
+              "line": 196,
+              "column": 65
+            }
+          },
+          "replacement": ">",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__corral-tools__src__lib.rs_line_196_col_63.log",
+      "diff_path": "diff/crates__corral-tools__src__lib.rs_line_196_col_63.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 1.914406936,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.45918161,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/lib.rs:197:34: replace && with || in ToolGateway::register",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/lib.rs",
+          "function": {
+            "function_name": "ToolGateway::register",
+            "return_type": "-> Result<(), GatewayError>",
+            "span": {
+              "start": {
+                "line": 185,
+                "column": 5
+              },
+              "end": {
+                "line": 209,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 197,
+              "column": 34
+            },
+            "end": {
+              "line": 197,
+              "column": 36
+            }
+          },
+          "replacement": "||",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__corral-tools__src__lib.rs_line_197_col_34.log",
+      "diff_path": "diff/crates__corral-tools__src__lib.rs_line_197_col_34.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 1.520182656,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.35182354,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/lib.rs:213:9: replace ToolGateway::offered -> Vec<OfferedTool> with vec![]",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/lib.rs",
+          "function": {
+            "function_name": "ToolGateway::offered",
+            "return_type": "-> Vec<OfferedTool>",
+            "span": {
+              "start": {
+                "line": 211,
+                "column": 5
+              },
+              "end": {
+                "line": 228,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 213,
+              "column": 9
+            },
+            "end": {
+              "line": 227,
+              "column": 16
+            }
+          },
+          "replacement": "vec![]",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__corral-tools__src__lib.rs_line_213_col_9.log",
+      "diff_path": "diff/crates__corral-tools__src__lib.rs_line_213_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 1.608072267,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.407697778,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/lib.rs:197:37: delete ! in ToolGateway::register",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/lib.rs",
+          "function": {
+            "function_name": "ToolGateway::register",
+            "return_type": "-> Result<(), GatewayError>",
+            "span": {
+              "start": {
+                "line": 185,
+                "column": 5
+              },
+              "end": {
+                "line": 209,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 197,
+              "column": 37
+            },
+            "end": {
+              "line": 197,
+              "column": 38
+            }
+          },
+          "replacement": "",
+          "genre": "UnaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__corral-tools__src__lib.rs_line_197_col_37.log",
+      "diff_path": "diff/crates__corral-tools__src__lib.rs_line_197_col_37.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 1.970888826,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.458963316,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/lib.rs:213:9: replace ToolGateway::offered -> Vec<OfferedTool> with vec![Default::default()]",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/lib.rs",
+          "function": {
+            "function_name": "ToolGateway::offered",
+            "return_type": "-> Vec<OfferedTool>",
+            "span": {
+              "start": {
+                "line": 211,
+                "column": 5
+              },
+              "end": {
+                "line": 228,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 213,
+              "column": 9
+            },
+            "end": {
+              "line": 227,
+              "column": 16
+            }
+          },
+          "replacement": "vec![Default::default()]",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__corral-tools__src__lib.rs_line_213_col_9_001.log",
+      "diff_path": "diff/crates__corral-tools__src__lib.rs_line_213_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.458516556,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/lib.rs:233:9: replace ToolGateway::from_wire -> Option<&str> with Some(\"\")",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/lib.rs",
+          "function": {
+            "function_name": "ToolGateway::from_wire",
+            "return_type": "-> Option<&str>",
+            "span": {
+              "start": {
+                "line": 230,
+                "column": 5
+              },
+              "end": {
+                "line": 236,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 233,
+              "column": 9
+            },
+            "end": {
+              "line": 235,
+              "column": 43
+            }
+          },
+          "replacement": "Some(\"\")",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__corral-tools__src__lib.rs_line_233_col_9_001.log",
+      "diff_path": "diff/crates__corral-tools__src__lib.rs_line_233_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 1.7161057149999999,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.351271618,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/lib.rs:233:9: replace ToolGateway::from_wire -> Option<&str> with None",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/lib.rs",
+          "function": {
+            "function_name": "ToolGateway::from_wire",
+            "return_type": "-> Option<&str>",
+            "span": {
+              "start": {
+                "line": 230,
+                "column": 5
+              },
+              "end": {
+                "line": 236,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 233,
+              "column": 9
+            },
+            "end": {
+              "line": 235,
+              "column": 43
+            }
+          },
+          "replacement": "None",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__corral-tools__src__lib.rs_line_233_col_9.log",
+      "diff_path": "diff/crates__corral-tools__src__lib.rs_line_233_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.020671729,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.254335765,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/lib.rs:233:9: replace ToolGateway::from_wire -> Option<&str> with Some(\"xyzzy\")",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/lib.rs",
+          "function": {
+            "function_name": "ToolGateway::from_wire",
+            "return_type": "-> Option<&str>",
+            "span": {
+              "start": {
+                "line": 230,
+                "column": 5
+              },
+              "end": {
+                "line": 236,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 233,
+              "column": 9
+            },
+            "end": {
+              "line": 235,
+              "column": 43
+            }
+          },
+          "replacement": "Some(\"xyzzy\")",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__corral-tools__src__lib.rs_line_233_col_9_002.log",
+      "diff_path": "diff/crates__corral-tools__src__lib.rs_line_233_col_9_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 1.58170388,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.404925423,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/fs/mod.rs:330:5: replace schema -> Value with Default::default()",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/fs/mod.rs",
+          "function": {
+            "function_name": "schema",
+            "return_type": "-> Value",
+            "span": {
+              "start": {
+                "line": 328,
+                "column": 1
+              },
+              "end": {
+                "line": 346,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 330,
+              "column": 5
+            },
+            "end": {
+              "line": 345,
+              "column": 7
+            }
+          },
+          "replacement": "Default::default()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__corral-tools__src__fs__mod.rs_line_330_col_5.log",
+      "diff_path": "diff/crates__corral-tools__src__fs__mod.rs_line_330_col_5.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 1.8127886370000001,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.407674869,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/fs/mod.rs:370:9: replace <impl Tool for FsRead>::spec -> Option<ToolSpec> with Some(Default::default())",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/fs/mod.rs",
+          "function": {
+            "function_name": "<impl Tool for FsRead>::spec",
+            "return_type": "-> Option<ToolSpec>",
+            "span": {
+              "start": {
+                "line": 369,
+                "column": 5
+              },
+              "end": {
+                "line": 374,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 370,
+              "column": 9
+            },
+            "end": {
+              "line": 373,
+              "column": 11
+            }
+          },
+          "replacement": "Some(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__corral-tools__src__fs__mod.rs_line_370_col_9_001.log",
+      "diff_path": "diff/crates__corral-tools__src__fs__mod.rs_line_370_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.85513643,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/fs/mod.rs:370:9: replace <impl Tool for FsRead>::spec -> Option<ToolSpec> with None",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/fs/mod.rs",
+          "function": {
+            "function_name": "<impl Tool for FsRead>::spec",
+            "return_type": "-> Option<ToolSpec>",
+            "span": {
+              "start": {
+                "line": 369,
+                "column": 5
+              },
+              "end": {
+                "line": 374,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 370,
+              "column": 9
+            },
+            "end": {
+              "line": 373,
+              "column": 11
+            }
+          },
+          "replacement": "None",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__corral-tools__src__fs__mod.rs_line_370_col_9.log",
+      "diff_path": "diff/crates__corral-tools__src__fs__mod.rs_line_370_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 1.416143547,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.454707945,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/fs/mod.rs:412:9: replace <impl Tool for FsWrite>::spec -> Option<ToolSpec> with Some(Default::default())",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/fs/mod.rs",
+          "function": {
+            "function_name": "<impl Tool for FsWrite>::spec",
+            "return_type": "-> Option<ToolSpec>",
+            "span": {
+              "start": {
+                "line": 411,
+                "column": 5
+              },
+              "end": {
+                "line": 417,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 412,
+              "column": 9
+            },
+            "end": {
+              "line": 416,
+              "column": 11
+            }
+          },
+          "replacement": "Some(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__corral-tools__src__fs__mod.rs_line_412_col_9_001.log",
+      "diff_path": "diff/crates__corral-tools__src__fs__mod.rs_line_412_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.861053187,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/fs/mod.rs:412:9: replace <impl Tool for FsWrite>::spec -> Option<ToolSpec> with None",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/fs/mod.rs",
+          "function": {
+            "function_name": "<impl Tool for FsWrite>::spec",
+            "return_type": "-> Option<ToolSpec>",
+            "span": {
+              "start": {
+                "line": 411,
+                "column": 5
+              },
+              "end": {
+                "line": 417,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 412,
+              "column": 9
+            },
+            "end": {
+              "line": 416,
+              "column": 11
+            }
+          },
+          "replacement": "None",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__corral-tools__src__fs__mod.rs_line_412_col_9.log",
+      "diff_path": "diff/crates__corral-tools__src__fs__mod.rs_line_412_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 1.359390234,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.355099797,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/fs/mod.rs:457:9: replace <impl Tool for FsDelete>::spec -> Option<ToolSpec> with Some(Default::default())",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/fs/mod.rs",
+          "function": {
+            "function_name": "<impl Tool for FsDelete>::spec",
+            "return_type": "-> Option<ToolSpec>",
+            "span": {
+              "start": {
+                "line": 456,
+                "column": 5
+              },
+              "end": {
+                "line": 461,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 457,
+              "column": 9
+            },
+            "end": {
+              "line": 460,
+              "column": 11
+            }
+          },
+          "replacement": "Some(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__corral-tools__src__fs__mod.rs_line_457_col_9_001.log",
+      "diff_path": "diff/crates__corral-tools__src__fs__mod.rs_line_457_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.654738573,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/corral-tools/src/fs/mod.rs:457:9: replace <impl Tool for FsDelete>::spec -> Option<ToolSpec> with None",
+          "package": "corral-tools",
+          "file": "crates/corral-tools/src/fs/mod.rs",
+          "function": {
+            "function_name": "<impl Tool for FsDelete>::spec",
+            "return_type": "-> Option<ToolSpec>",
+            "span": {
+              "start": {
+                "line": 456,
+                "column": 5
+              },
+              "end": {
+                "line": 461,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 457,
+              "column": 9
+            },
+            "end": {
+              "line": 460,
+              "column": 11
+            }
+          },
+          "replacement": "None",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__corral-tools__src__fs__mod.rs_line_457_col_9.log",
+      "diff_path": "diff/crates__corral-tools__src__fs__mod.rs_line_457_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 1.365152004,
+          "process_status": "Success",
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.301953007,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=corral-tools@0.0.1"
+          ]
+        }
+      ]
+    }
+  ],
+  "total_mutants": 26,
+  "missed": 0,
+  "caught": 21,
+  "timeout": 0,
+  "unviable": 5,
+  "success": 0,
+  "start_time": "2026-11-19T04:14:57.087531316Z",
+  "end_time": "2026-11-19T04:16:10.529158771Z",
+  "cargo_mutants_version": "27.1.0"
+}

@@ -1,0 +1,266 @@
+
+*** crates/corral-tools/src/lib.rs:74:47: replace == with != in wire_name
+
+*** mutation diff:
+--- crates/corral-tools/src/lib.rs
++++ replace == with != in wire_name
+@@ -66,17 +66,17 @@
+     pub parameters: Value,
+ }
+ 
+ /// The name a tool goes out under: every character that isn't an ASCII letter, a digit, `_` or
+ /// `-` becomes `_`, so `fs.read` is `fs_read`.
+ pub fn wire_name(name: &str) -> String {
+     name.chars()
+         .map(|c| {
+-            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
++            if c.is_ascii_alphanumeric() || c != /* ~ changed by cargo-mutants ~ */ '_' || c == '-' {
+                 c
+             } else {
+                 '_'
+             }
+         })
+         .collect()
+ }
+ 
+
+
+*** /root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo test --no-run --verbose --package=corral-tools@0.0.1
+       Fresh unicode-ident v1.0.27
+       Fresh proc-macro2 v1.0.107
+       Fresh quote v1.0.47
+       Fresh syn v3.0.9
+       Fresh serde_core v1.0.229
+       Fresh linux-raw-sys v0.12.1
+       Fresh bitflags v2.13.2
+       Fresh rustix v1.1.6
+       Fresh zmij v1.0.23
+       Fresh io-lifetimes v3.0.1
+       Fresh io-lifetimes v2.0.4
+       Fresh serde_derive v1.0.229
+       Fresh tokio-macros v2.7.2
+       Fresh thiserror-impl v2.0.21
+       Fresh once_cell v1.21.4
+       Fresh winnow v1.0.5
+       Fresh pin-project-lite v0.2.17
+       Fresh memchr v2.8.3
+       Fresh itoa v1.0.18
+       Fresh jiff-core v0.1.3
+       Fresh jiff v0.2.40
+       Fresh serde_json v1.0.154
+       Fresh tokio v1.54.1
+       Fresh toml_parser v1.1.5+spec-1.1.0
+       Fresh rustix-linux-procfs v0.1.1
+       Fresh thiserror v2.0.21
+       Fresh serde v1.0.229
+       Fresh fs-set-times v0.20.3
+       Fresh io-extras v0.19.0
+       Fresh toml_datetime v1.1.3+spec-1.1.0
+       Fresh serde_spanned v1.1.3
+       Fresh ambient-authority v0.0.2
+       Fresh ipnet v2.12.2
+       Fresh toml_writer v1.2.0+spec-1.1.0
+       Fresh maybe-owned v0.3.4
+       Fresh cap-primitives v4.0.3
+       Fresh toml v1.2.1+spec-1.1.0
+       Fresh corral-core v0.0.1 (/tmp/cargo-mutants-cr-bvTwti.tmp/crates/corral-core)
+       Fresh tinyvec v1.13.3
+       Fresh unicode-normalization v0.1.26
+       Fresh corral-policy v0.0.1 (/tmp/cargo-mutants-cr-bvTwti.tmp/crates/corral-policy)
+       Fresh cap-std v4.0.3
+       Dirty corral-tools v0.0.1 (/tmp/cargo-mutants-cr-bvTwti.tmp/crates/corral-tools): the file `crates/corral-tools/src/lib.rs` has changed (1795061745.172533526s, 4s after last build at 1795061741.320681484s)
+   Compiling corral-tools v0.0.1 (/tmp/cargo-mutants-cr-bvTwti.tmp/crates/corral-tools)
+     Running `/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name corral_tools --edition=2024 crates/corral-tools/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type lib --emit=dep-info,metadata,link -C embed-bitcode=no '--warn=clippy::wildcard_enum_match_arm' '--deny=clippy::unwrap_used' --forbid=unsafe_code '--warn=clippy::todo' --warn=missing_docs '--deny=clippy::dbg_macro' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=06415a7a6a1b91db -C extra-filename=-a7591eeb2cfc32f0 --out-dir /tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps -C strip=debuginfo -L dependency=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps --extern cap_std=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libcap_std-7a61c0e86689d3f3.rmeta --extern corral_core=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libcorral_core-38198feeb1d7d033.rmeta --extern corral_policy=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libcorral_policy-ddee9fcd4af69943.rmeta --extern serde_json=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libserde_json-e983f4e4987effe0.rmeta --extern thiserror=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libthiserror-06d3e013f0eeacf2.rmeta --extern tokio=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libtokio-0a33ab0d29bdf4e4.rmeta --extern unicode_normalization=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libunicode_normalization-c4bfe8164fc55010.rmeta`
+     Running `/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name offer --edition=2024 crates/corral-tools/tests/offer.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no '--warn=clippy::wildcard_enum_match_arm' '--deny=clippy::unwrap_used' --forbid=unsafe_code '--warn=clippy::todo' --warn=missing_docs '--deny=clippy::dbg_macro' --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=7e7f2b010191db13 -C extra-filename=-506115fcf526dfca --out-dir /tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps -C strip=debuginfo -L dependency=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps --extern cap_std=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libcap_std-7a61c0e86689d3f3.rlib --extern corral_core=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libcorral_core-38198feeb1d7d033.rlib --extern corral_policy=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libcorral_policy-ddee9fcd4af69943.rlib --extern corral_tools=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libcorral_tools-a7591eeb2cfc32f0.rlib --extern serde_json=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libserde_json-e983f4e4987effe0.rlib --extern thiserror=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libthiserror-06d3e013f0eeacf2.rlib --extern tokio=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libtokio-0a33ab0d29bdf4e4.rlib --extern unicode_normalization=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libunicode_normalization-c4bfe8164fc55010.rlib`
+     Running `/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name fs --edition=2024 crates/corral-tools/tests/fs.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no '--warn=clippy::wildcard_enum_match_arm' '--deny=clippy::unwrap_used' --forbid=unsafe_code '--warn=clippy::todo' --warn=missing_docs '--deny=clippy::dbg_macro' --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=962f99d1b3127cb0 -C extra-filename=-f39e5a25f37ec3ff --out-dir /tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps -C strip=debuginfo -L dependency=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps --extern cap_std=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libcap_std-7a61c0e86689d3f3.rlib --extern corral_core=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libcorral_core-38198feeb1d7d033.rlib --extern corral_policy=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libcorral_policy-ddee9fcd4af69943.rlib --extern corral_tools=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libcorral_tools-a7591eeb2cfc32f0.rlib --extern serde_json=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libserde_json-e983f4e4987effe0.rlib --extern thiserror=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libthiserror-06d3e013f0eeacf2.rlib --extern tokio=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libtokio-0a33ab0d29bdf4e4.rlib --extern unicode_normalization=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libunicode_normalization-c4bfe8164fc55010.rlib`
+     Running `/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name gateway --edition=2024 crates/corral-tools/tests/gateway.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no '--warn=clippy::wildcard_enum_match_arm' '--deny=clippy::unwrap_used' --forbid=unsafe_code '--warn=clippy::todo' --warn=missing_docs '--deny=clippy::dbg_macro' --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=4e797ec4756edabe -C extra-filename=-121b216c705a4326 --out-dir /tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps -C strip=debuginfo -L dependency=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps --extern cap_std=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libcap_std-7a61c0e86689d3f3.rlib --extern corral_core=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libcorral_core-38198feeb1d7d033.rlib --extern corral_policy=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libcorral_policy-ddee9fcd4af69943.rlib --extern corral_tools=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libcorral_tools-a7591eeb2cfc32f0.rlib --extern serde_json=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libserde_json-e983f4e4987effe0.rlib --extern thiserror=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libthiserror-06d3e013f0eeacf2.rlib --extern tokio=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libtokio-0a33ab0d29bdf4e4.rlib --extern unicode_normalization=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libunicode_normalization-c4bfe8164fc55010.rlib`
+     Running `/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name corral_tools --edition=2024 crates/corral-tools/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no '--warn=clippy::wildcard_enum_match_arm' '--deny=clippy::unwrap_used' --forbid=unsafe_code '--warn=clippy::todo' --warn=missing_docs '--deny=clippy::dbg_macro' --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=247609306bf9e800 -C extra-filename=-78097af8246f3a36 --out-dir /tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps -C strip=debuginfo -L dependency=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps --extern cap_std=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libcap_std-7a61c0e86689d3f3.rlib --extern corral_core=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libcorral_core-38198feeb1d7d033.rlib --extern corral_policy=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libcorral_policy-ddee9fcd4af69943.rlib --extern serde_json=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libserde_json-e983f4e4987effe0.rlib --extern thiserror=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libthiserror-06d3e013f0eeacf2.rlib --extern tokio=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libtokio-0a33ab0d29bdf4e4.rlib --extern unicode_normalization=/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/libunicode_normalization-c4bfe8164fc55010.rlib`
+    Finished `test` profile [unoptimized] target(s) in 3.25s
+  Executable `/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/corral_tools-78097af8246f3a36`
+  Executable `/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/fs-f39e5a25f37ec3ff`
+  Executable `/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/gateway-121b216c705a4326`
+  Executable `/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/offer-506115fcf526dfca`
+
+*** result: Success
+
+*** /root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo test --verbose --package=corral-tools@0.0.1
+       Fresh unicode-ident v1.0.27
+       Fresh proc-macro2 v1.0.107
+       Fresh quote v1.0.47
+       Fresh syn v3.0.9
+       Fresh serde_core v1.0.229
+       Fresh bitflags v2.13.2
+       Fresh linux-raw-sys v0.12.1
+       Fresh rustix v1.1.6
+       Fresh io-lifetimes v3.0.1
+       Fresh zmij v1.0.23
+       Fresh io-lifetimes v2.0.4
+       Fresh serde_derive v1.0.229
+       Fresh tokio-macros v2.7.2
+       Fresh thiserror-impl v2.0.21
+       Fresh jiff-core v0.1.3
+       Fresh memchr v2.8.3
+       Fresh itoa v1.0.18
+       Fresh winnow v1.0.5
+       Fresh pin-project-lite v0.2.17
+       Fresh once_cell v1.21.4
+       Fresh rustix-linux-procfs v0.1.1
+       Fresh tokio v1.54.1
+       Fresh toml_parser v1.1.5+spec-1.1.0
+       Fresh serde_json v1.0.154
+       Fresh jiff v0.2.40
+       Fresh thiserror v2.0.21
+       Fresh serde v1.0.229
+       Fresh fs-set-times v0.20.3
+       Fresh io-extras v0.19.0
+       Fresh toml_datetime v1.1.3+spec-1.1.0
+       Fresh serde_spanned v1.1.3
+       Fresh ipnet v2.12.2
+       Fresh ambient-authority v0.0.2
+       Fresh maybe-owned v0.3.4
+       Fresh toml_writer v1.2.0+spec-1.1.0
+       Fresh toml v1.2.1+spec-1.1.0
+       Fresh cap-primitives v4.0.3
+       Fresh corral-core v0.0.1 (/tmp/cargo-mutants-cr-bvTwti.tmp/crates/corral-core)
+       Fresh tinyvec v1.13.3
+       Fresh unicode-normalization v0.1.26
+       Fresh corral-policy v0.0.1 (/tmp/cargo-mutants-cr-bvTwti.tmp/crates/corral-policy)
+       Fresh cap-std v4.0.3
+       Fresh corral-tools v0.0.1 (/tmp/cargo-mutants-cr-bvTwti.tmp/crates/corral-tools)
+    Finished `test` profile [unoptimized] target(s) in 0.25s
+     Running `/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/corral_tools-78097af8246f3a36`
+
+running 5 tests
+test checkpoint::tests::a_waiting_checkpoint_debugs_its_call_and_hides_the_locator ... ok
+test checkpoint::tests::notes_are_trimmed_capped_and_empty_ones_dropped ... ok
+test checkpoint::tests::the_gesture_message_names_what_is_needed ... ok
+test runner::tests::a_long_detail_is_cut_to_the_cap_with_a_marker ... ok
+test runner::tests::the_detail_names_the_tool_the_destination_and_the_arguments ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/fs-f39e5a25f37ec3ff`
+
+running 14 tests
+test tp_fs_01_parent_components_are_refused_wherever_they_are ... ok
+test tp_fs_02_absolute_paths_work_only_inside_a_root_and_home_shortcuts_are_refused ... ok
+test tp_fs_04_a_link_that_stays_inside_works ... ok
+test tp_fs_03_a_link_that_leads_outside_is_refused ... ok
+test tp_fs_05_a_file_also_linked_from_elsewhere_is_refused ... ok
+test tp_fs_06_a_name_that_differs_only_in_case_is_refused ... ok
+test tp_fs_07_a_name_that_differs_only_in_unicode_normalization_is_refused ... ok
+test tp_fs_08_a_folder_swapped_for_a_link_after_the_sandbox_was_made_is_still_refused ... ok
+test tp_fs_09_an_unreadable_file_is_not_called_an_escape ... ok
+test tp_fs_09_roots_must_be_folders_and_a_second_root_is_reached_by_its_absolute_path ... ok
+test tp_fs_09_writes_at_the_same_time_never_collide ... ok
+test tp_fs_10_errors_read_plainly ... ok
+test tp_fs_10_the_file_tools_carry_their_class_and_destination_and_report_plainly ... ok
+test tp_fs_09_writes_are_whole_or_nothing_and_sizes_are_capped ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running `/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/gateway-121b216c705a4326`
+
+running 10 tests
+test a_tool_is_trusted_unless_it_says_otherwise ... ok
+test output_is_cut_back_to_a_character_boundary ... ok
+test rules_are_reexported_for_profiles ... ok
+test the_model_sees_at_most_16_kb_of_tool_output ... ok
+test tp_gate_04_unknown_and_duplicate_tools_are_refused ... ok
+test tp_gate_05_output_is_capped_for_the_model_and_kept_whole ... ok
+test tp_gate_06_a_tool_that_reads_untrusted_content_taints_the_run ... ok
+test tp_gate_07_a_tool_error_is_typed_and_doesnt_taint ... ok
+test tp_pol_10_a_token_decided_for_another_class_is_refused ... ok
+test tp_pol_10_a_token_runs_exactly_the_call_it_was_issued_for ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/tmp/cargo-mutants-cr-bvTwti.tmp/target/debug/deps/offer-506115fcf526dfca`
+
+running 7 tests
+test tp_tool_01_file_tools_describe_themselves ... ok
+test tp_tool_01_a_call_shaped_like_the_spec_works ... ok
+test tp_tool_02_the_gateway_offers_only_tools_with_a_spec ... FAILED
+test tp_tool_02_a_wire_name_maps_back_to_its_tool ... FAILED
+test tp_tool_02_wire_names_use_only_safe_characters ... FAILED
+test tp_tool_03_an_offered_tool_needs_a_usable_wire_name ... ok
+test tp_tool_03_two_tools_cant_share_a_wire_name ... FAILED
+
+failures:
+
+---- tp_tool_02_the_gateway_offers_only_tools_with_a_spec stdout ----
+
+thread 'tp_tool_02_the_gateway_offers_only_tools_with_a_spec' (4067) panicked at crates/corral-tools/tests/offer.rs:177:5:
+assertion `left == right` failed
+  left: [("fs.delete", "fs.delete"), ("fs.read", "fs.read"), ("fs.write", "fs.write")]
+ right: [("fs_delete", "fs.delete"), ("fs_read", "fs.read"), ("fs_write", "fs.write")]
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+   1: core::panicking::panic_fmt
+   2: core::panicking::assert_failed_inner
+   3: core::panicking::assert_failed::<alloc::vec::Vec<(&str, &str)>, [(&str, &str); 3]>
+   4: offer::tp_tool_02_the_gateway_offers_only_tools_with_a_spec
+   5: offer::tp_tool_02_the_gateway_offers_only_tools_with_a_spec::{closure#0}
+   6: <offer::tp_tool_02_the_gateway_offers_only_tools_with_a_spec::{closure#0} as core::ops::function::FnOnce<()>>::call_once
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- tp_tool_02_a_wire_name_maps_back_to_its_tool stdout ----
+
+thread 'tp_tool_02_a_wire_name_maps_back_to_its_tool' (4066) panicked at crates/corral-tools/tests/offer.rs:199:5:
+assertion `left == right` failed
+  left: None
+ right: Some("fs.read")
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+   1: core::panicking::panic_fmt
+   2: core::panicking::assert_failed_inner
+   3: core::panicking::assert_failed::<core::option::Option<&str>, core::option::Option<&str>>
+   4: offer::tp_tool_02_a_wire_name_maps_back_to_its_tool
+   5: offer::tp_tool_02_a_wire_name_maps_back_to_its_tool::{closure#0}
+   6: <offer::tp_tool_02_a_wire_name_maps_back_to_its_tool::{closure#0} as core::ops::function::FnOnce<()>>::call_once
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- tp_tool_02_wire_names_use_only_safe_characters stdout ----
+
+thread 'tp_tool_02_wire_names_use_only_safe_characters' (4068) panicked at crates/corral-tools/tests/offer.rs:157:5:
+assertion `left == right` failed
+  left: "fs.read"
+ right: "fs_read"
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+   1: core::panicking::panic_fmt
+   2: core::panicking::assert_failed_inner
+   3: core::panicking::assert_failed::<alloc::string::String, &str>
+   4: offer::tp_tool_02_wire_names_use_only_safe_characters
+   5: offer::tp_tool_02_wire_names_use_only_safe_characters::{closure#0}
+   6: <offer::tp_tool_02_wire_names_use_only_safe_characters::{closure#0} as core::ops::function::FnOnce<()>>::call_once
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- tp_tool_03_two_tools_cant_share_a_wire_name stdout ----
+
+thread 'tp_tool_03_two_tools_cant_share_a_wire_name' (4070) panicked at crates/corral-tools/tests/offer.rs:212:5:
+assertion `left == right` failed
+  left: None
+ right: Some(WireClash { tool: "fs_read", other: "fs.read" })
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+   1: core::panicking::panic_fmt
+   2: core::panicking::assert_failed_inner
+   3: core::panicking::assert_failed::<core::option::Option<corral_tools::GatewayError>, core::option::Option<corral_tools::GatewayError>>
+   4: offer::tp_tool_03_two_tools_cant_share_a_wire_name
+   5: offer::tp_tool_03_two_tools_cant_share_a_wire_name::{closure#0}
+   6: <offer::tp_tool_03_two_tools_cant_share_a_wire_name::{closure#0} as core::ops::function::FnOnce<()>>::call_once
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+
+failures:
+    tp_tool_02_a_wire_name_maps_back_to_its_tool
+    tp_tool_02_the_gateway_offers_only_tools_with_a_spec
+    tp_tool_02_wire_names_use_only_safe_characters
+    tp_tool_03_two_tools_cant_share_a_wire_name
+
+test result: FAILED. 3 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+error: test failed, to rerun pass `-p corral-tools --test offer`
+
+*** result: Failure(101)

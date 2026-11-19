@@ -13,6 +13,11 @@
 //!   [`CheckpointDesk`] until the user answers with a strong enough gesture, the profile's timeout
 //!   passes, or the run is stopped (docs/01 §5).
 //!
+//! - **Offering tools to a model** (TP-TOOL-01..03): a tool with a [`ToolSpec`] (a description
+//!   and a JSON schema for its arguments) is offered under its [`wire_name`], since models call
+//!   tools by names of letters, digits, `_` and `-` only. [`ToolGateway::from_wire`] maps the
+//!   name back, so a call the model makes up matches no tool and is `unknown`.
+//!
 //! - **The filesystem sandbox** ([`fs`]): `fs.read`, `fs.write` and `fs.delete` reach only the
 //!   agent's own folders, opened beneath a directory handle (M2 item 6).
 //!
@@ -35,6 +40,45 @@ use std::sync::Arc;
 
 /// The most tool output the model sees, in bytes (docs/01 §4: 16 KB of text by default).
 pub const MODEL_OUTPUT_CAP: usize = 16 * 1024;
+
+/// The longest name a tool can be offered under: the limit model APIs put on function names.
+pub const MAX_WIRE_NAME_CHARS: usize = 64;
+
+/// How a tool is described to a model.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ToolSpec {
+    /// What it does, in plain words, for the model.
+    pub description: String,
+    /// A JSON schema for its arguments.
+    pub parameters: Value,
+}
+
+/// A tool as a model is offered it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OfferedTool {
+    /// The name the model calls it by.
+    pub wire_name: String,
+    /// The registered name.
+    pub name: String,
+    /// What it does, for the model.
+    pub description: String,
+    /// A JSON schema for its arguments.
+    pub parameters: Value,
+}
+
+/// The name a tool goes out under: every character that isn't an ASCII letter, a digit, `_` or
+/// `-` becomes `_`, so `fs.read` is `fs_read`.
+pub fn wire_name(name: &str) -> String {
+    name.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
 
 /// A boxed future, so tools can be async behind `dyn Tool`.
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -67,6 +111,10 @@ pub trait Tool: Send + Sync {
         let _ = args; // Most tools have no destination worth pinning a grant to.
         None
     }
+    /// How to offer it to a model. A tool without one isn't offered.
+    fn spec(&self) -> Option<ToolSpec> {
+        None
+    }
     /// Runs the call.
     fn call<'a>(&'a self, args: &'a Value) -> BoxFuture<'a, Result<String, ToolError>>;
 }
@@ -80,6 +128,17 @@ pub enum GatewayError {
     /// A tool with that name is already registered.
     #[error("a tool called {0} is already registered")]
     Duplicate(String),
+    /// A tool that would be offered under an empty or too long name.
+    #[error("{0:?} can't be offered to a model: its name is empty or longer than 64 characters")]
+    BadWireName(String),
+    /// Another tool already goes out under the same wire name.
+    #[error("{tool} would be offered under the same name as {other}")]
+    WireClash {
+        /// The tool being registered.
+        tool: String,
+        /// The tool already registered.
+        other: String,
+    },
     /// A tool registered as `unknown`.
     #[error("{0} doesn't say what kind of action it is, so it can't be registered")]
     UnknownClass(String),
@@ -113,6 +172,8 @@ pub struct ToolOutput {
 #[derive(Default)]
 pub struct ToolGateway {
     tools: HashMap<String, Arc<dyn Tool>>,
+    /// Wire name → registered name, for every tool.
+    wire: HashMap<String, String>,
 }
 
 impl ToolGateway {
@@ -121,7 +182,8 @@ impl ToolGateway {
         Self::default()
     }
 
-    /// Registers a tool under its name. A name is taken once, with its class.
+    /// Registers a tool under its name. A name is taken once, with its class, and no two tools
+    /// share a wire name.
     pub fn register(&mut self, tool: Arc<dyn Tool>) -> Result<(), GatewayError> {
         let name = tool.name().to_owned();
         if tool.class() == ActionClass::Unknown {
@@ -130,8 +192,47 @@ impl ToolGateway {
         if self.tools.contains_key(&name) {
             return Err(GatewayError::Duplicate(name));
         }
+        let wire = wire_name(&name);
+        let usable = !wire.is_empty() && wire.chars().count() <= MAX_WIRE_NAME_CHARS;
+        if tool.spec().is_some() && !usable {
+            return Err(GatewayError::BadWireName(name));
+        }
+        if let Some(other) = self.wire.get(&wire) {
+            return Err(GatewayError::WireClash {
+                tool: name,
+                other: other.clone(),
+            });
+        }
+        self.wire.insert(wire, name.clone());
         self.tools.insert(name, tool);
         Ok(())
+    }
+
+    /// The tools a model is offered: those with a spec, by name.
+    pub fn offered(&self) -> Vec<OfferedTool> {
+        let mut offered: Vec<OfferedTool> = self
+            .tools
+            .iter()
+            .filter_map(|(name, tool)| {
+                let spec = tool.spec()?;
+                Some(OfferedTool {
+                    wire_name: wire_name(name),
+                    name: name.clone(),
+                    description: spec.description,
+                    parameters: spec.parameters,
+                })
+            })
+            .collect();
+        offered.sort_by(|a, b| a.name.cmp(&b.name));
+        offered
+    }
+
+    /// The registered name of the offered tool a model called `wire`, or `None` if the model
+    /// wasn't offered a tool by that name.
+    pub fn from_wire(&self, wire: &str) -> Option<&str> {
+        let name = self.wire.get(wire)?;
+        let tool = self.tools.get(name)?;
+        tool.spec().map(|_| name.as_str())
     }
 
     /// A registered tool's class, so adapters map calls from the registry, not from the model.
