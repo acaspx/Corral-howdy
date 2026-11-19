@@ -16,6 +16,7 @@
 //!
 //! Real providers run against cassettes (AGENTS.md rule 7); time is tokio's paused clock.
 
+use corral_adapters::agent::MessagesAgent;
 use corral_adapters::agent::ResponsesAgent;
 use corral_adapters::cassette::{Cassette, CassetteTransport, RecordedResponse};
 use corral_adapters::fake::{FakeDriver, FakeScript, ToolSetup};
@@ -511,7 +512,63 @@ impl Subject for ClaudeText {
     }
 }
 
+/// Claude with tools: the agent loop over the Messages API.
+struct ClaudeAgent;
+
+impl Subject for ClaudeAgent {
+    const TOOLS: bool = true;
+
+    fn driver(
+        scenario: &Scenario,
+        setup: ToolSetup,
+    ) -> (Arc<dyn RunDriver>, Sent, Option<&'static str>) {
+        let start = json!({"type": "message_start",
+            "message": {"usage": {"input_tokens": 100, "output_tokens": 1}}});
+        let end = |reason: &str| {
+            [
+                json!({"type": "message_delta", "delta": {"stop_reason": reason},
+                       "usage": {"output_tokens": 20}}),
+                json!({"type": "message_stop"}),
+            ]
+        };
+        let tape = match scenario {
+            Scenario::Answer | Scenario::OverCap => cassette("anthropic", "text-ok.json"),
+            Scenario::Stall => cassette("anthropic", "stall.json"),
+            Scenario::Tool => {
+                let mut first = vec![
+                    start.clone(),
+                    json!({"type": "content_block_start", "index": 0, "content_block": {
+                        "type": "tool_use", "id": "toolu_1", "name": "fs_read", "input": {}}}),
+                    json!({"type": "content_block_delta", "index": 0, "delta": {
+                        "type": "input_json_delta", "partial_json": "{\"path\":\"notes.md\"}"}}),
+                    json!({"type": "content_block_stop", "index": 0}),
+                ];
+                first.extend(end("tool_use"));
+                let mut second = vec![
+                    start,
+                    json!({"type": "content_block_delta", "index": 0, "delta": {
+                        "type": "text_delta", "text": "Your notes say to buy milk."}}),
+                ];
+                second.extend(end("end_turn"));
+                Cassette {
+                    description: "Claude reads notes.md, then answers.".into(),
+                    responses: vec![ok(&first), ok(&second)],
+                }
+            }
+        };
+        let (transport, sent) = replay(tape);
+        let agent = MessagesAgent::new(
+            transport,
+            keys(Provider::Anthropic, ANTHROPIC_KEY),
+            MessagesConfig::anthropic("claude-test"),
+            setup,
+        );
+        (Arc::new(agent), sent, Some(ANTHROPIC_KEY))
+    }
+}
+
 adapter_contract!(fake, Fake);
 adapter_contract!(grok_agent, GrokAgent);
 adapter_contract!(grok_text, GrokText);
 adapter_contract!(claude_text, ClaudeText);
+adapter_contract!(claude_agent, ClaudeAgent);

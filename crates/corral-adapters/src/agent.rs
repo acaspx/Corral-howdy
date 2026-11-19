@@ -1,11 +1,13 @@
-//! Grok with tools: the agent loop (M3 item 3, docs/01 §4–5, TP-TOOL-07..12).
+//! Agents with tools: the agent loop (M3 item 3, docs/01 §4–5, TP-TOOL-07..12, 18).
 //!
-//! A run is a series of turns. Each turn is one Responses request carrying the whole
-//! [`Conversation`] and the agent's offered tools, admitted by the budget meter like any request.
-//! When the model calls tools, each call goes through the agent's [`ToolRunner`]: the policy
-//! decides, an Ask waits at a checkpoint on the agent's card, and only an allowed call runs, in
-//! the gateway. What came back (the output, or why it didn't run) goes into the next turn. The run
-//! completes when the model answers without calling anything.
+//! One loop drives any API that can carry tools ([`ToolProtocol`]): Grok over the Responses API
+//! ([`ResponsesAgent`]) and Claude over the Messages API ([`MessagesAgent`]). A run is a series of
+//! turns. Each turn is one request carrying the whole conversation and the agent's offered tools,
+//! admitted by the budget meter like any request. When the model calls tools, each call goes
+//! through the agent's [`ToolRunner`]: the policy decides, an Ask waits at a checkpoint on the
+//! agent's card, and only an allowed call runs, in the gateway. What came back (the output, or why
+//! it didn't run) goes into the next turn. The run completes when the model answers without
+//! calling anything.
 //!
 //! - **Names.** A call names a tool by its wire name; [`ToolGateway::from_wire`] maps it back to
 //!   the registered tool. A name the model wasn't offered stays as it is, matches no tool, and is
@@ -20,9 +22,11 @@
 //! - **A cap on turns** ([`DEFAULT_MAX_TURNS`]): a run that keeps calling tools without finishing
 //!   fails with a plain message instead of spending on.
 
-use crate::responses::{Conversation, ResponseDecoder, ResponsesConfig};
-use crate::stream::{Failure, StreamDriver, fail_run};
+use crate::messages::MessagesConfig;
+use crate::responses::ResponsesConfig;
+use crate::stream::{Failure, Protocol, StreamDecoder, StreamDriver, fail_run};
 use crate::transport::Transport;
+use corral_core::budget::RequestEstimate;
 use corral_core::event::FailureReason;
 use corral_core::supervisor::{CancelToken, EventSink, RunDriver, RunFuture, RunRequest};
 use corral_policy::Policy;
@@ -36,9 +40,57 @@ use std::sync::Arc;
 /// The most model turns a run gets before Corral stops it.
 pub const DEFAULT_MAX_TURNS: u32 = 20;
 
+/// The most a single tool call's arguments can be, in bytes. A call over it fails the run.
+pub const MAX_CALL_ARGUMENT_BYTES: usize = 1024 * 1024;
+
 /// What the model is told when a call's arguments aren't a JSON object.
 const BAD_ARGUMENTS: &str =
     "Corral couldn't read this call: its arguments must be a JSON object. Nothing ran.";
+
+/// A tool call the model made: what to run, and the ID its result goes back under.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionCall {
+    /// Pairs the call with its output.
+    pub call_id: String,
+    /// The wire name of the tool it called.
+    pub name: String,
+    /// Its arguments, as the JSON text the model wrote.
+    pub arguments: String,
+}
+
+/// An API the agent loop can drive with tools: how a turn's request looks, how its calls are
+/// read, and how a turn goes back into the conversation.
+pub trait ToolProtocol: Protocol {
+    /// Everything said so far in a run, in the API's own shape.
+    type Conversation: Send + Sync;
+    /// Reads one response, keeping its tool calls.
+    type ToolDecoder: StreamDecoder + Send;
+    /// A conversation that starts with the user's prompt.
+    fn conversation(&self, prompt: &str) -> Self::Conversation;
+    /// One turn's request: the conversation, the tools, the output limit the meter allowed.
+    fn turn_body(
+        &self,
+        conversation: &Self::Conversation,
+        tools: &[OfferedTool],
+        max_output_tokens: u32,
+    ) -> Value;
+    /// The most one turn could cost.
+    fn turn_estimate(
+        &self,
+        conversation: &Self::Conversation,
+        tools: &[OfferedTool],
+    ) -> RequestEstimate;
+    /// A decoder for a response to a request that offered tools.
+    fn tool_decoder(&self) -> Self::ToolDecoder;
+    /// The response's text and its calls, once it's over.
+    fn take_turn(decoder: &mut Self::ToolDecoder) -> (String, Vec<FunctionCall>);
+    /// Adds a turn: what the model said, each call it made and what came back.
+    fn record(
+        conversation: &mut Self::Conversation,
+        said: &str,
+        results: &[(FunctionCall, String)],
+    );
+}
 
 /// What an agent's tool calls go through: its policy, its tools and the desk where checkpoints
 /// wait. The fake agent uses the same.
@@ -54,20 +106,26 @@ pub struct ToolSetup {
     pub ids: IdSource,
 }
 
-/// A [`RunDriver`] for an agent with tools over a Responses API.
-pub struct ResponsesAgent {
-    stream: StreamDriver<ResponsesConfig>,
+/// A [`RunDriver`] for an agent with tools over any [`ToolProtocol`].
+pub struct ToolAgent<P> {
+    stream: StreamDriver<P>,
     tools: ToolSetup,
     max_turns: u32,
 }
 
-impl ResponsesAgent {
+/// Grok with tools, over the Responses API.
+pub type ResponsesAgent = ToolAgent<ResponsesConfig>;
+
+/// Claude with tools, over the Messages API.
+pub type MessagesAgent = ToolAgent<MessagesConfig>;
+
+impl<P: ToolProtocol> ToolAgent<P> {
     /// An agent that sends through `transport`, reads keys from `keys`, and runs its tool calls
     /// through `tools`.
     pub fn new(
         transport: Arc<dyn Transport>,
         keys: Arc<dyn SecretStore>,
-        config: ResponsesConfig,
+        config: P,
         tools: ToolSetup,
     ) -> Self {
         Self {
@@ -84,7 +142,7 @@ impl ResponsesAgent {
     }
 }
 
-impl RunDriver for ResponsesAgent {
+impl<P: ToolProtocol> RunDriver for ToolAgent<P> {
     fn run(&self, request: RunRequest, sink: EventSink, cancel: CancelToken) -> RunFuture {
         let setup = self.tools.clone();
         let agent = Agent {
@@ -106,8 +164,8 @@ impl RunDriver for ResponsesAgent {
 }
 
 /// One run's agent: a fresh runner, so no grants or taint carry over (TP-POL-04).
-struct Agent {
-    stream: StreamDriver<ResponsesConfig>,
+struct Agent<P> {
+    stream: StreamDriver<P>,
     runner: ToolRunner,
     gateway: Arc<ToolGateway>,
     offered: Vec<OfferedTool>,
@@ -122,23 +180,24 @@ enum Sent {
     Over,
 }
 
-impl Agent {
+impl<P: ToolProtocol> Agent<P> {
     async fn work(&self, prompt: &str, sink: &EventSink, cancel: &CancelToken) {
-        let mut conversation = Conversation::new(prompt);
+        let config = self.stream.config();
+        let mut conversation = config.conversation(prompt);
         for _ in 0..self.max_turns {
-            let mut decoder = ResponseDecoder::offering_tools();
+            let mut decoder = config.tool_decoder();
             if let Sent::Over = self.send(&conversation, &mut decoder, sink, cancel).await {
                 return;
             }
-            let calls = decoder.take_calls();
+            let (said, calls) = P::take_turn(&mut decoder);
             // No calls: the decoder logged run.completed (or run.failed).
             if calls.is_empty() {
                 return;
             }
-            conversation.said(decoder.said());
+            let mut results = Vec::with_capacity(calls.len());
             for call in calls {
                 let Ok(Value::Object(args)) = serde_json::from_str::<Value>(&call.arguments) else {
-                    conversation.called(&call, BAD_ARGUMENTS);
+                    results.push((call, BAD_ARGUMENTS.to_owned()));
                     continue;
                 };
                 let tool = self.gateway.from_wire(&call.name).unwrap_or(&call.name);
@@ -156,8 +215,9 @@ impl Agent {
                     ToolAnswer::Denied { reason, note: None } => reason,
                     ToolAnswer::Stopped => return,
                 };
-                conversation.called(&call, &output);
+                results.push((call, output));
             }
+            P::record(&mut conversation, &said, &results);
         }
         fail_run(
             sink,
@@ -174,8 +234,8 @@ impl Agent {
     /// lifts the limit to the hard cap, so the turn is asked about once.
     async fn send(
         &self,
-        conversation: &Conversation,
-        decoder: &mut ResponseDecoder,
+        conversation: &P::Conversation,
+        decoder: &mut P::ToolDecoder,
         sink: &EventSink,
         cancel: &CancelToken,
     ) -> Sent {

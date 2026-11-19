@@ -165,7 +165,7 @@ Loop detector (item 7) ✅ 2026-11-15: in the policy gate; from the `loop_limit`
 **Exit:** E2E journeys J1–J6 and J9–J11 (test plan §6) green; TP-SHAPE-*, TP-RANK-*, TP-USAGE-*, TP-GLASS-*, TP-PLACE-*, TP-HOVER-*, TP-TRACE-*, TP-LOGO-* green; axe zero serious violations; performance budgets met (corral summon p95 < 150 ms, event→UI p95 < 100 ms, idle corral 0 frames, morph < 2 ms GPU).
 
 ## M5: More adapters (~3 weeks; issues parallelize well)
-1. `anthropic_messages` client + native agents on Claude models
+1. `anthropic_messages` client + native agents on Claude models (client ✅ SK-7; tools through the shared agent loop ✅ 2026-11-19, pulled forward, TP-TOOL-16..18)
 2. Meta Model API (Muse Spark) through the OpenAI-compatible client (config + cassettes)
 3. `managed` adapter for the OpenAI Agents API (scope per Spike S3)
 4. `acp` adapter: spawn, process group, permission mapping, kill on cancel (per Spike S4)

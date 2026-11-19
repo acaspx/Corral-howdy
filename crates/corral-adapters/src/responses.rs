@@ -28,6 +28,7 @@
 //! - **Stop** (TP-ADP-03): the whole request runs inside a `select!` on the cancel token, so
 //!   Stop drops the connection at once.
 
+use crate::agent::ToolProtocol;
 use crate::sse::SseEvent;
 use crate::stream::{Protocol, StreamDecoder, StreamDriver, clean};
 use crate::transport::KeyHeader;
@@ -110,19 +111,7 @@ impl ResponsesConfig {
     }
 }
 
-/// The most a single function call's arguments can be, in bytes. A call over it fails the run.
-pub const MAX_CALL_ARGUMENT_BYTES: usize = 1024 * 1024;
-
-/// A function call the model made: what to run, and the ID its result goes back under.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FunctionCall {
-    /// Pairs the call with its output.
-    pub call_id: String,
-    /// The wire name of the tool it called.
-    pub name: String,
-    /// Its arguments, as the JSON text the model wrote.
-    pub arguments: String,
-}
+pub use crate::agent::{FunctionCall, MAX_CALL_ARGUMENT_BYTES};
 
 /// Everything said so far in a run, as Responses input items. Nothing is stored at xAI, so each
 /// request carries it all.
@@ -165,6 +154,38 @@ impl Conversation {
     /// The input items, in order.
     pub fn items(&self) -> &[Value] {
         &self.items
+    }
+}
+
+impl ToolProtocol for ResponsesConfig {
+    type Conversation = Conversation;
+    type ToolDecoder = ResponseDecoder;
+
+    fn conversation(&self, prompt: &str) -> Conversation {
+        Conversation::new(prompt)
+    }
+
+    fn turn_body(&self, conversation: &Conversation, tools: &[OfferedTool], max: u32) -> Value {
+        ResponsesConfig::turn_body(self, conversation, tools, max)
+    }
+
+    fn turn_estimate(&self, conversation: &Conversation, tools: &[OfferedTool]) -> RequestEstimate {
+        ResponsesConfig::turn_estimate(self, conversation, tools)
+    }
+
+    fn tool_decoder(&self) -> ResponseDecoder {
+        ResponseDecoder::offering_tools()
+    }
+
+    fn take_turn(decoder: &mut ResponseDecoder) -> (String, Vec<FunctionCall>) {
+        (decoder.said().to_owned(), decoder.take_calls())
+    }
+
+    fn record(conversation: &mut Conversation, said: &str, results: &[(FunctionCall, String)]) {
+        conversation.said(said);
+        for (call, output) in results {
+            conversation.called(call, output);
+        }
     }
 }
 

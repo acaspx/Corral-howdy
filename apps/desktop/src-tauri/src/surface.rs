@@ -12,8 +12,9 @@
 //! The corral holds one agent per connected provider (Grok, Claude, GPT, Muse Spark; see
 //! `corral_adapters::catalog`): connecting a key adds its drop and removing it takes the drop away
 //! ([`Corral::refresh`]). Grok and Claude have clients; the others say so when given a task.
-//! Grok works with the file tools in `~/Corral/Grok` ([`crate::agent_tools`]): its calls go
-//! through the policy, and when the policy asks, they wait on its card. Claude has no tools yet.
+//! Grok and Claude work with the file tools, each in its own folder (`~/Corral/Grok`,
+//! `~/Corral/Claude`; [`crate::agent_tools`]): their calls go through the policy, and when the
+//! policy asks, they wait on the agent's card.
 //! Each run has a hard cap of [`RUN_CAP_MICRO_USD`] and asks on the card before going past
 //! [`SOFT_LIMIT_MICRO_USD`]. Events go to the SQLite event store in the app's data folder.
 //!
@@ -31,7 +32,7 @@ use crate::linked::LinkedStore;
 use crate::logos::{LogoStore, fetch_missing};
 use crate::native;
 use crate::touch_id::{Finished, TouchIdDesk};
-use corral_adapters::agent::{ResponsesAgent, ToolSetup};
+use corral_adapters::agent::{MessagesAgent, ResponsesAgent, ToolSetup};
 use corral_adapters::catalog::{AgentRouter, agent_for, agents_for, corral_agents};
 use corral_adapters::linked::{LinkChange, LinkedApp, LinkedSettings};
 use corral_adapters::logos::{LogoId, ReqwestLogoFetcher};
@@ -60,7 +61,8 @@ use tauri::{AppHandle, Manager};
 /// The skeleton's per-run hard cap: $0.25 (docs/03, J0).
 pub const RUN_CAP_MICRO_USD: u64 = 250_000;
 /// Where a run asks on its card before spending more: $0.10 (TP-BUD-02). An agent that can't
-/// ask (Claude, for now) has each request held under it instead.
+/// ask (one whose folder couldn't be made, so it has no tools) has each request held under it
+/// instead.
 pub const SOFT_LIMIT_MICRO_USD: u64 = 100_000;
 /// The model Grok's drop uses. Model IDs are config (docs/01 §4); this is the skeleton's.
 pub const GROK_MODEL: &str = "grok-4.7";
@@ -100,7 +102,7 @@ pub struct Corral {
     pub logos: Option<LogoStore>,
     linked: Arc<Linked>,
     keys: Arc<dyn SecretStore>,
-    /// Where Grok's tool calls and spend checkpoints wait for the user's answer from the card.
+    /// Where agents' tool calls and spend checkpoints wait for the user's answer from the card.
     desk: Arc<CheckpointDesk>,
     /// The Touch ID prompt for a critical checkpoint, if one is up (TP-CHK-17).
     touch_id: Arc<Mutex<TouchIdDesk>>,
@@ -376,7 +378,7 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
 }
 
 /// The supervisor: each agent's runs go to its provider (Grok and Claude have clients so far),
-/// the event store, the $0.25 cap and the $0.10 soft limit. Grok's checkpoints wait on `desk`.
+/// the event store, the $0.25 cap and the $0.10 soft limit. Tool checkpoints wait on `desk`.
 fn supervisor(
     app: &AppHandle,
     feed: &Arc<CorralFeed>,
@@ -410,8 +412,8 @@ fn supervisor(
     let transport = ReqwestTransport::new().map_err(|e| format!("no HTTPS client: {e}"))?;
     let keys = app.state::<Keys>().0.clone();
     let transport: Arc<dyn Transport> = Arc::new(transport);
-    // Without its folder, Grok still answers, with no tools.
-    let grok: Arc<dyn RunDriver> = match grok_tools(app, desk) {
+    // Without its folder, an agent still answers, with no tools.
+    let grok: Arc<dyn RunDriver> = match agent_file_tools(app, desk, Provider::Xai) {
         Ok(tools) => Arc::new(ResponsesAgent::new(
             transport.clone(),
             keys.clone(),
@@ -427,10 +429,25 @@ fn supervisor(
             ))
         }
     };
-    let claude = MessagesDriver::new(transport, keys, MessagesConfig::anthropic(CLAUDE_MODEL));
+    let claude: Arc<dyn RunDriver> = match agent_file_tools(app, desk, Provider::Anthropic) {
+        Ok(tools) => Arc::new(MessagesAgent::new(
+            transport,
+            keys,
+            MessagesConfig::anthropic(CLAUDE_MODEL),
+            tools,
+        )),
+        Err(reason) => {
+            eprintln!("corral: Claude has no tools: {reason}");
+            Arc::new(MessagesDriver::new(
+                transport,
+                keys,
+                MessagesConfig::anthropic(CLAUDE_MODEL),
+            ))
+        }
+    };
     let mut drivers: HashMap<AgentId, Arc<dyn RunDriver>> = HashMap::new();
     drivers.insert(agent_for(Provider::Xai).id, grok);
-    drivers.insert(agent_for(Provider::Anthropic).id, Arc::new(claude));
+    drivers.insert(agent_for(Provider::Anthropic).id, claude);
     let driver = AgentRouter::new(drivers);
     let built = Supervisor::with_ledger(
         SupervisorConfig::default(),
@@ -446,13 +463,18 @@ fn supervisor(
     Ok(built)
 }
 
-/// Grok's file tools over `~/Corral/Grok`, with checkpoints on `desk`.
-fn grok_tools(app: &AppHandle, desk: &Arc<CheckpointDesk>) -> Result<ToolSetup, String> {
+/// The file tools over `~/Corral/<agent name>` for `provider`'s agent, with checkpoints on
+/// `desk`.
+fn agent_file_tools(
+    app: &AppHandle,
+    desk: &Arc<CheckpointDesk>,
+    provider: Provider,
+) -> Result<ToolSetup, String> {
     let home = app
         .path()
         .home_dir()
         .map_err(|e| format!("no home folder: {e}"))?;
-    let name = agent_for(Provider::Xai).name;
+    let name = agent_for(provider).name;
     file_tools(&agent_folder(&home, &name), Arc::clone(desk))
 }
 
