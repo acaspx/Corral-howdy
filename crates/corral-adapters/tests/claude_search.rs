@@ -7,12 +7,13 @@
 //! to Anthropic exactly as they came, encrypted results included, and a paused turn is resumed.
 //! No network: the Messages stream is written out as Anthropic documents it.
 
-use corral_adapters::agent::{MessagesAgent, ProviderTool, ToolSetup, allows};
+use corral_adapters::agent::{MessagesAgent, ProviderTool, ToolProtocol, ToolSetup, allows};
 use corral_adapters::cassette::{Cassette, CassetteTransport, RecordedResponse};
 use corral_adapters::messages::{
     MessageDecoder, MessagesConfig, MessagesConversation, WEB_SEARCH_MICRO_USD,
     WEB_SEARCHES_PER_TURN,
 };
+use corral_adapters::responses::ResponsesConfig;
 use corral_adapters::sse::SseEvent;
 use corral_adapters::stream::StreamDecoder;
 use corral_core::budget::BudgetConfig;
@@ -679,4 +680,89 @@ async fn tp_prov_09_after_a_search_sending_data_out_names_the_untrusted_content(
     );
     let messages = w.transport.seen()[0].body["messages"].clone();
     assert_eq!(messages.as_array().map(Vec::len), Some(1));
+}
+
+#[test]
+fn tp_prov_08_a_response_that_ends_mid_search_fails_the_run() {
+    let mut d = MessageDecoder::offering_tools(searching().price).with_web_search();
+    let out = feed(
+        &mut d,
+        &[
+            json!({"type": "message_start", "message": {"usage": {"input_tokens": 1}}}),
+            json!({"type": "content_block_start", "index": 0, "content_block": {
+                "type": "server_tool_use", "id": "srvtoolu_1", "name": "web_search"}}),
+            json!({"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 1}}),
+            json!({"type": "message_stop"}),
+        ],
+    );
+    let [EventBody::RunFailed(failed)] = out.as_slice() else {
+        panic!("expected one run.failed, got {:?}", kinds(&out));
+    };
+    assert_eq!(failed.reason, FailureReason::Adapter);
+    assert!(
+        failed.message.contains("middle of a tool call"),
+        "{}",
+        failed.message
+    );
+    assert!(d.content().is_empty(), "nothing is kept");
+}
+
+#[test]
+fn tp_prov_09_only_a_paused_turn_is_resumed() {
+    for (stop_reason, paused) in [
+        ("pause_turn", true),
+        ("end_turn", false),
+        ("tool_use", false),
+    ] {
+        let config = searching();
+        let mut d = config.tool_decoder();
+        feed(&mut d, &search_events(stop_reason));
+        assert_eq!(
+            <MessagesConfig as ToolProtocol>::paused(&d),
+            paused,
+            "{stop_reason}"
+        );
+        assert_eq!(
+            <MessagesConfig as ToolProtocol>::untrusted(&d),
+            Some("web search results from Anthropic's servers")
+        );
+    }
+}
+
+#[test]
+fn tp_prov_09_an_api_without_provider_tools_reads_nothing_untrusted_and_never_pauses() {
+    let config = ResponsesConfig::xai("grok-test");
+    let decoder = config.tool_decoder();
+    assert_eq!(<ResponsesConfig as ToolProtocol>::untrusted(&decoder), None);
+    assert!(!<ResponsesConfig as ToolProtocol>::paused(&decoder));
+}
+
+#[test]
+fn tp_prov_06_thinking_goes_back_as_it_came_with_its_signature() {
+    let mut d = MessageDecoder::offering_tools(searching().price).with_web_search();
+    feed(
+        &mut d,
+        &[
+            json!({"type": "message_start", "message": {"usage": {"input_tokens": 1}}}),
+            json!({"type": "content_block_start", "index": 0, "content_block": {
+                "type": "thinking", "thinking": "", "signature": ""}}),
+            json!({"type": "content_block_delta", "index": 0, "delta": {
+                "type": "thinking_delta", "thinking": "Search first, "}}),
+            json!({"type": "content_block_delta", "index": 0, "delta": {
+                "type": "thinking_delta", "thinking": "then answer."}}),
+            json!({"type": "content_block_delta", "index": 0, "delta": {
+                "type": "signature_delta", "signature": "EqQBCgIYAhIM"}}),
+            json!({"type": "content_block_stop", "index": 0}),
+            json!({"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 1}}),
+            json!({"type": "message_stop"}),
+        ],
+    );
+    assert_eq!(
+        d.content(),
+        [
+            json!({"type": "thinking", "thinking": "Search first, then answer.",
+                "signature": "EqQBCgIYAhIM"})
+        ]
+    );
+    assert_eq!(d.said(), "", "thinking isn't the answer");
 }
