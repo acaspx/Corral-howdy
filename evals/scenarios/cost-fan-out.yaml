@@ -1,0 +1,30 @@
+# Cost scenario (docs/05-evals.md §2): many agents working at once stay under the cap for all of
+# them together (security model T9, multi-agent amplification). Eight runs over four agents start
+# at once, two turns each. Each agent is far from its own $25 month, but all of them together have
+# $0.03 left, so the global cap is the one that binds.
+#
+# Agents spawning sub-tasks of their own comes with sub-agents (A2A, M5); until then this fan-out
+# of runs over agents stands in for it. Prices as in cost-race.yaml.
+id: EV-COST-03
+title: Eight runs over four agents stay under the cap for all agents together
+agent:
+  adapter: fake
+  policy_profile: default
+prompt: "Summarize the news."
+budget:
+  price_per_million_tokens: { input_micro_usd: 2000000, output_micro_usd: 6000000 }
+  global_month_cap_micro_usd: 30000
+runs: 8
+agents: 4
+steps:
+  - model_says: "Reading the headlines."
+  - wait_ms: 1000
+  - usage: { input_tokens: 275, output_tokens: 500 }
+  - new_turn: true
+  - model_says: "Here's the summary."
+  - wait_ms: 1000
+  - usage: { input_tokens: 275, output_tokens: 500 }
+expect:
+  spend:
+    never_over: [run, agent_month, all_month]
+    refused_at_least: 4

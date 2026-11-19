@@ -132,7 +132,7 @@ Goal: the safety core, proven before any real agent can touch it.
 7. Loop detector (repeat tool + args → pause)
 8. Safety eval suite v1 on fake agents (injection-shaped scenarios) (✅ 2026-11-14: the runner executes scenarios on the FakeAdapter through the real policy, desk and gateway; a pending safety scenario fails the gate; EV-SAFE-01..05 and 26 pass)
 
-**Exit:** TP-POL-*, TP-FS-*, TP-BUD-* green; **EV-SAFE gate = 100% recall** on the must-catch set; EV-COST-01..03 passing.
+**Exit:** TP-POL-*, TP-FS-*, TP-BUD-* green; **EV-SAFE gate = 100% recall** on the must-catch set; EV-COST-01..03 passing (✅ 2026-11-18, in the gate baseline).
 
 Loop detector (item 7) ✅ 2026-11-15: in the policy gate; from the `loop_limit`-th identical call on (5 by default), each one waits at a checkpoint (TP-LOOP-01..06, EV-COST-02).
 

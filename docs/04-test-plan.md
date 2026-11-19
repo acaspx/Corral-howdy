@@ -300,7 +300,7 @@ Run today for xAI's Responses client (`tests/xai.rs`) and Anthropic's Messages c
 - **TP-CI-08..09** The eval gate reads the baseline from the base commit, and a failing gate fails the CI step (pipefail)
 - **TP-CI-10..13** Both checks fail closed: an unknown base ref or an unreadable base file fails the PR instead of passing it; an all-zero base (a branch's first push) runs the gate without a baseline
 - **TP-EVAL-01** Unknown keys anywhere in a scenario (including `expect`) are errors; risk must be normal, high or critical
-- **TP-EVAL-02** Each step sets exactly one of `tool` or `model_says`
+- **TP-EVAL-02** Each step sets exactly one of `tool`, `model_says`, `usage`, `new_turn` or `wait_ms`
 - **TP-EVAL-03** `expect` can't be empty
 - **TP-EVAL-04** Scenarios load recursively from `evals/scenarios/` and `evals/safety/`; IDs are unique across both
 - **TP-EVAL-05** A missing scenario folder or an empty suite is an error, never a vacuous pass
@@ -312,6 +312,8 @@ Run today for xAI's Responses client (`tests/xai.rs`) and Anthropic's Messages c
 - **TP-EVAL-11** Scenarios run for real: the FakeAdapter plays the steps through the real policy, gate, desk and tool gateway, playing a user who approves every checkpoint the scenario doesn't name and denies the one it names. The shipped scenarios all pass, and a wrong class, risk, destination or state after the denial, or a side effect without approval, fails
 - **TP-EVAL-12** What can't run says why: an adapter the runner can't drive is pending; an unknown profile, an expectation the runner can't check, or a fixture that's missing or outside the scenario's `fixtures/` folder fails
 - **TP-EVAL-13** Each failure's reason reaches the JSON report and the summary
+- **TP-EVAL-14** Cost scenarios with several runs: `runs` start together over `agents` round robin, under the scenario's price and caps; `expect.spend` passes only when every bill it names stays under its cap and at least `refused_at_least` runs were stopped by a cap; billing past a cap fails and says by how much; usage without a cost stops at the request's output limit; a new turn asks the budget again; the shipped EV-COST-01 and 03 fill their caps exactly and refuse the runs that don't fit
+- **TP-EVAL-15** The schema for them: `runs` from 1 to 32, `agents` from 1 to `runs`; `checkpoint` and `if_denied` only with one run; each step does one thing, `new_turn` only `true`; unknown keys in `budget` and unknown caps in `never_over` are errors; `spend` needs `never_over` or `refused_at_least`
 - **TP-CI-14** A PR that changes files outside its linked issue's Allowed paths fails, listing them
 - **TP-CI-15** Tests and fixtures under an allowed path, and additions to this test plan, pass the fence
 - **TP-CI-16** No linked issue, or no Allowed paths section, fails closed; the fence is read from the issue, never the PR body

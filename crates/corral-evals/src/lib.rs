@@ -70,7 +70,23 @@ pub struct AgentSpec {
     pub policy_profile: String,
 }
 
-/// One scripted agent step. Exactly one of `tool` or `model_says` is set.
+/// What a cost step reports at the end of the model turn.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UsageStep {
+    /// Input tokens.
+    pub input_tokens: u64,
+    /// Output tokens.
+    pub output_tokens: u64,
+    /// What the provider bills, reported as given even past the request's worst case (a provider
+    /// that overbills). Left out: the fake bills like an honest provider, its output stopped at
+    /// the request's max output tokens and priced at the scenario's price.
+    #[serde(default)]
+    pub cost_micro_usd: Option<u64>,
+}
+
+/// One scripted agent step. Exactly one of `tool`, `model_says`, `usage`, `new_turn` or
+/// `wait_ms` is set.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Step {
@@ -86,6 +102,69 @@ pub struct Step {
     /// Text the model says (no side effect).
     #[serde(default)]
     pub model_says: Option<String>,
+    /// Usage to report when the model turn ends.
+    #[serde(default)]
+    pub usage: Option<UsageStep>,
+    /// Ends the model turn and asks the model again, through the budget meter. Only `true`.
+    #[serde(default)]
+    pub new_turn: Option<bool>,
+    /// Waits this long on the runner's clock: other runs move meanwhile.
+    #[serde(default)]
+    pub wait_ms: Option<u64>,
+}
+
+/// A model's price per million tokens, in micro-USD.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PriceSpec {
+    /// Per million input tokens.
+    pub input_micro_usd: u64,
+    /// Per million output tokens.
+    pub output_micro_usd: u64,
+}
+
+/// The price the fake model charges and the caps the runs are held to. Anything left out is
+/// free (the price) or Corral's default (the caps).
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BudgetSpec {
+    /// The fake model's price.
+    #[serde(default)]
+    pub price_per_million_tokens: Option<PriceSpec>,
+    /// Each run's cap.
+    #[serde(default)]
+    pub run_cap_micro_usd: Option<u64>,
+    /// Each agent's monthly cap.
+    #[serde(default)]
+    pub agent_month_cap_micro_usd: Option<u64>,
+    /// The monthly cap for all agents together.
+    #[serde(default)]
+    pub global_month_cap_micro_usd: Option<u64>,
+}
+
+/// A cap whose bill `expect.spend` checks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CapScope {
+    /// Each run's cap.
+    Run,
+    /// Each agent's monthly cap.
+    AgentMonth,
+    /// The monthly cap for all agents together.
+    AllMonth,
+}
+
+/// What the runs were billed, graded from the log.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SpendExpect {
+    /// Caps whose bill must stay at or under the cap.
+    #[serde(default)]
+    pub never_over: Vec<CapScope>,
+    /// At least this many runs must have been stopped by a cap, so a scenario can't pass
+    /// because the caps never bound.
+    #[serde(default)]
+    pub refused_at_least: Option<u32>,
 }
 
 /// Risk tier a checkpoint must carry (`docs/01-system-design.md` §5).
@@ -153,12 +232,25 @@ pub struct Expect {
     /// Patterns that must never appear.
     #[serde(default)]
     pub never: Vec<NeverRule>,
+    /// What the runs were billed.
+    #[serde(default)]
+    pub spend: Option<SpendExpect>,
 }
 
 impl Expect {
     fn is_empty(&self) -> bool {
-        self.checkpoint.is_none() && self.if_denied.is_none() && self.never.is_empty()
+        self.checkpoint.is_none()
+            && self.if_denied.is_none()
+            && self.never.is_empty()
+            && self.spend.is_none()
     }
+}
+
+/// The most runs one scenario can start.
+pub const MAX_RUNS: u32 = 32;
+
+fn one() -> u32 {
+    1
 }
 
 /// One eval scenario file (`evals/scenarios/**.yaml`, `evals/safety/**.yaml`).
@@ -174,6 +266,15 @@ pub struct Scenario {
     pub agent: AgentSpec,
     /// The task given to the agent.
     pub prompt: String,
+    /// The fake model's price and the caps.
+    #[serde(default)]
+    pub budget: Option<BudgetSpec>,
+    /// How many copies of the run start at once (1 to [`MAX_RUNS`]).
+    #[serde(default = "one")]
+    pub runs: u32,
+    /// How many agents the runs are spread over, round robin (1 to `runs`).
+    #[serde(default = "one")]
+    pub agents: u32,
     /// Scripted agent steps (interpreted by the FakeAdapter from M1).
     pub steps: Vec<Step>,
     /// Expectations checked against the event log.
@@ -274,24 +375,55 @@ pub fn parse_scenario(path: &Path, text: &str) -> Result<Scenario, EvalError> {
     }
     for (i, step) in scenario.steps.iter().enumerate() {
         let n = i + 1;
-        match (&step.tool, &step.model_says) {
-            (Some(_), None) => {}
-            (None, Some(_)) if step.args.is_none() && step.returns_fixture.is_none() => {}
-            (None, Some(_)) => {
-                return Err(invalid(format!(
-                    "step {n}: `args` and `returns_fixture` belong to a `tool` step"
-                )));
-            }
-            _ => {
-                return Err(invalid(format!(
-                    "step {n}: set exactly one of `tool` or `model_says`"
-                )));
-            }
+        let kinds = [
+            step.tool.is_some(),
+            step.model_says.is_some(),
+            step.usage.is_some(),
+            step.new_turn.is_some(),
+            step.wait_ms.is_some(),
+        ];
+        if kinds.iter().filter(|set| **set).count() != 1 {
+            return Err(invalid(format!(
+                "step {n}: set exactly one of `tool`, `model_says`, `usage`, `new_turn` or `wait_ms`"
+            )));
         }
+        if step.tool.is_none() && (step.args.is_some() || step.returns_fixture.is_some()) {
+            return Err(invalid(format!(
+                "step {n}: `args` and `returns_fixture` belong to a `tool` step"
+            )));
+        }
+        if step.new_turn == Some(false) {
+            return Err(invalid(format!("step {n}: `new_turn` can only be true")));
+        }
+    }
+    if !(1..=MAX_RUNS).contains(&scenario.runs) {
+        return Err(invalid(format!("`runs` must be from 1 to {MAX_RUNS}")));
+    }
+    if !(1..=scenario.runs).contains(&scenario.agents) {
+        return Err(invalid(format!(
+            "`agents` must be from 1 to `runs` ({})",
+            scenario.runs
+        )));
     }
     if scenario.expect.is_empty() {
         return Err(invalid(
-            "`expect` needs at least one of `checkpoint`, `if_denied` or `never`".into(),
+            "`expect` needs at least one of `checkpoint`, `if_denied`, `never` or `spend`".into(),
+        ));
+    }
+    if scenario.runs > 1
+        && (scenario.expect.checkpoint.is_some() || scenario.expect.if_denied.is_some())
+    {
+        return Err(invalid(
+            "`checkpoint` and `if_denied` judge one run; with `runs` over 1, use `spend` or `never`"
+                .into(),
+        ));
+    }
+    if let Some(spend) = &scenario.expect.spend
+        && spend.never_over.is_empty()
+        && spend.refused_at_least.is_none()
+    {
+        return Err(invalid(
+            "`spend` needs `never_over` or `refused_at_least`".into(),
         ));
     }
     Ok(scenario)

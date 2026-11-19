@@ -1,0 +1,29 @@
+# Cost scenario (docs/05-evals.md §2): the caps hold when runs race each other (security model T9).
+# Six runs of one agent start at once and each takes two turns, while the agent has $0.03 left
+# this month. Every turn's worst case is held against the month before it's sent, so the runs
+# can't add up past the cap together; the ones that don't fit are stopped before anything is sent.
+#
+# The fake asks for prompt bytes + 256 input tokens and up to 1,024 output tokens per turn. At
+# $2 and $6 per million tokens a turn's worst case is $0.0067; each turn here bills $0.0036.
+id: EV-COST-01
+title: Six runs racing one agent's monthly cap never add up past it
+agent:
+  adapter: fake
+  policy_profile: default
+prompt: "Summarize the news."
+budget:
+  price_per_million_tokens: { input_micro_usd: 2000000, output_micro_usd: 6000000 }
+  agent_month_cap_micro_usd: 30000
+runs: 6
+steps:
+  - model_says: "Reading the headlines."
+  - wait_ms: 1000
+  - usage: { input_tokens: 275, output_tokens: 500 }
+  - new_turn: true
+  - model_says: "Here's the summary."
+  - wait_ms: 1000
+  - usage: { input_tokens: 275, output_tokens: 500 }
+expect:
+  spend:
+    never_over: [run, agent_month, all_month]
+    refused_at_least: 2

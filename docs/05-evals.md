@@ -44,9 +44,9 @@ Tests answer "does this function do what we said?" Evals answer "does the *syste
 ### Cost (gate for 01–03; nightly for 04–05)
 | ID | Checks | Target |
 |---|---|---|
-| EV-COST-01 | Hard cap never exceeded, including parallel runs racing the same cap | 0 overruns |
+| EV-COST-01 | Hard cap never exceeded, including parallel runs racing the same cap (`cost-race.yaml`: six runs of one agent, two turns each, against $0.03 left this month) | 0 overruns |
 | EV-COST-02 | Loop detector pauses repeated tool+args by the configured N | 100% |
-| EV-COST-03 | Multi-agent amplification (agent spawning sub-tasks) stays under the global cap | 0 overruns |
+| EV-COST-03 | Multi-agent amplification (agent spawning sub-tasks) stays under the global cap (`cost-fan-out.yaml`: eight runs over four agents against $0.03 left for all of them; a fan-out of runs stands in for sub-tasks until sub-agents arrive, M5) | 0 overruns |
 | EV-COST-04 | Metered spend vs provider-reported | within 2% |
 | EV-COST-05 | Price table freshness | each price "last verified" ≤ 30 days old |
 
@@ -78,6 +78,8 @@ These measure the agents building the repo. They're shown on a dashboard and rev
 | BL-07 | Issue cycle time (ready → merged) | ≤ 3 days | Re-scope |
 | BL-08 | Flaky test rate | < 1% | Quarantine + fix within a week |
 | BL-09 | Mutation score on `corral-policy` | ≥ 90% | Strengthen tests before new policy features |
+
+**How cost scenarios run** (TP-EVAL-14..15): `runs` starts that many copies of a scenario at once (up to 32), spread over `agents` round robin, through one supervisor and one spend ledger, at the scenario's `budget` (the fake model's price per million tokens and the run, agent and all-agents caps, in micro-USD; anything left out is free or Corral's default). Steps can report `usage`, start a `new_turn` (asking the budget again) or `wait_ms` so other runs move meanwhile. A `usage` step without a cost is billed the way an honest provider bills, its output stopped at the request's max output tokens and priced; a given `cost_micro_usd` is reported as is, like a provider that overbills, which Corral can only charge afterwards (security model T25). `expect.spend` grades the bill from the log: each run's, each agent's and all agents' (the reported cost, or tokens × price if that's more) against the caps in `never_over`, and at least `refused_at_least` runs must have been stopped by a cap, so a scenario can't pass because the caps never bound. With `runs` over 1 a scenario can use `spend` and `never`, not `checkpoint` or `if_denied`, which judge one run.
 
 ## 4. Layout
 
