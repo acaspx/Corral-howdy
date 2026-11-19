@@ -1,0 +1,21 @@
+--- crates/corral-tools/src/lib.rs
++++ replace Tool::spec -> Option<ToolSpec> with Some(Default::default())
+@@ -108,17 +108,17 @@
+     /// Where this call sends data or acts, as the policy should see it (an address, a domain, a
+     /// path). Read from the arguments by the tool, never taken from the model's description.
+     fn destination(&self, args: &Value) -> Option<String> {
+         let _ = args; // Most tools have no destination worth pinning a grant to.
+         None
+     }
+     /// How to offer it to a model. A tool without one isn't offered.
+     fn spec(&self) -> Option<ToolSpec> {
+-        None
++        Some(Default::default()) /* ~ changed by cargo-mutants ~ */
+     }
+     /// Runs the call.
+     fn call<'a>(&'a self, args: &'a Value) -> BoxFuture<'a, Result<String, ToolError>>;
+ }
+ 
+ /// Why the gateway didn't run a call.
+ #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+ pub enum GatewayError {

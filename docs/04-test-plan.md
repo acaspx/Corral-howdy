@@ -107,6 +107,9 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-GATE-05** Tool output for the model is capped (16 KB by default) on a character boundary, with a marker; the full output is kept for the trace (T30)
 - **TP-GATE-06** A tool that reads untrusted content taints its run through its token
 - **TP-GATE-07** A tool error is typed and doesn't taint the run
+- **TP-TOOL-01** A tool that can be offered to a model describes itself: a plain-words description (at most 1,024 characters) and a JSON schema for its arguments (an object, every argument described, no others allowed); the file tools' schemas match what they read
+- **TP-TOOL-02** Tools go out under a wire name of ASCII letters, digits, `_` and `-` (`fs.read` is `fs_read`); the gateway offers only tools with a spec, by name, and maps an offered wire name back to its tool; any other name is no tool
+- **TP-TOOL-03** No two tools share a wire name, and an offered tool's wire name is 1 to 64 characters; registering one that breaks either is refused
 - **TP-CHK-01** An Ask pauses the run at a checkpoint drawn only from core fields: the class, the risk, a title written by the core and the exact detail (tool, destination, arguments); nothing runs while it waits
 - **TP-CHK-02** Deny records the note (capped at 1,000 characters), runs nothing, and tells the agent, which carries on
 - **TP-CHK-03** Approve once runs that call and the next one asks again; approve for the run covers the same destination only (high and critical)
