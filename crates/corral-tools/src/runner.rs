@@ -213,6 +213,12 @@ impl ToolRunner {
         }
     }
 
+    /// Marks the run as having read untrusted content from `source` that no tool here brought
+    /// in, such as a provider's web search results (T28). Ways out ask again from then on.
+    pub fn taint(&self, source: impl Into<String>) {
+        self.gate.taint(source);
+    }
+
     /// The run reached its soft limit (TP-BUD-02): asks whether to go on, as a
     /// `budget.threshold` checkpoint the policy decides on. Going on lifts the limit to the hard
     /// cap. Deny, Stop or no answer ends the run; an unanswered soft limit never means spend
