@@ -100,24 +100,60 @@ impl<P: Protocol> RunDriver for StreamDriver<P> {
     }
 }
 
-/// Why a run ended without completing.
-enum Failure {
+/// Why a turn ended without finishing.
+pub(crate) enum Failure {
     /// Not logged yet: the driver emits `run.failed`.
     Emit(FailureReason, String),
     /// The core already ended the run (the budget meter refused the request).
     Ended,
+    /// The run is at its soft limit: nothing was sent. An agent that can ask the user does; one
+    /// that can't ends the run.
+    SoftLimit(String),
+}
+
+/// Logs `run.failed`.
+pub(crate) fn fail_run(sink: &EventSink, reason: FailureReason, message: String) {
+    // The sink refuses only when the run is already over or the log is gone; either way the
+    // supervisor closes the run out.
+    let _ = sink.emit(EventBody::RunFailed(RunFailed { reason, message }));
 }
 
 impl<P: Protocol> StreamDriver<P> {
+    /// The protocol's configuration.
+    pub(crate) fn config(&self) -> &P {
+        self.config.as_ref()
+    }
+
     async fn drive(&self, prompt: &str, sink: &EventSink) {
-        if let Err(Failure::Emit(reason, message)) = self.attempt(prompt, sink).await {
-            // The sink refuses only when the run is already over or the log is gone; either way
-            // the supervisor closes the run out.
-            let _ = sink.emit(EventBody::RunFailed(RunFailed { reason, message }));
+        let config = self.config.as_ref();
+        let mut decoder = config.decoder();
+        let result = self
+            .turn(
+                sink,
+                &config.estimate(prompt),
+                |max| config.body(prompt, max),
+                &mut decoder,
+            )
+            .await;
+        match result {
+            Ok(()) | Err(Failure::Ended) => {}
+            Err(Failure::Emit(reason, message)) => fail_run(sink, reason, message),
+            // This driver's agents can't ask the user, so a soft limit ends the run here.
+            Err(Failure::SoftLimit(message)) => {
+                fail_run(sink, FailureReason::BudgetHardCap, message);
+            }
         }
     }
 
-    async fn attempt(&self, prompt: &str, sink: &EventSink) -> Result<(), Failure> {
+    /// One request: reads the key, asks the budget meter with `estimate`, sends `body` (given
+    /// the output limit the meter allowed), and feeds the stream to `decoder` until it finishes.
+    pub(crate) async fn turn<D: StreamDecoder>(
+        &self,
+        sink: &EventSink,
+        estimate: &RequestEstimate,
+        body: impl FnOnce(u32) -> Value,
+        decoder: &mut D,
+    ) -> Result<(), Failure> {
         let config = self.config.as_ref();
         let provider = config.provider();
         let name = provider.display_name();
@@ -139,12 +175,11 @@ impl<P: Protocol> StreamDriver<P> {
                     provider: provider.id().into(),
                     model: config.model().to_owned(),
                 },
-                &config.estimate(prompt),
+                estimate,
             )
             .map_err(|e| match e {
-                // These agents can't ask the user yet (M3), so a soft limit ends the run here.
                 SupervisorError::Budget(refusal @ BudgetError::SoftLimit { .. }) => {
-                    Failure::Emit(FailureReason::BudgetHardCap, refusal.to_string())
+                    Failure::SoftLimit(refusal.to_string())
                 }
                 // The core logged run.failed; nothing is sent.
                 SupervisorError::Budget(
@@ -163,7 +198,7 @@ impl<P: Protocol> StreamDriver<P> {
             })?;
 
         let url = config.url();
-        let body = config.body(prompt, admission.max_output_tokens);
+        let body = body(admission.max_output_tokens);
         let request = PostRequest {
             url: &url,
             key: &key,
@@ -219,7 +254,6 @@ impl<P: Protocol> StreamDriver<P> {
         };
 
         let mut parser = SseParser::default();
-        let mut decoder = config.decoder();
         let mut body = response.body;
         loop {
             let next = tokio::time::timeout(config.idle_timeout(), body.next())

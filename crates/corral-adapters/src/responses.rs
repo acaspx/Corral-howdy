@@ -290,6 +290,8 @@ pub struct ResponseDecoder {
     /// The agent was offered tools, so its function calls are read rather than refused.
     tools: bool,
     calls: Vec<FunctionCall>,
+    /// The reply's whole text, once the response is over.
+    said: String,
 }
 
 impl ResponseDecoder {
@@ -299,6 +301,11 @@ impl ResponseDecoder {
             tools: true,
             ..Self::default()
         }
+    }
+
+    /// The reply's whole text, once the response is over (empty before).
+    pub fn said(&self) -> &str {
+        &self.said
     }
 
     /// The function calls the response made, in order. Each is handed out once.
@@ -387,8 +394,9 @@ impl ResponseDecoder {
                             .and_then(Value::as_str)
                     })
                     .map(clean);
+                self.said = std::mem::take(&mut self.text);
                 let mut out = vec![EventBody::ModelResponse(ModelResponse {
-                    text: std::mem::take(&mut self.text),
+                    text: self.said.clone(),
                     finish_reason,
                 })];
                 if let Some(usage) = response.and_then(|r| r.get("usage")) {

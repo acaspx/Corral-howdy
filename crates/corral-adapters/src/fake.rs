@@ -23,8 +23,7 @@ use corral_core::event::{
 use corral_core::supervisor::{
     CancelToken, EventSink, RunDriver, RunFuture, RunRequest, SupervisorError,
 };
-use corral_policy::Policy;
-use corral_tools::{BudgetAnswer, CheckpointDesk, IdSource, ToolAnswer, ToolGateway, ToolRunner};
+use corral_tools::{BudgetAnswer, ToolAnswer, ToolRunner};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -151,17 +150,7 @@ impl FakeScript {
 }
 
 /// What a fake agent's tool calls go through: the same policy, gateway and desk as a real one.
-#[derive(Clone)]
-pub struct ToolSetup {
-    /// The agent's policy. Each run gets a fresh gate under it.
-    pub policy: Policy,
-    /// The registered tools.
-    pub gateway: Arc<ToolGateway>,
-    /// Where checkpoints wait.
-    pub desk: Arc<CheckpointDesk>,
-    /// Tool-call and checkpoint IDs.
-    pub ids: IdSource,
-}
+pub use crate::agent::ToolSetup;
 
 /// Runs scripts. Each run gets the script for its prompt, or the default one.
 pub struct FakeDriver {
