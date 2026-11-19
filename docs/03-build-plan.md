@@ -124,7 +124,7 @@ Issues (examples):
 Goal: the safety core, proven before any real agent can touch it.
 
 1. ✅ Action class enum (exhaustive) + profile TOML schema + default profiles (2026-11-13)
-2. ✅ Pure `decide(profile, action, ctx)` + table-driven tests for every class × decision; allow-for-run, destination pinning and taint included (2026-11-13; 37 of 37 mutants caught)
+2. ✅ Pure `decide(profile, action, ctx)` + table-driven tests for every class × decision; allow-for-run, destination pinning and taint included (2026-11-13; 37 of 37 mutants caught); approve once per exact call for normal risk ✅ 2026-11-18 (TP-POL-08)
 3. ✅ `PolicyGate` + `Decision::Allow` capability token required by `ToolGateway` (2026-11-14: `Gate`, `AllowToken`, `ToolGateway` with class checks, output cap and taint)
 4. Checkpoint lifecycle: open → resolve (approve / deny / edit / allow-for-run) → timeout behavior (core ✅ 2026-11-14: `ToolRunner` and `CheckpointDesk`, driven by the FakeAdapter; hover card ✅: the approval box with Approve and Deny over IPC; allow-for-run on the card ✅ 2026-11-15; edit-then-approve in the core ✅ 2026-11-17; the card's edit fields in the core ✅ 2026-11-17; the edit sheet on the card ✅ 2026-11-17; Touch ID for critical on the card ✅ 2026-11-18)
 5. Budget meter: pre-request estimate, hard cap, soft-limit checkpoint, reconciliation (soft limit ✅ 2026-11-15: a `budget.threshold` checkpoint on the card; none is set in the app until agents can ask, M3; monthly caps per agent and for all agents ✅ 2026-11-18, seeded from the store at launch)

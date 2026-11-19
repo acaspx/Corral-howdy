@@ -95,7 +95,7 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-POL-05** Checkpoint timeout → `on_timeout` behavior (deny / cancel_run)
 - **TP-POL-06** Edit-args approval executes the *edited* args, and the trace records both versions (`tool.requested` keeps the agent's, `checkpoint.resolved` the edited ones)
 - **TP-POL-07** Denial note is delivered to the agent as a tool result
-- **TP-POL-08** Identical low-risk asks within a run are batched into one checkpoint
+- **TP-POL-08** Approve once per exact call (decided 2026-11-18, replacing "batched into one checkpoint", since a run asks one at a time): an approved normal-risk call doesn't ask again for the identical call (any key order) in that run; another argument or tool, high and critical, spend limits, edited calls, ways out on a tainted run and the loop detector's limit still ask; a denied or refused call records nothing; a new run remembers nothing; allow-for-run still covers the class
 - **TP-POL-09** Risk tier → required gesture (click / no-voice / Touch ID)
 - **TP-POL-10** `ToolGateway` refuses execution without a valid `Decision::Allow` token (also enforced at compile time; this test covers the runtime path for dynamic MCP tools)
 - **TP-POL-11** Allow-for-run on a high or critical class covers only the approved destination; a new recipient, domain or path root asks again

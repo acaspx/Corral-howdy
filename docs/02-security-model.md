@@ -23,7 +23,7 @@ Corral holds API keys and can make agents act on a user's behalf. Treat it like 
 | T1 | **Prompt injection** in a web page or file makes an agent exfiltrate data or send messages | All side effects pass `PolicyGate`; `net.write`/`comms.send` ask by default; egress allowlist per agent; checkpoint shows exact destination + payload | EV-SAFE-01..20 (injection corpus) |
 | T2 | Adapter bug bypasses the gate | Tools only reachable via `ToolGateway`, which requires a `Decision::Allow` token minted by the policy engine (type-level: no token, no call) | Compile-time API design + TP-POL-10 |
 | T3 | Unknown/new action type slips through | `unknown` class = deny; adapters must map exhaustively (Rust `match` without wildcard) | TP-POL-03 |
-| T4 | Approval fatigue → users rubber-stamp | Precision target ≥ 90%; "allow for run" option; batching of identical low-risk asks; weekly review of checkpoint noise | EV-UX-02 |
+| T4 | Approval fatigue → users rubber-stamp | Precision target ≥ 90%; "allow for run" option; an approved normal-risk call doesn't ask again for the identical call in that run (never for high or critical, a tainted way out, or past the loop limit); weekly review of checkpoint noise | EV-UX-02, TP-POL-08 |
 | T5 | Voice misrecognition approves an action | Voice cannot approve high/critical | TP-VOICE-04 |
 | T6 | Key theft from disk/logs/traces | Keychain only; redaction filter on every log/trace sink; secret-scanner test over all persisted bytes after eval runs | TP-SEC-01, EV-SAFE-30 |
 | T7 | Malicious imported manifest grants itself broad permissions | Strict schema; import shows diff of permissions; profiles can't widen beyond global ceilings | TP-MAN-*, fuzz FZ-01 |
