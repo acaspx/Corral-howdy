@@ -107,3 +107,22 @@ async fn tp_setup_02_a_provider_without_a_check_is_stored_and_marked_unchecked()
     assert!(!connected.checked);
     assert!(connected.status.configured);
 }
+
+#[tokio::test]
+async fn tp_setup_06_a_key_id_is_not_sent_or_stored() {
+    let store = MemoryStore::default();
+    // The probe would accept anything sent, so an error means nothing was sent.
+    let err = connect_key(
+        &store,
+        &Answer(Ok(200)),
+        Provider::Anthropic,
+        "apikey_01PgqDx7Lm2NvR4tWz8yBc3K".to_owned(), // gitleaks:allow (made-up key ID)
+    )
+    .await
+    .expect_err("caught");
+    assert!(
+        err.starts_with("That's the key's ID, not the key."),
+        "{err}"
+    );
+    assert!(store.get(Provider::Anthropic).expect("read").is_none());
+}

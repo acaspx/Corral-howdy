@@ -283,6 +283,7 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-SETUP-03** All four entry points (menu bar, corral menu, + chip or empty puddle, Settings › Agents) send the same `openSetup` intent
 - **TP-SETUP-05** One key field takes any provider's key: the core suggests the provider from the key's prefix (`xai-`, `sk-ant-`, `sk-proj-`/`sk-`), asks when the key doesn't say, and the user can change it; the provider's check (TP-SETUP-02) has the last word, and a refused or unchecked key is never stored
 - **TP-SETUP-04** Launch-only apps (consumer Muse, dots) are labelled "not supervised" and never show approval controls
+- **TP-SETUP-06** A key's ID or a shortened copy of a key (as a console's key list shows them) is caught before anything is sent or stored, and the message says what to copy instead, without quoting what was pasted
 
 ### Walking skeleton (before M2)
 - **TP-SKEL-01** The xAI key is read from the Keychain at request time; with no key, deploy is refused with "Add your xAI key" and nothing is sent
