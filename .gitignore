@@ -36,3 +36,6 @@ evals/reports/*
 .gemini/
 .agents/
 .codex/
+
+# cargo-mutants output
+mutants.out*/
