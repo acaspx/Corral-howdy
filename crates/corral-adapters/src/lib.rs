@@ -11,6 +11,7 @@
 //! - [`cassette`]: recorded exchanges replayed in tests, so tests never call the network
 //!   (AGENTS.md rule 7).
 
+pub mod agent;
 pub mod cassette;
 pub mod catalog;
 pub mod fake;
