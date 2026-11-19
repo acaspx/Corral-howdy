@@ -11,9 +11,11 @@
 //!
 //! The corral holds one agent per connected provider (Grok, Claude, GPT, Muse Spark; see
 //! `corral_adapters::catalog`): connecting a key adds its drop and removing it takes the drop away
-//! ([`Corral::refresh`]). Grok and Claude have clients; the others say so when given a task. No
-//! tools, and a hard cap of [`RUN_CAP_MICRO_USD`] per run. Events go to the SQLite event store in
-//! the app's data folder.
+//! ([`Corral::refresh`]). Grok and Claude have clients; the others say so when given a task.
+//! Grok works with the file tools in `~/Corral/Grok` ([`crate::agent_tools`]): its calls go
+//! through the policy, and when the policy asks, they wait on its card. Claude has no tools yet.
+//! Each run has a hard cap of [`RUN_CAP_MICRO_USD`] and asks on the card before going past
+//! [`SOFT_LIMIT_MICRO_USD`]. Events go to the SQLite event store in the app's data folder.
 //!
 //! Each connected provider's logo is fetched once from its own site and kept in the app's
 //! `logos` folder ([`crate::logos`], ADR-015); the drop shows it from then on.
@@ -22,12 +24,14 @@
 //! corral's right-click menu. They never take tasks: their card's Open button opens the app's
 //! own site. The choice is kept in `linked-apps.json` ([`crate::linked`]).
 
+use crate::agent_tools::{agent_folder, file_tools};
 use crate::bridge::{AuthOutcome, BridgeError, Intent, RosterSnapshot};
 use crate::keys::Keys;
 use crate::linked::LinkedStore;
 use crate::logos::{LogoStore, fetch_missing};
 use crate::native;
 use crate::touch_id::{Finished, TouchIdDesk};
+use corral_adapters::agent::{ResponsesAgent, ToolSetup};
 use corral_adapters::catalog::{AgentRouter, agent_for, agents_for, corral_agents};
 use corral_adapters::linked::{LinkChange, LinkedApp, LinkedSettings};
 use corral_adapters::logos::{LogoId, ReqwestLogoFetcher};
@@ -55,6 +59,9 @@ use tauri::{AppHandle, Manager};
 
 /// The skeleton's per-run hard cap: $0.25 (docs/03, J0).
 pub const RUN_CAP_MICRO_USD: u64 = 250_000;
+/// Where a run asks on its card before spending more: $0.10 (TP-BUD-02). An agent that can't
+/// ask (Claude, for now) has each request held under it instead.
+pub const SOFT_LIMIT_MICRO_USD: u64 = 100_000;
 /// The model Grok's drop uses. Model IDs are config (docs/01 §4); this is the skeleton's.
 pub const GROK_MODEL: &str = "grok-4.7";
 /// The model Claude's drop uses (SK-7).
@@ -93,8 +100,7 @@ pub struct Corral {
     pub logos: Option<LogoStore>,
     linked: Arc<Linked>,
     keys: Arc<dyn SecretStore>,
-    /// Where tool calls wait for the user. Empty until agents get tools (M3): Grok and Claude
-    /// still refuse tool calls, and the FakeAdapter isn't in the app.
+    /// Where Grok's tool calls and spend checkpoints wait for the user's answer from the card.
     desk: Arc<CheckpointDesk>,
     /// The Touch ID prompt for a critical checkpoint, if one is up (TP-CHK-17).
     touch_id: Arc<Mutex<TouchIdDesk>>,
@@ -337,7 +343,8 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
 
     // Only the agents Corral runs take tasks; linked drops never do (ADR-005).
     let runnable: Vec<AgentId> = agents_for(&connected).into_iter().map(|c| c.id).collect();
-    let controls = match supervisor(app, &feed, clock) {
+    let desk = Arc::new(CheckpointDesk::default());
+    let controls = match supervisor(app, &feed, clock, &desk) {
         Ok(supervisor) => Some(Arc::new(CorralControls::new(
             supervisor,
             runnable,
@@ -357,7 +364,7 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
             settings: Mutex::new(linked),
         }),
         keys,
-        desk: Arc::new(CheckpointDesk::default()),
+        desk,
         touch_id: Arc::new(Mutex::new(TouchIdDesk::default())),
     };
     // The slot is empty: this is its only writer, and `start` runs once.
@@ -369,11 +376,12 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
 }
 
 /// The supervisor: each agent's runs go to its provider (Grok and Claude have clients so far),
-/// the event store, the $0.25 cap.
+/// the event store, the $0.25 cap and the $0.10 soft limit. Grok's checkpoints wait on `desk`.
 fn supervisor(
     app: &AppHandle,
     feed: &Arc<CorralFeed>,
     clock: Arc<dyn Clock>,
+    desk: &Arc<CheckpointDesk>,
 ) -> Result<Supervisor, String> {
     let dir = app
         .path()
@@ -402,17 +410,29 @@ fn supervisor(
     let transport = ReqwestTransport::new().map_err(|e| format!("no HTTPS client: {e}"))?;
     let keys = app.state::<Keys>().0.clone();
     let transport: Arc<dyn Transport> = Arc::new(transport);
-    let grok = ResponsesDriver::new(
-        transport.clone(),
-        keys.clone(),
-        ResponsesConfig::xai(GROK_MODEL),
-    );
+    // Without its folder, Grok still answers, with no tools.
+    let grok: Arc<dyn RunDriver> = match grok_tools(app, desk) {
+        Ok(tools) => Arc::new(ResponsesAgent::new(
+            transport.clone(),
+            keys.clone(),
+            ResponsesConfig::xai(GROK_MODEL),
+            tools,
+        )),
+        Err(reason) => {
+            eprintln!("corral: Grok has no tools: {reason}");
+            Arc::new(ResponsesDriver::new(
+                transport.clone(),
+                keys.clone(),
+                ResponsesConfig::xai(GROK_MODEL),
+            ))
+        }
+    };
     let claude = MessagesDriver::new(transport, keys, MessagesConfig::anthropic(CLAUDE_MODEL));
     let mut drivers: HashMap<AgentId, Arc<dyn RunDriver>> = HashMap::new();
-    drivers.insert(agent_for(Provider::Xai).id, Arc::new(grok));
+    drivers.insert(agent_for(Provider::Xai).id, grok);
     drivers.insert(agent_for(Provider::Anthropic).id, Arc::new(claude));
     let driver = AgentRouter::new(drivers);
-    Ok(Supervisor::with_ledger(
+    let built = Supervisor::with_ledger(
         SupervisorConfig::default(),
         BudgetConfig {
             per_run_cap_micro_usd: RUN_CAP_MICRO_USD,
@@ -421,7 +441,19 @@ fn supervisor(
         Arc::new(driver),
         feed.watch(Arc::new(store)),
         clock,
-    ))
+    );
+    built.set_soft_limit(Some(SOFT_LIMIT_MICRO_USD));
+    Ok(built)
+}
+
+/// Grok's file tools over `~/Corral/Grok`, with checkpoints on `desk`.
+fn grok_tools(app: &AppHandle, desk: &Arc<CheckpointDesk>) -> Result<ToolSetup, String> {
+    let home = app
+        .path()
+        .home_dir()
+        .map_err(|e| format!("no home folder: {e}"))?;
+    let name = agent_for(Provider::Xai).name;
+    file_tools(&agent_folder(&home, &name), Arc::clone(desk))
 }
 
 /// How far back launch reads spend: past the start of this month in any time zone.

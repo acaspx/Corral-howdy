@@ -489,6 +489,7 @@ dependencies = [
  "corral-secrets",
  "corral-store",
  "corral-tools",
+ "getrandom 0.3.4",
  "serde",
  "serde_json",
  "swift-rs",
