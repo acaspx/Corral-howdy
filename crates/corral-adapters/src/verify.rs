@@ -5,6 +5,10 @@
 //! down, rate-limited or unreachable) says it couldn't check, so a good key isn't called bad. A
 //! provider without a known check (the Meta Model API, for now) is stored unchecked, and the UI
 //! says so. Messages never quote the key; the key only travels in the request's auth header.
+//!
+//! Before anything is sent, two common copying mistakes are caught (TP-SETUP-06): a key's ID
+//! (`apikey_…`) and a key as a console's list shows it, with the middle left out. Either would only
+//! come back as a refused key, which doesn't say what to copy instead.
 
 use crate::transport::BoxFuture;
 use corral_secrets::{Provider, Secret};
@@ -28,6 +32,36 @@ pub enum KeyCheckError {
     /// The provider couldn't be asked; the key may well be fine.
     #[error("Couldn't reach {} to check the key ({}). Try again in a moment.", .0.display_name(), .1)]
     Unavailable(Provider, String),
+    /// What was pasted isn't a key, and nothing was sent.
+    #[error("{0}")]
+    NotTheKey(KeyMistake),
+}
+
+/// Something pasted in place of a key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum KeyMistake {
+    /// The key's ID, which consoles list beside the key.
+    #[error(
+        "That's the key's ID, not the key. Copy the key itself, which you see when you create it."
+    )]
+    KeyId,
+    /// The key as a list shows it, with the middle left out.
+    #[error(
+        "That's a shortened copy of the key, with the middle left out. Copy the whole key, which you see when you create it."
+    )]
+    Shortened,
+}
+
+/// The copying mistake `key` shows, if any. Real keys have no `apikey_` prefix and no run of dots
+/// or stars.
+fn mistake(key: &str) -> Option<KeyMistake> {
+    if key.starts_with("apikey_") {
+        Some(KeyMistake::KeyId)
+    } else if key.contains("...") || key.contains("**") {
+        Some(KeyMistake::Shortened)
+    } else {
+        None
+    }
 }
 
 /// One authenticated GET that reports only the HTTP status. The network lives in
@@ -68,6 +102,9 @@ pub async fn check_key(
     provider: Provider,
     key: &Secret,
 ) -> Result<KeyCheck, KeyCheckError> {
+    if let Some(mistake) = mistake(key.expose()) {
+        return Err(KeyCheckError::NotTheKey(mistake));
+    }
     let Some((url, headers)) = models_request(provider, key) else {
         return Ok(KeyCheck::NotChecked);
     };
