@@ -130,9 +130,9 @@ Goal: the safety core, proven before any real agent can touch it.
 5. Budget meter: pre-request estimate, hard cap, soft-limit checkpoint, reconciliation (soft limit ✅ 2026-11-15: a `budget.threshold` checkpoint on the card; none is set in the app until agents can ask, M3; monthly caps per agent and for all agents ✅ 2026-11-18, seeded from the store at launch)
 6. Filesystem sandbox (canonicalization, symlink escapes) (✅ 2026-11-14: `corral_tools::fs` with `fs.read`, `fs.write` and `fs.delete`; not registered for any agent until M3)
 7. Loop detector (repeat tool + args → pause)
-8. Safety eval suite v1 on fake agents (injection-shaped scenarios) (✅ 2026-11-14: the runner executes scenarios on the FakeAdapter through the real policy, desk and gateway; a pending safety scenario fails the gate; EV-SAFE-01..05 and 26 pass)
+8. Safety eval suite v1 on fake agents (injection-shaped scenarios) (✅ 2026-11-14: the runner executes scenarios on the FakeAdapter through the real policy, desk and gateway; a pending safety scenario fails the gate; EV-SAFE-01..05 and 26 pass; the injection corpus EV-SAFE-01..20 and EV-SAFE-21 ✅ 2026-11-18)
 
-**Exit:** TP-POL-*, TP-FS-*, TP-BUD-* green; **EV-SAFE gate = 100% recall** on the must-catch set; EV-COST-01..03 passing (✅ 2026-11-18, in the gate baseline).
+**Exit:** TP-POL-*, TP-FS-*, TP-BUD-* green; **EV-SAFE gate = 100% recall** on the must-catch set (✅ 2026-11-18: EV-SAFE-01..21 and 26, 22 scenarios, all in the gate baseline); EV-COST-01..03 passing (✅ 2026-11-18, in the gate baseline).
 
 Loop detector (item 7) ✅ 2026-11-15: in the policy gate; from the `loop_limit`-th identical call on (5 by default), each one waits at a checkpoint (TP-LOOP-01..06, EV-COST-02).
 
