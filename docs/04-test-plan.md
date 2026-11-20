@@ -283,9 +283,9 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-TV-05** When a run fails or stops, every span still open ends with it, as an error or cancelled; the run span carries the failure message
 - **TP-TV-06** A run still going has open spans (no end, running); no events, no spans
 - **TP-TV-07** Model text, arguments and results are agent text: cleaned of control and bidi characters and capped at 2,000 characters
-- **TP-TV-08** Budget warnings, pauses and resumes are zero-length marks on the run
+- **TP-TV-08** Budget warnings, pauses, resumes and plan updates (with their steps) are zero-length marks on the run, each with its own ID
 - **TP-TV-09** A tool result with no request still shows; the view is sent as camelCase JSON
-- **TP-TV-10** (Rust) `Store::recent_runs`: the newest runs first (at most 200), each with its agent, prompt, queued and end times, outcome (running, completed, failed, cancelled) and cost, in one query (`crates/corral-store/tests/recent_runs.rs`)
+- **TP-TV-10** (Rust) `Store::recent_runs`: the newest runs first (at most 200), each with its agent, prompt, queued and end times, outcome (running, completed, failed, cancelled) and cost, in one query; runs queued in the same millisecond list the later-logged first (`crates/corral-store/tests/recent_runs.rs`)
 - **TP-TRACE-01** (Rust) `plan_view` builds subtasks from `plan.updated` events, falling back to top-level spans when no plan is published
 - **TP-TRACE-02** At most 3 columns; extra runs collapse into "+N more running"; needs-you columns sort first
 - **TP-TRACE-03** Each column's wire ends at its agent's drop (or the hidden bead) after a shape morph or a usage reorder

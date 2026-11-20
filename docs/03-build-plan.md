@@ -161,7 +161,9 @@ Progress: the nightly live smoke is wired (2026-11-19: `.github/workflows/live-s
 2b. **Shown set:** "Your corral holds up to 8" chooser when a 9th agent is added + Settings → Corral; hidden agents reachable via `@` in the prompt bar
 3. **Hover cards + trace tree** (per S6; spec in [07 §8](07-brand-and-corral-surface.md)): paper hover card with plan progress, elapsed, spend and state-based buttons; trace tree of translucent prompt/task/subtask cards wired to drops; `plan_view` projection + `plan.updated` events in the core; logo import
 4. Checkpoint UI: approval box in the hover card (stepper for several pending, Touch ID for critical) + actionable notification; edit-args flow; nonce-bound approve; 300 ms input guard
-5. Main window: trace viewer (tree + waterfall), JSON copy
+5. Main window: trace viewer (tree + waterfall), JSON copy. In two PRs:
+   1. ✅ The core: `corral_core::trace_view` derives the span tree from a run's events, and `Store::recent_runs` lists runs in one query (2026-11-20, TP-TV-01..10)
+   2. The viewer in the main window: the run list, the tree with its waterfall, filter by kind, copy as JSON
 6. Agent editor + policy editor (shows effective decision per class)
 7. Storybook with fixture event streams for every component state
 8. Accessibility pass (keyboard-only deploy/approve/deny; VoiceOver labels)
