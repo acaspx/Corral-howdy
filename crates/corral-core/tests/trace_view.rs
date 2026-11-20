@@ -487,3 +487,51 @@ fn tp_tv_09_the_view_is_sent_as_camel_case_json() {
         json!({"key": "prompt", "value": "Tidy my notes"})
     );
 }
+
+#[test]
+fn tp_tv_08_a_plan_update_is_a_mark_with_its_steps() {
+    let step = |title: &str, status: StepStatus| PlanStep {
+        title: title.into(),
+        status,
+    };
+    let view = trace_view(&run(vec![
+        (1, queued()),
+        (
+            3,
+            EventBody::PlanUpdated(PlanUpdated {
+                steps: vec![
+                    step("Read notes", StepStatus::Done),
+                    step("Sort them", StepStatus::InProgress),
+                    step("Write summary", StepStatus::Pending),
+                    step("Email it", StepStatus::Skipped),
+                ],
+            }),
+        ),
+    ]));
+    let plan = span(&view.spans, "mark-1");
+    assert_eq!(plan.name, "plan: 1 of 4 done");
+    assert_eq!(
+        attr(plan, "steps"),
+        Some(
+            "Read notes (done)\nSort them (in progress)\nWrite summary (pending)\nEmail it (skipped)"
+        )
+    );
+}
+
+#[test]
+fn tp_tv_08_each_mark_has_its_own_id() {
+    let view = trace_view(&run(vec![
+        (1, queued()),
+        (
+            2,
+            EventBody::RunPaused(RunPaused {
+                reason: PauseReason::User,
+            }),
+        ),
+        (3, EventBody::RunResumed(RunResumed {})),
+        (4, EventBody::RunResumed(RunResumed {})),
+    ]));
+    let ids: Vec<&str> = view.spans.iter().map(|s| s.id.as_str()).collect();
+    assert_eq!(ids, ["run", "mark-1", "mark-2", "mark-3"]);
+    assert_eq!(span(&view.spans, "mark-1").name, "paused: by you");
+}

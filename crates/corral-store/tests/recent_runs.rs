@@ -174,3 +174,19 @@ fn tp_tv_10_an_empty_log_lists_nothing() {
     let store = Store::open(&db.path()).expect("open");
     assert!(store.recent_runs(10).expect("list").is_empty());
 }
+
+#[test]
+fn tp_tv_10_runs_queued_in_the_same_millisecond_list_the_later_one_first() {
+    let db = TempDb::new("ties");
+    let store = Store::open(&db.path()).expect("open");
+    write(&store, "a", vec![(5_000, queued("grok", "one"))]);
+    write(&store, "b", vec![(5_000, queued("grok", "two"))]);
+    write(&store, "c", vec![(4_000, queued("grok", "three"))]);
+    let ids: Vec<String> = store
+        .recent_runs(10)
+        .expect("list")
+        .into_iter()
+        .map(|r| r.run_id.as_str().to_owned())
+        .collect();
+    assert_eq!(ids, ["b", "a", "c"]);
+}
