@@ -15,3 +15,4 @@ pub mod ids;
 pub mod lifecycle;
 pub mod run_card;
 pub mod supervisor;
+pub mod trace_view;
