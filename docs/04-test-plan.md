@@ -324,6 +324,13 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-SHELL-05** Logging out or shutting down is never blocked by Corral
 - **TP-SHELL-06** Clicking the Dock icon (Reopen) shows the hidden main window
 
+### Live provider smoke (nightly)
+`.github/workflows/live-smoke.yml` runs `cargo run -p corral-adapters --example live_smoke` every night in the `live-smoke` environment. What decides pass or fail is `corral_adapters::smoke`, tested offline in `crates/corral-adapters/tests/live_smoke.rs`:
+- **TP-SMOKE-01** Each provider with a key in its variable (`CORRAL_LIVE_XAI_KEY`, `CORRAL_LIVE_ANTHROPIC_KEY`) is checked; a blank one is skipped; no keys at all fails; a key that isn't valid is named by its variable, never its value
+- **TP-SMOKE-02** EV-PROV-03: the provider's model list still has the model the app's agent uses (`catalog::default_model`), asked for the way the key check asks; a missing model is named
+- **TP-SMOKE-03** EV-PROV-01: one short task through the agent loop ends with exactly one `run.completed`, nothing after it, a non-empty answer and usage with input tokens, output tokens and a cost; anything else fails with the reason
+- **TP-SMOKE-04** The task is one short benign prompt under a 5-cent run cap
+
 ### Build loop integrity (CI scripts and eval runner)
 - **TP-CI-01..02** Editing an inline `#[cfg(test)]` assertion fails the scope guard until explained under "Test changes"
 - **TP-CI-03..05** Adding tests (new modules, appended test functions) needs no explanation; editing non-test code above a test module is fine
