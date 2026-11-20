@@ -324,6 +324,13 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-SHELL-05** Logging out or shutting down is never blocked by Corral
 - **TP-SHELL-06** Clicking the Dock icon (Reopen) shows the hidden main window
 
+### Live provider smoke (nightly)
+`.github/workflows/live-smoke.yml` runs `cargo run -p corral-adapters --example live_smoke` every night in the `live-smoke` environment. What decides pass or fail is `corral_adapters::smoke`, tested offline in `crates/corral-adapters/tests/live_smoke.rs`:
+- **TP-SMOKE-01** Each provider with a key in its variable (`CORRAL_LIVE_XAI_KEY`, `CORRAL_LIVE_ANTHROPIC_KEY`) is checked; a blank one is skipped; no keys at all fails; a key that isn't valid is named by its variable, never its value
+- **TP-SMOKE-02** EV-PROV-03: the provider's model list still has the model the app's agent uses (`catalog::default_model`), asked for the way the key check asks; a missing model is named
+- **TP-SMOKE-03** EV-PROV-01: one short task through the agent loop ends with exactly one `run.completed`, nothing after it, a non-empty answer and usage with input tokens, output tokens and a cost; anything else fails with the reason
+- **TP-SMOKE-04** The task is one short benign prompt under a 5-cent run cap
+
 ### Build loop integrity (CI scripts and eval runner)
 - **TP-CI-01..02** Editing an inline `#[cfg(test)]` assertion fails the scope guard until explained under "Test changes"
 - **TP-CI-03..05** Adding tests (new modules, appended test functions) needs no explanation; editing non-test code above a test module is fine
@@ -395,7 +402,7 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 
 ## 8. Environments and secrets in CI
 - PR CI uses **no real keys**: cassettes and fakes only. Forked PRs can't reach protected environments.
-- `live-smoke` environment: one low-limit key per provider, required reviewers, nightly schedule only.
+- `live-smoke` environment: one separate low-limit key per provider (for Anthropic, a key in a workspace with its own spend limit), usable only from `main` (a deployment branch rule), by `.github/workflows/live-smoke.yml` nightly and on demand, never on a pull request. Not required reviewers: those would hold every nightly run until someone approved it. The keys reach `examples/live_smoke.rs` as environment variables; this is the one place a key comes from anywhere but the Keychain, since CI has none.
 - `release` environment: signing and notarization credentials; manual approval by a code owner.
 
 ## 9. Release checklist (v1.0)

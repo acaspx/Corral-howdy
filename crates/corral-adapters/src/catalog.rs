@@ -37,6 +37,22 @@ pub fn provider_of(agent: &AgentId) -> Option<Provider> {
         .find(|p| &agent_for(*p).id == agent)
 }
 
+/// The model Grok's agent uses. Model IDs are config (docs/01 §4); this is the skeleton's.
+pub const GROK_MODEL: &str = "grok-4.7";
+
+/// The model Claude's agent uses (SK-7).
+pub const CLAUDE_MODEL: &str = "claude-sonnet-5-5";
+
+/// The model `provider`'s agent uses, for the providers with a client so far. The nightly live
+/// check makes sure each is still listed (EV-PROV-03).
+pub fn default_model(provider: Provider) -> Option<&'static str> {
+    match provider {
+        Provider::Xai => Some(GROK_MODEL),
+        Provider::Anthropic => Some(CLAUDE_MODEL),
+        Provider::OpenAi | Provider::Meta => None,
+    }
+}
+
 /// The agents for the connected providers, in the order Settings lists providers (until usage
 /// ranking lands, M4).
 pub fn agents_for(connected: &[Provider]) -> Vec<AgentCard> {

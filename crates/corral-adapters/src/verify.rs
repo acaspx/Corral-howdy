@@ -77,7 +77,7 @@ pub trait ModelsProbe: Send + Sync {
 }
 
 /// Where and how each provider lists its models, or `None` when there's no known check.
-fn models_request(
+pub(crate) fn models_request(
     provider: Provider,
     key: &Secret,
 ) -> Option<(&'static str, Vec<(&'static str, String)>)> {

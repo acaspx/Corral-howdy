@@ -64,10 +64,10 @@ pub const RUN_CAP_MICRO_USD: u64 = 250_000;
 /// ask (one whose folder couldn't be made, so it has no tools) has each request held under it
 /// instead.
 pub const SOFT_LIMIT_MICRO_USD: u64 = 100_000;
-/// The model Grok's drop uses. Model IDs are config (docs/01 §4); this is the skeleton's.
-pub const GROK_MODEL: &str = "grok-4.7";
-/// The model Claude's drop uses (SK-7).
-pub const CLAUDE_MODEL: &str = "claude-sonnet-5-5";
+/// The model Grok's drop uses: the catalog's, which the nightly live check watches (EV-PROV-03).
+pub const GROK_MODEL: &str = corral_adapters::catalog::GROK_MODEL;
+/// The model Claude's drop uses (SK-7): the catalog's, which the nightly live check watches.
+pub const CLAUDE_MODEL: &str = corral_adapters::catalog::CLAUDE_MODEL;
 
 /// The providers with a key in the Keychain. A key that can't be read counts as missing (the
 /// card would fail on it anyway) and is logged.
