@@ -155,7 +155,7 @@ Loop detector (item 7) ✅ 2026-11-15: in the policy gate; from the `loop_limit`
 Progress: the nightly live smoke is wired (2026-11-19: `.github/workflows/live-smoke.yml`, `corral_adapters::smoke`, TP-SMOKE-01..04, EV-PROV-01 and 03) and checks Claude until there's an xAI key. EV-COST-04 waits for that key too: xAI reports what it billed with each response, while Anthropic reports only tokens, so checking Claude's dollars would need an Admin API key in CI (decided 2026-11-19: wait for xAI).
 
 ## M4: The corral UI (~3.5 weeks)
-1. Typed IPC (tauri-specta) + the Rust → Swift snapshot/delta bridge (C ABI)
+1. Typed IPC + the Rust → Swift snapshot/delta bridge (C ABI). Typed IPC ✅ with ts-rs (2026-11-20, ADR-001 §6, TP-IPC-06); the bridge has been in since SK-2
 2. **Liquid-glass corral** (per S5): `CorralPanel` at bottom center, shape grammar up to an octagon, usage-ranked slots (top-left, clockwise), polar morph springs, drop tokens with agent logos and status rings, deploy (click / drag up / selected / all); working agents stay in the shape (ADR-014)
 2a. **Usage ranking in the core:** `usage_rank` projection, idle-gated publishing with hysteresis, "Keep order fixed" setting
 2b. **Shown set:** "Your corral holds up to 8" chooser when a 9th agent is added + Settings → Corral; hidden agents reachable via `@` in the prompt bar

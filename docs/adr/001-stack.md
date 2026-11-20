@@ -17,6 +17,12 @@ step 2). Supersedes the "confirm after Spike S1" note in [01-system-design.md §
    Touch ID.
 5. **A WidgetKit widget is feasible inside the Tauri bundle** and stays a later item. It needs the
    paid Developer ID signing set up first.
+6. **Typed IPC uses ts-rs** (decided 2026-11-20, M4 item 1). Every type the main window sees
+   derives `ts_rs::TS`; `apps/desktop/src-tauri/src/bindings.rs` writes them to
+   `apps/desktop/src/bindings.ts`, and a test fails when the committed file is stale (TP-IPC-06).
+   The `invoke` wrappers stay small and hand-written, typed with those. Not tauri-specta: its Tauri
+   2 version was still a release candidate (2.0.0-rc.25), needed exact pins, and had broken
+   between candidates. Revisit when it's stable, since it would also generate the wrappers.
 
 ## What S1 proved (on Anton's Mac, macOS 26.5, Xcode with the 26.5 SDK)
 
