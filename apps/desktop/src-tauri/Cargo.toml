@@ -24,9 +24,10 @@ swift-rs = { version = "1.0.7", features = ["build"], optional = true }
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
 corral-core = { path = "../../../crates/corral-core" }
-corral-secrets = { path = "../../../crates/corral-secrets" }
+# `ts`: the TypeScript declarations of the types the main window sees (TP-IPC-06).
+corral-secrets = { path = "../../../crates/corral-secrets", features = ["ts"] }
 # Grok over xAI and the event store, for the walking skeleton's corral (SK-6).
-corral-adapters = { path = "../../../crates/corral-adapters" }
+corral-adapters = { path = "../../../crates/corral-adapters", features = ["ts"] }
 corral-store = { path = "../../../crates/corral-store" }
 corral-policy = { path = "../../../crates/corral-policy" }
 corral-tools = { path = "../../../crates/corral-tools" }
@@ -35,6 +36,8 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 # Checkpoint IDs make an answer single use, so they come from the OS random source (TP-TOOL-14).
 getrandom = "0.3"
+# The main window's types, generated from these (ADR-001, TP-IPC-06).
+ts-rs = "12.0.1"
 
 # The workspace lints, except `unsafe_code` is `deny` instead of `forbid`, so the one FFI module
 # (`src/native.rs`) can allow it. ADR-001 is the ADR that allows it.

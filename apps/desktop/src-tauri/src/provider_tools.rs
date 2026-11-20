@@ -27,7 +27,7 @@ pub const MAX_PROVIDER_TOOLS_BYTES: usize = 4 * 1024;
 type Choices = BTreeMap<String, BTreeSet<ProviderTool>>;
 
 /// One switch in the main window: a provider-side tool one agent can be given.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderToolChoice {
     /// The agent's ID, e.g. `claude`.
@@ -38,7 +38,8 @@ pub struct ProviderToolChoice {
     pub tool: ProviderTool,
     /// Whose servers it runs on, e.g. `Anthropic`.
     pub runs_on: String,
-    /// What one use costs, in micro-USD.
+    /// What one use costs, in micro-USD. A JSON number: far below 2^53.
+    #[ts(type = "number")]
     pub cost_micro_usd: u64,
     /// The most uses in one turn.
     pub per_turn: u32,
@@ -48,7 +49,7 @@ pub struct ProviderToolChoice {
 
 /// What the window shows: every switch, and why the saved choices couldn't be read, if they
 /// couldn't.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
 pub struct ProviderToolsView {
     /// Each tool an agent can be given, in the catalog's order.
     pub choices: Vec<ProviderToolChoice>,
