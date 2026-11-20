@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-run-trace"
+description = "Enables the run_trace command without any pre-configured scope."
+commands.allow = ["run_trace"]
+
+[[permission]]
+identifier = "deny-run-trace"
+description = "Denies the run_trace command without any pre-configured scope."
+commands.deny = ["run_trace"]

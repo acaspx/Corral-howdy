@@ -22,6 +22,7 @@ pub mod keys;
 pub mod linked;
 pub mod logos;
 pub mod provider_tools;
+pub mod traces;
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
@@ -89,6 +90,8 @@ pub fn run() {
             keys::remove_provider_key,
             provider_tools::provider_tools,
             provider_tools::set_provider_tool,
+            traces::recent_runs,
+            traces::run_trace,
         ])
         .setup(|app| {
             let show = MenuItem::with_id(app, MENU_SHOW, "Show Corral", true, None::<&str>)?;
@@ -116,6 +119,8 @@ pub fn run() {
             app.manage(std::sync::Arc::new(provider_tools::ProviderTools::open(
                 data.join("provider-tools.json"),
             )));
+            // The trace viewer reads the event store once the corral opens it.
+            app.manage(std::sync::Arc::new(traces::Traces::default()));
 
             // The corral, wired to the core: Grok's drop deploys through the supervisor, and every
             // logged event updates the drops and their cards (SK-6).

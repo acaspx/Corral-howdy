@@ -69,3 +69,111 @@ choices: Array<ProviderToolChoice>,
  * Why every tool is off despite the file, in plain words.
  */
 problem: string | null, };
+
+export type RunListItem = {
+/**
+ * The run.
+ */
+runId: string,
+/**
+ * Its agent's name, e.g. "Grok", or its ID when Corral doesn't know it.
+ */
+agentName: string,
+/**
+ * The prompt, cleaned and capped.
+ */
+prompt: string,
+/**
+ * When it was queued, in ms since the epoch.
+ */
+queuedMs: number,
+/**
+ * When it ended, if it has.
+ */
+endedMs: number | null,
+/**
+ * How it ended, or that it hasn't.
+ */
+outcome: RunListOutcome,
+/**
+ * What it cost, in micro-USD.
+ */
+costMicroUsd: number, };
+
+export type RunListOutcome = "running" | "completed" | "failed" | "cancelled";
+
+export type RunTrace = {
+/**
+ * The span tree.
+ */
+view: TraceView,
+/**
+ * The run's events, as the log holds them, indented.
+ */
+json: string, };
+
+export type TraceView = {
+/**
+ * The run.
+ */
+runId: string,
+/**
+ * When its first event was logged, in ms since the epoch.
+ */
+startMs: number,
+/**
+ * When it ended, or none while it's going.
+ */
+endMs: number | null,
+/**
+ * Its spans.
+ */
+spans: Array<Span>, };
+
+export type Span = {
+/**
+ * Unique in the run: `run`, `model-1`, `tool-<call>`, `checkpoint-<id>`, `mark-<n>`.
+ */
+id: string,
+/**
+ * The span it's under, or none for the run.
+ */
+parent: string | null,
+/**
+ * What it is.
+ */
+kind: SpanKind,
+/**
+ * Its name, e.g. "chat claude-sonnet-5-5".
+ */
+name: string,
+/**
+ * When it began, in ms since the epoch.
+ */
+startMs: number,
+/**
+ * When it ended, or none while it's open.
+ */
+endMs: number | null,
+/**
+ * How it went.
+ */
+status: SpanStatus,
+/**
+ * What the side panel shows, in order.
+ */
+attributes: Array<Attribute>, };
+
+export type Attribute = {
+/**
+ * The label, e.g. "input tokens".
+ */
+key: string,
+/**
+ * The value, as text.
+ */
+value: string, };
+
+export type SpanKind = "run" | "model" | "tool" | "checkpoint" | "mark";
+
+export type SpanStatus = "running" | "ok" | "error" | "denied" | "cancelled";
