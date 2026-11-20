@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-provider-tools"
+description = "Enables the provider_tools command without any pre-configured scope."
+commands.allow = ["provider_tools"]
+
+[[permission]]
+identifier = "deny-provider-tools"
+description = "Denies the provider_tools command without any pre-configured scope."
+commands.deny = ["provider_tools"]

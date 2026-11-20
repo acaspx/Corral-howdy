@@ -64,8 +64,12 @@ pub struct FunctionCall {
     pub arguments: String,
 }
 
-/// A tool that runs on the provider's servers rather than in Corral.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// A tool that runs on the provider's servers rather than in Corral. Saved by its name, e.g.
+/// `web_search`.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
+#[serde(rename_all = "snake_case")]
 pub enum ProviderTool {
     /// Searching the web. Read-only, but what it finds is untrusted.
     WebSearch,

@@ -28,3 +28,6 @@ h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: -0.01em; }
 .key-name { font-weight: 600; }
 .key-detail { flex: 1; opacity: 0.75; }
 .key-error { color: light-dark(#b3261e, #ff8a80); font-size: 13px; margin: 10px 0 0; }
+.tool-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 12px; }
+.tool-switch { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 600; }
+.tool-terms { font-size: 12px; margin: 4px 0 0 24px; opacity: 0.75; max-width: 60ch; }

@@ -1,5 +1,7 @@
 import { KeyIntake } from "./KeyIntake";
 import { keyApi as defaultKeyApi, type KeyApi } from "./keys";
+import { ProviderTools } from "./ProviderTools";
+import { providerToolsApi as defaultToolsApi, type ProviderToolsApi } from "./providerToolsApi";
 
 /**
  * The main window: Corral's deep-work surface (traces, agent and policy editors, spend, settings).
@@ -13,7 +15,13 @@ const sections = [
   { title: "Spend", body: "What each agent has cost, against its limits." },
 ] as const;
 
-export function App({ keyApi = defaultKeyApi }: { keyApi?: KeyApi }) {
+export function App({
+  keyApi = defaultKeyApi,
+  toolsApi = defaultToolsApi,
+}: {
+  keyApi?: KeyApi;
+  toolsApi?: ProviderToolsApi;
+}) {
   return (
     <main className="shell">
       <header>
@@ -29,6 +37,7 @@ export function App({ keyApi = defaultKeyApi }: { keyApi?: KeyApi }) {
         ))}
       </ul>
       <KeyIntake api={keyApi} />
+      <ProviderTools api={toolsApi} />
       <p className="status" role="status">
         Walking skeleton: connect a key and its agent joins the corral; Grok and Claude take tasks
         today. Right-click the corral to place it, add linked apps, or stop all agents.

@@ -6,6 +6,7 @@
 //! arrive with manifests in M5. A provider whose client hasn't landed yet still gets its drop, and
 //! a task given to it ends with a plain message; nothing is sent anywhere.
 
+use crate::agent::ProviderTool;
 use crate::linked::{LinkedApp, LinkedSettings};
 use corral_core::corral_view::AgentCard;
 use corral_core::event::{EventBody, FailureReason, RunFailed};
@@ -27,6 +28,15 @@ pub fn agent_for(provider: Provider) -> AgentCard {
         id: AgentId::from(id),
         name: name.into(),
         monogram: monogram.into(),
+    }
+}
+
+/// The provider-side tools `provider`'s agent can be given (M3 item 4, TP-PROV-10): Claude's web
+/// search so far. Grok's waits for a recording of xAI's search stream.
+pub fn provider_tools(provider: Provider) -> &'static [ProviderTool] {
+    match provider {
+        Provider::Anthropic => &[ProviderTool::WebSearch],
+        Provider::Xai | Provider::OpenAi | Provider::Meta => &[],
     }
 }
 
@@ -100,5 +110,34 @@ impl RunDriver for AgentRouter {
                 ),
             }));
         })
+    }
+}
+
+/// Whether a switch is on, read when a run starts.
+pub type SwitchState = Arc<dyn Fn() -> bool + Send + Sync>;
+
+/// One agent built two ways, with a provider-side tool and without (TP-PROV-13). Each run goes to
+/// one or the other by the switch as it is when the run starts, so turning a tool on or off
+/// changes only later runs, and needs no restart.
+pub struct Switched {
+    on: Arc<dyn RunDriver>,
+    off: Arc<dyn RunDriver>,
+    state: SwitchState,
+}
+
+impl Switched {
+    /// Runs go to `on` while `state` says so, otherwise to `off`.
+    pub fn new(on: Arc<dyn RunDriver>, off: Arc<dyn RunDriver>, state: SwitchState) -> Self {
+        Self { on, off, state }
+    }
+}
+
+impl RunDriver for Switched {
+    fn run(&self, request: RunRequest, sink: EventSink, cancel: CancelToken) -> RunFuture {
+        if (self.state)() {
+            self.on.run(request, sink, cancel)
+        } else {
+            self.off.run(request, sink, cancel)
+        }
     }
 }

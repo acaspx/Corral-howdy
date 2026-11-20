@@ -8,6 +8,8 @@ const COMMANDS: &[&str] = &[
     "identify_provider_key",
     "connect_provider_key",
     "remove_provider_key",
+    "provider_tools",
+    "set_provider_tool",
 ];
 
 fn main() {
