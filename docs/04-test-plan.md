@@ -286,6 +286,12 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-TV-08** Budget warnings, pauses, resumes and plan updates (with their steps) are zero-length marks on the run, each with its own ID
 - **TP-TV-09** A tool result with no request still shows; the view is sent as camelCase JSON
 - **TP-TV-10** (Rust) `Store::recent_runs`: the newest runs first (at most 200), each with its agent, prompt, queued and end times, outcome (running, completed, failed, cancelled) and cost, in one query; runs queued in the same millisecond list the later-logged first (`crates/corral-store/tests/recent_runs.rs`)
+- **TP-TV-11** (Rust) The viewer's run list (`apps/desktop/src-tauri/src/traces.rs`): the newest 100 runs, each with its agent's name (an unknown agent keeps its ID), its prompt cleaned and capped at 200 characters, its times, outcome and cost; before the event store is open, the viewer says so (`apps/desktop/src-tauri/tests/traces.rs`)
+- **TP-TV-12** (Rust) A run's trace is its span tree plus its events as indented JSON, read in one query; a run not in the log is an error
+- **TP-TV-13** (TS) The main window lists the newest runs with the agent, prompt, outcome and cost; with none, it says how to get a first trace (`src/TraceViewer.test.tsx`)
+- **TP-TV-14** (TS) A run opens as its span tree in log order, each span under its parent, with its status, its duration and a bar on the run's timeline; the run's details show first, and a span's when it's picked
+- **TP-TV-15** (TS) Filtering by kind (model calls, tool calls, checkpoints, marks, everything) keeps the run and the kind picked
+- **TP-TV-16** (TS) "Copy as JSON" copies the run's events and says so; a copy that fails says why; agent text is shown as text, never markup
 - **TP-TRACE-01** (Rust) `plan_view` builds subtasks from `plan.updated` events, falling back to top-level spans when no plan is published
 - **TP-TRACE-02** At most 3 columns; extra runs collapse into "+N more running"; needs-you columns sort first
 - **TP-TRACE-03** Each column's wire ends at its agent's drop (or the hidden bead) after a shape morph or a usage reorder
