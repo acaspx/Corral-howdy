@@ -402,7 +402,7 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 
 ## 8. Environments and secrets in CI
 - PR CI uses **no real keys**: cassettes and fakes only. Forked PRs can't reach protected environments.
-- `live-smoke` environment: one low-limit key per provider, required reviewers, nightly schedule only.
+- `live-smoke` environment: one separate low-limit key per provider (for Anthropic, a key in a workspace with its own spend limit), usable only from `main` (a deployment branch rule), by `.github/workflows/live-smoke.yml` nightly and on demand, never on a pull request. Not required reviewers: those would hold every nightly run until someone approved it. The keys reach `examples/live_smoke.rs` as environment variables; this is the one place a key comes from anywhere but the Keychain, since CI has none.
 - `release` environment: signing and notarization credentials; manual approval by a code owner.
 
 ## 9. Release checklist (v1.0)

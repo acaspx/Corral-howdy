@@ -64,9 +64,9 @@ Not yet covered, and why: punycode and mixed-script display of a destination is 
 ### Provider reliability (nightly, live smoke)
 | ID | Checks |
 |---|---|
-| EV-PROV-01 | One short benign task per provider completes; usage reported |
+| EV-PROV-01 | One short benign task per provider completes; usage reported (`examples/live_smoke.rs`, judged by `corral_adapters::smoke`, TP-SMOKE-03) |
 | EV-PROV-02 | Malformed-stream and 429 injection via proxy; typed failure or retry |
-| EV-PROV-03 | Model list still contains every model ID used by default agents |
+| EV-PROV-03 | Model list still contains every model ID used by default agents (`catalog::default_model`, TP-SMOKE-02) |
 
 ## 3. Build-loop evals (weekly report, steer the loop)
 These measure the agents building the repo. They're shown on a dashboard and reviewed at the weekly retro.
