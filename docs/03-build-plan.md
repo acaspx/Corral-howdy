@@ -146,7 +146,7 @@ Loop detector (item 7) ✅ 2026-11-15: in the policy gate; from the `loop_limit`
    4. ✅ In the app: Grok gets the file tools in `~/Corral/Grok`, random checkpoint IDs, and a $0.10 soft limit (2026-11-18, TP-TOOL-13..14)
 4. Provider-side tools toggle (`provider_tools` permission). In two PRs:
    1. ✅ Claude's web search, offered only when the policy allows `provider_tools`: in the trace, in the budget, tainting the run, with sources in the answer (2026-11-19, TP-PROV-01..09, TP-GATE-08). Grok's waits for an xAI recording
-   2. The switch in the app, per agent, labelled "runs on Anthropic's servers"
+   2. ✅ The switch in the main window, per agent, saying where the tool runs, what it costs and that its results are untrusted; read as each run starts (2026-11-19, TP-PROV-10..14)
 5. Record/replay cassettes for provider tests (no live keys in CI)
 6. Adapter contract suite runs against `fake` and `native+xai(cassette)` (✅ 2026-11-18: `tests/contract.rs`, also Grok text-only and Claude)
 

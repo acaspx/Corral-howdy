@@ -187,6 +187,11 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-PROV-07** A failed search shows as a failed `tool.result` with its error code and reads nothing untrusted
 - **TP-PROV-08** Other tools that run at Anthropic (code execution, MCP, web fetch) stay refused, and so does search for an agent that wasn't given it
 - **TP-PROV-09** In the agent loop: without the policy the search isn't offered; a paused turn (`pause_turn`) is sent back as it came and resumed; after a search the run is tainted, so sending data out asks and names the search results
+- **TP-PROV-10** The catalog says which agents can be given which provider-side tools: Claude's web search so far, and nothing for Grok, GPT or Muse Spark; a tool is saved by its name (`web_search`) and an unknown name is refused (`tests/provider_switch.rs`)
+- **TP-PROV-11** The main window lists each provider-side tool the core offers, off until turned on, with where it runs, what it costs and that what it finds is untrusted; a choice goes to the core, is saved in `provider-tools.json` and read back at launch; a tool an agent isn't offered is refused and nothing is saved (`apps/desktop/src-tauri/tests/provider_tools.rs`, `src/ProviderTools.test.tsx`)
+- **TP-PROV-12** Failing closed: a choices file that can't be read (not JSON, too large, an unknown tool, a tool an agent isn't offered) leaves every tool off, says why in the window and is left as it was; a choice that can't be saved doesn't take effect and the window says why
+- **TP-PROV-13** The switch is read when each run starts: a run goes to the agent with the tool or the one without it, and a later change affects only later runs
+- **TP-PROV-14** An agent given a provider-side tool runs under its usual policy with only `provider_tools` allowed, over the same tools and checkpoint desk
 - **TP-ACP-01..05** ACP: spawn, permission request → checkpoint, deny path, env scrubbing, process-group kill (no orphan processes after cancel)
 - **TP-ACP-06** An ACP agent whose permission mode Corral can't set reports `Partial` gating; a known bypass mode refuses to start
 - **TP-ACP-07** Killing Corral (SIGKILL) leaves no ACP agent processes or their children running

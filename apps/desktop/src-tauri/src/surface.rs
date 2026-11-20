@@ -25,15 +25,16 @@
 //! corral's right-click menu. They never take tasks: their card's Open button opens the app's
 //! own site. The choice is kept in `linked-apps.json` ([`crate::linked`]).
 
-use crate::agent_tools::{agent_folder, file_tools};
+use crate::agent_tools::{agent_folder, allowing_provider_tools, file_tools};
 use crate::bridge::{AuthOutcome, BridgeError, Intent, RosterSnapshot};
 use crate::keys::Keys;
 use crate::linked::LinkedStore;
 use crate::logos::{LogoStore, fetch_missing};
 use crate::native;
+use crate::provider_tools::ProviderTools;
 use crate::touch_id::{Finished, TouchIdDesk};
-use corral_adapters::agent::{MessagesAgent, ResponsesAgent, ToolSetup};
-use corral_adapters::catalog::{AgentRouter, agent_for, agents_for, corral_agents};
+use corral_adapters::agent::{MessagesAgent, ProviderTool, ResponsesAgent, ToolSetup};
+use corral_adapters::catalog::{AgentRouter, Switched, agent_for, agents_for, corral_agents};
 use corral_adapters::linked::{LinkChange, LinkedApp, LinkedSettings};
 use corral_adapters::logos::{LogoId, ReqwestLogoFetcher};
 use corral_adapters::messages::{MessagesConfig, MessagesDriver};
@@ -430,12 +431,7 @@ fn supervisor(
         }
     };
     let claude: Arc<dyn RunDriver> = match agent_file_tools(app, desk, Provider::Anthropic) {
-        Ok(tools) => Arc::new(MessagesAgent::new(
-            transport,
-            keys,
-            MessagesConfig::anthropic(CLAUDE_MODEL),
-            tools,
-        )),
+        Ok(tools) => claude_agent(app, transport, keys, tools),
         Err(reason) => {
             eprintln!("corral: Claude has no tools: {reason}");
             Arc::new(MessagesDriver::new(
@@ -461,6 +457,46 @@ fn supervisor(
     );
     built.set_soft_limit(Some(SOFT_LIMIT_MICRO_USD));
     Ok(built)
+}
+
+/// Claude with its file tools, and with web search when the user turned it on in the main window
+/// (TP-PROV-13): the switch is read as each run starts. Without a way to allow it, Claude runs
+/// without search.
+fn claude_agent(
+    app: &AppHandle,
+    transport: Arc<dyn Transport>,
+    keys: Arc<dyn SecretStore>,
+    tools: ToolSetup,
+) -> Arc<dyn RunDriver> {
+    let plain: Arc<dyn RunDriver> = Arc::new(MessagesAgent::new(
+        transport.clone(),
+        keys.clone(),
+        MessagesConfig::anthropic(CLAUDE_MODEL),
+        tools.clone(),
+    ));
+    let searching_tools = match allowing_provider_tools(tools) {
+        Ok(searching_tools) => searching_tools,
+        Err(reason) => {
+            eprintln!("corral: Claude can't search the web: {reason}");
+            return plain;
+        }
+    };
+    let searching: Arc<dyn RunDriver> = Arc::new(MessagesAgent::new(
+        transport,
+        keys,
+        MessagesConfig {
+            web_search: true,
+            ..MessagesConfig::anthropic(CLAUDE_MODEL)
+        },
+        searching_tools,
+    ));
+    let choices = Arc::clone(app.state::<Arc<ProviderTools>>().inner());
+    let claude = agent_for(Provider::Anthropic).id;
+    Arc::new(Switched::new(
+        searching,
+        plain,
+        Arc::new(move || choices.is_on(&claude, ProviderTool::WebSearch)),
+    ))
 }
 
 /// The file tools over `~/Corral/<agent name>` for `provider`'s agent, with checkpoints on

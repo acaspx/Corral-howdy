@@ -9,6 +9,10 @@
 //! - **One desk.** Checkpoints wait on the app's desk, where the card's answers go.
 //! - **Random IDs.** A checkpoint's ID is what makes an answer single use, so IDs come from the
 //!   operating system's random source (128 bits).
+//! - **Provider-side tools** (TP-PROV-14): an agent the user gave one runs under the default
+//!   profile with one rule more, allowing `provider_tools`, read strictly by the policy engine like
+//!   any profile.
+//!   Whether a run gets the tool is the policy's decision (`corral_adapters::agent::allows`).
 
 use corral_adapters::agent::ToolSetup;
 use corral_policy::{Policy, Profile};
@@ -49,6 +53,20 @@ pub fn file_tools(folder: &Path, desk: Arc<CheckpointDesk>) -> Result<ToolSetup,
         gateway: Arc::new(gateway),
         desk,
         ids: random_ids(),
+    })
+}
+
+/// The one rule a profile adds for an agent the user gave provider-side tools.
+const ALLOW_PROVIDER_TOOLS: &str = "[[rules]]\nclass = \"provider_tools\"\ndecision = \"allow\"\n";
+
+/// `setup` under the default profile plus a rule allowing provider-side tools: the same tools,
+/// desk and IDs. (The file tools above use the default profile, so only that rule differs.)
+pub fn allowing_provider_tools(setup: ToolSetup) -> Result<ToolSetup, String> {
+    let profile = Profile::from_toml(ALLOW_PROVIDER_TOOLS)
+        .map_err(|e| format!("couldn't allow provider tools: {e}"))?;
+    Ok(ToolSetup {
+        policy: Policy::new(profile),
+        ..setup
     })
 }
 

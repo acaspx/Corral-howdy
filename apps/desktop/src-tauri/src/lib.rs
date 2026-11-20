@@ -20,6 +20,7 @@ pub mod agent_tools;
 pub mod keys;
 pub mod linked;
 pub mod logos;
+pub mod provider_tools;
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
@@ -85,6 +86,8 @@ pub fn run() {
             keys::identify_provider_key,
             keys::connect_provider_key,
             keys::remove_provider_key,
+            provider_tools::provider_tools,
+            provider_tools::set_provider_tool,
         ])
         .setup(|app| {
             let show = MenuItem::with_id(app, MENU_SHOW, "Show Corral", true, None::<&str>)?;
@@ -106,6 +109,12 @@ pub fn run() {
                     _ => {}
                 })
                 .build(app)?;
+
+            // Which provider-side tools the user turned on, for the window and the agents.
+            let data = app.path().app_data_dir()?;
+            app.manage(std::sync::Arc::new(provider_tools::ProviderTools::open(
+                data.join("provider-tools.json"),
+            )));
 
             // The corral, wired to the core: Grok's drop deploys through the supervisor, and every
             // logged event updates the drops and their cards (SK-6).
