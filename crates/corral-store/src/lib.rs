@@ -49,6 +49,8 @@ CREATE TABLE IF NOT EXISTS events (
     hash           TEXT    NOT NULL,
     UNIQUE (run_id, seq)
 );
+-- Finding events by kind and time: the newest runs (recent_runs) and this month's spend.
+CREATE INDEX IF NOT EXISTS events_kind_ts ON events (kind, ts);
 CREATE TRIGGER IF NOT EXISTS events_no_update BEFORE UPDATE ON events
     BEGIN SELECT RAISE(ABORT, 'events are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS events_no_delete BEFORE DELETE ON events
@@ -57,6 +59,41 @@ CREATE TRIGGER IF NOT EXISTS events_no_delete BEFORE DELETE ON events
 
 const COLUMNS: &str =
     "run_id, seq, ts, kind, span_id, parent_span_id, payload_json, prev_hash, hash";
+
+/// The most runs [`Store::recent_runs`] returns.
+pub const MAX_RECENT_RUNS: usize = 200;
+
+/// How a run ended, or that it hasn't.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunOutcome {
+    /// No `run.completed`, `run.failed` or `run.cancelled` yet.
+    Running,
+    /// `run.completed`.
+    Completed,
+    /// `run.failed`.
+    Failed,
+    /// `run.cancelled`.
+    Cancelled,
+}
+
+/// One run as the trace viewer lists it (TP-TV-10).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunSummary {
+    /// The run.
+    pub run_id: RunId,
+    /// Its agent, from its `run.queued`.
+    pub agent_id: AgentId,
+    /// The prompt, as given (agent text for a surface to clean).
+    pub prompt: String,
+    /// When it was queued.
+    pub queued_ms: u64,
+    /// When it ended, if it has.
+    pub ended_ms: Option<u64>,
+    /// How it ended.
+    pub outcome: RunOutcome,
+    /// What it cost: the sum of its `usage.reported`.
+    pub cost_micro_usd: u64,
+}
 
 /// One `usage.reported`, with whose run it was: what seeds the budget's monthly caps at launch
 /// (TP-BUD-07).
@@ -269,6 +306,80 @@ impl Store {
         ))?;
         let rows = stmt.query_map(params![run_id.as_str()], Row::read)?;
         rows.map(|row| row?.event()).collect()
+    }
+
+    /// The newest runs, newest first, at most `limit` (and at most [`MAX_RECENT_RUNS`]): one
+    /// query for the runs' `run.queued`, `usage.reported` and ending events, projected in memory.
+    pub fn recent_runs(&self, limit: usize) -> Result<Vec<RunSummary>, StoreError> {
+        let limit = i64::try_from(limit.min(MAX_RECENT_RUNS))
+            .map_err(|_| StoreError::Corrupt("the run limit doesn't fit".into()))?;
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare_cached(&format!(
+            "SELECT {COLUMNS} FROM events \
+             WHERE kind IN ('run.queued', 'usage.reported', 'run.completed', 'run.failed', \
+                            'run.cancelled') \
+               AND run_id IN (SELECT run_id FROM events WHERE kind = 'run.queued' \
+                              ORDER BY ts DESC, id DESC LIMIT ?1) \
+             ORDER BY id"
+        ))?;
+        let rows = stmt.query_map(params![limit], Row::read)?;
+        let mut runs: Vec<RunSummary> = Vec::new();
+        let mut index: HashMap<RunId, usize> = HashMap::new();
+        for row in rows {
+            let event = row?.event()?;
+            let run_id = event.run_id.clone();
+            let ended = |outcome: RunOutcome| (Some(event.ts), outcome);
+            let (ended_ms, outcome) = match event.body {
+                EventBody::RunQueued(queued) => {
+                    index.insert(run_id.clone(), runs.len());
+                    runs.push(RunSummary {
+                        run_id,
+                        agent_id: queued.agent_id,
+                        prompt: queued.prompt,
+                        queued_ms: event.ts,
+                        ended_ms: None,
+                        outcome: RunOutcome::Running,
+                        cost_micro_usd: 0,
+                    });
+                    continue;
+                }
+                EventBody::UsageReported(usage) => {
+                    let run = summary(&mut runs, &index, &run_id)?;
+                    run.cost_micro_usd = run.cost_micro_usd.saturating_add(usage.cost_micro_usd);
+                    continue;
+                }
+                EventBody::RunCompleted(_) => ended(RunOutcome::Completed),
+                EventBody::RunFailed(_) => ended(RunOutcome::Failed),
+                EventBody::RunCancelled(_) => ended(RunOutcome::Cancelled),
+                EventBody::RunStarted(_)
+                | EventBody::PlanUpdated(_)
+                | EventBody::ModelRequest(_)
+                | EventBody::ModelDelta(_)
+                | EventBody::ModelResponse(_)
+                | EventBody::ToolRequested(_)
+                | EventBody::PolicyDecided(_)
+                | EventBody::CheckpointOpened(_)
+                | EventBody::CheckpointResolved(_)
+                | EventBody::ToolStarted(_)
+                | EventBody::ToolResult(_)
+                | EventBody::BudgetWarned(_)
+                | EventBody::RunPaused(_)
+                | EventBody::RunResumed(_)
+                | EventBody::SessionClosed(_) => {
+                    return Err(StoreError::Corrupt(format!(
+                        "the run list query returned {}",
+                        event.kind().as_str()
+                    )));
+                }
+            };
+            let run = summary(&mut runs, &index, &run_id)?;
+            run.ended_ms = ended_ms;
+            run.outcome = outcome;
+        }
+        // Newest first; runs queued in the same millisecond, the later-logged first.
+        runs.reverse();
+        runs.sort_by_key(|run| std::cmp::Reverse(run.queued_ms));
+        Ok(runs)
     }
 
     /// Every `usage.reported` at or after `since_ms`, with its run's agent, in log order: one query
@@ -524,4 +635,16 @@ impl Row {
             &serde_json::Value::Object(obj).to_string(),
         )?)
     }
+}
+
+/// The listed run `run_id`, whose `run.queued` is its first event and so came first.
+fn summary<'a>(
+    runs: &'a mut [RunSummary],
+    index: &HashMap<RunId, usize>,
+    run_id: &RunId,
+) -> Result<&'a mut RunSummary, StoreError> {
+    index
+        .get(run_id)
+        .and_then(|i| runs.get_mut(*i))
+        .ok_or_else(|| StoreError::Corrupt(format!("{run_id} has events before it was queued")))
 }
