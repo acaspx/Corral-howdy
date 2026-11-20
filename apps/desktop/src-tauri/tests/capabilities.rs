@@ -1,7 +1,8 @@
 //! TP-IPC-05: the main window's capability grants only what the current UI uses (security model T10).
 //!
 //! The list below is the whole grant. The main window may read, identify, connect (check and save) and
-//! remove provider keys; the tray and menus are built in Rust, which capabilities don't gate. Adding a
+//! remove provider keys, and see and switch the provider-side tools the core offers; the tray and
+//! menus are built in Rust, which capabilities don't gate. Adding a
 //! permission means adding it here and in `capabilities/default.json` in the same PR, with the
 //! feature that needs it; both are reviewed by the code owner. Never add a bundle such as
 //! `core:default`.
@@ -10,6 +11,8 @@ const MAIN_WINDOW_PERMISSIONS: &[&str] = &[
     "allow-identify-provider-key",
     "allow-connect-provider-key",
     "allow-remove-provider-key",
+    "allow-provider-tools",
+    "allow-set-provider-tool",
 ];
 
 fn main_window_capability() -> serde_json::Value {
