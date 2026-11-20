@@ -276,6 +276,16 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-HOVER-09** High-risk Approve is disabled until the card is pinned and any truncated detail is expanded
 - **TP-HOVER-10** The done card shows the run's result: the agent's summary in its own labelled, length-capped box (agent text, T20), and outputs, pages read and approvals from core projections only. A follow-up stays in the same session; Send back closes it and offers Undo
 - **TP-HOVER-11** The card measures to a visible size (at least its 340 pt width), from SwiftUI rather than the hosting view's fitting size, which is 0×0 for a view that doesn't size its window; a longer card measures taller
+- **TP-TV-01** (Rust) The trace viewer's span tree (`corral_core::trace_view`): a run span ("invoke_agent <agent>": prompt, adapter, totals) over one span per model call ("chat <model>": provider, finish reason, response, that turn's usage), each with its start and end (`tests/trace_view.rs`)
+- **TP-TV-02** A tool call is a span beside the model calls ("execute_tool <tool>": class, arguments, the policy's decision, the result); a failed result is an error
+- **TP-TV-03** A checkpoint is a span under its tool call (risk, detail, resolution), from opened to resolved; approved, edited and allowed-for-run are ok, denied is denied, expired is cancelled; spans come in the order they began
+- **TP-TV-04** A call the policy denied ends at the decision, denied
+- **TP-TV-05** When a run fails or stops, every span still open ends with it, as an error or cancelled; the run span carries the failure message
+- **TP-TV-06** A run still going has open spans (no end, running); no events, no spans
+- **TP-TV-07** Model text, arguments and results are agent text: cleaned of control and bidi characters and capped at 2,000 characters
+- **TP-TV-08** Budget warnings, pauses and resumes are zero-length marks on the run
+- **TP-TV-09** A tool result with no request still shows; the view is sent as camelCase JSON
+- **TP-TV-10** (Rust) `Store::recent_runs`: the newest runs first (at most 200), each with its agent, prompt, queued and end times, outcome (running, completed, failed, cancelled) and cost, in one query (`crates/corral-store/tests/recent_runs.rs`)
 - **TP-TRACE-01** (Rust) `plan_view` builds subtasks from `plan.updated` events, falling back to top-level spans when no plan is published
 - **TP-TRACE-02** At most 3 columns; extra runs collapse into "+N more running"; needs-you columns sort first
 - **TP-TRACE-03** Each column's wire ends at its agent's drop (or the hidden bead) after a shape morph or a usage reorder
