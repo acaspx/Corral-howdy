@@ -8,6 +8,7 @@
 //! - [`transport`]: one HTTP POST with a streamed body; the network lives only here.
 //! - [`catalog`]: the agent each provider's key brings, and the router that runs it.
 //! - [`verify`]: checks a key with its provider before it's stored (TP-SETUP-02).
+//! - [`smoke`]: what the nightly live check passes and fails on (EV-PROV-01, 03).
 //! - [`cassette`]: recorded exchanges replayed in tests, so tests never call the network
 //!   (AGENTS.md rule 7).
 
@@ -19,6 +20,7 @@ pub mod linked;
 pub mod logos;
 pub mod messages;
 pub mod responses;
+pub mod smoke;
 pub mod sse;
 pub mod stream;
 pub mod transport;

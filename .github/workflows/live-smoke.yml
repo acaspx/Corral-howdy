@@ -1,0 +1,45 @@
+# The nightly live check (M3 exit; EV-PROV-01, 03; docs/04 §8). One short task per provider with a
+# key, through the agent loop the app uses, plus a check that each still lists Corral's model.
+# What passes or fails is crates/corral-adapters/src/smoke.rs, tested offline in CI.
+#
+# Hardening, as in ci.yml:
+# - Runs on a schedule or on demand, never on a pull request, so a PR can't reach the keys.
+# - The keys live in the `live-smoke` environment, which only `main` may use (a deployment branch
+#   rule), one separate low-limit key per provider. Each task is capped at 5 cents.
+# - Every run step uses bash with -eo pipefail; actions are pinned to full commit SHAs (T12).
+name: live-smoke
+
+on:
+  schedule:
+    - cron: "17 11 * * *" # 03:17 in California
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-smoke
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  smoke:
+    name: live smoke (one short task per provider)
+    runs-on: macos-latest
+    environment: live-smoke
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install && rustup show active-toolchain
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Check each provider
+        run: cargo run -p corral-adapters --example live_smoke
+        env:
+          CORRAL_LIVE_XAI_KEY: ${{ secrets.CORRAL_LIVE_XAI_KEY }}
+          CORRAL_LIVE_ANTHROPIC_KEY: ${{ secrets.CORRAL_LIVE_ANTHROPIC_KEY }}
