@@ -212,6 +212,7 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-IPC-03** CSP blocks remote scripts; agent-produced markdown is sanitized (no raw HTML, no `javascript:` links)
 - **TP-IPC-04** No webview ever navigates to a remote URL
 - **TP-IPC-05** The main window's capability lists only the permissions the current UI uses; a call outside it (e.g. creating a tray icon) is refused
+- **TP-IPC-06** The main window's types are generated from the Rust types (ts-rs): the committed `apps/desktop/src/bindings.ts` matches them exactly, exports each type the window sees once, and says what serde sends (JSON numbers, camelCase, `null` for none); a stale file fails with the command that regenerates it (`apps/desktop/src-tauri/tests/bindings.rs`)
 
 ### Corral surface (Swift)
 - **TP-SHAPE-01** Shape grammar: 0 empty, 1 circle, 2 dumbbell, 3–8 polygon, capped at an octagon

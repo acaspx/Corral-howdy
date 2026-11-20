@@ -1,12 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { Connected, KeyStatus, Provider } from "./bindings";
+
+export type { Connected, KeyStatus, Provider };
 
 /**
  * Provider keys. One field takes any provider's key: the core suggests the provider from the key
  * (TP-SETUP-05), checks it with that provider and stores it in the Keychain (TP-SETUP-02). Only a
  * status ever comes back: whether a key is set and its last 4 characters (TP-SETUP-01, TP-SEC-02).
  */
-export type Provider = "xai" | "openai" | "anthropic" | "meta";
-
 /** Providers in the order the picker lists them, with the names people know them by. */
 export const PROVIDERS: readonly { id: Provider; name: string }[] = [
   { id: "xai", name: "xAI" },
@@ -17,18 +18,6 @@ export const PROVIDERS: readonly { id: Provider; name: string }[] = [
 
 export function providerName(provider: Provider): string {
   return PROVIDERS.find((p) => p.id === provider)?.name ?? provider;
-}
-
-export interface KeyStatus {
-  provider: Provider;
-  configured: boolean;
-  last4: string | null;
-}
-
-export interface Connected {
-  status: KeyStatus;
-  /** Whether the provider accepted the key; false when there's no check for it yet. */
-  checked: boolean;
 }
 
 export interface KeyApi {

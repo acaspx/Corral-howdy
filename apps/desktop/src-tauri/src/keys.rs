@@ -57,7 +57,7 @@ impl ModelsProbe for NoClient {
 }
 
 /// A connected key: its status, and whether the provider checked it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
 pub struct Connected {
     /// The provider's key status.
     pub status: KeyStatus,

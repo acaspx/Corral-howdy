@@ -16,7 +16,7 @@ Read first: [00-product-brief.md](00-product-brief.md). Security details: [02-se
 │  │   └─ Main window: traces, agent config, policies,      │   │
 │  │      spend, settings                                   │   │
 │  │                                                        │   │
-│  │            ▲ typed IPC (tauri-specta commands/events)  │   │
+│  │            ▲ typed IPC (types generated with ts-rs)    │   │
 │  │            ▼                                           │   │
 │  │  Tauri shell (thin): windows, tray, hotkeys, updater   │   │
 │  │            │                                           │   │

@@ -22,6 +22,11 @@ bytes = "1"
 # HTTPS to model providers. native-tls is Security.framework on macOS (the system trust store,
 # no bundled crypto); rustls' default provider pulls aws-lc-sys, whose license deny.toml refuses.
 reqwest = { version = "0.13", default-features = false, features = ["native-tls", "json", "stream", "http2"] }
+# TypeScript declarations for the main window (TP-IPC-06), only for the desktop app's build.
+ts-rs = { version = "12.0.1", optional = true }
+
+[features]
+ts = ["dep:ts-rs"]
 
 [dev-dependencies]
 # Paused time: backoff and Stop are tested exactly without waiting.

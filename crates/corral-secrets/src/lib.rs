@@ -24,6 +24,7 @@ pub use keychain::KeychainStore;
 
 /// A model provider with its own API key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum Provider {
     /// xAI (Grok).
     #[serde(rename = "xai")]
@@ -167,6 +168,7 @@ pub fn identify(key: &str) -> Option<Provider> {
 
 /// Whether a provider has a key, as Settings shows it (TP-SEC-02).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct KeyStatus {
     /// The provider.
