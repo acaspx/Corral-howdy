@@ -190,3 +190,30 @@ fn tp_tv_10_runs_queued_in_the_same_millisecond_list_the_later_one_first() {
         .collect();
     assert_eq!(ids, ["b", "a", "c"]);
 }
+
+#[test]
+fn tp_usage_06_deploys_since_reads_each_run_queued_from_then_on() {
+    let db = TempDb::new("deploys");
+    let store = Store::open(&db.path()).expect("open");
+    write(&store, "old", vec![(1_000, queued("grok", "a"))]);
+    write(
+        &store,
+        "new",
+        vec![
+            (5_000, queued("claude", "b")),
+            (5_100, usage(10)),
+            (
+                5_200,
+                EventBody::RunCompleted(RunCompleted { summary: None }),
+            ),
+        ],
+    );
+    write(&store, "newer", vec![(6_000, queued("grok", "c"))]);
+    let deploys = store.deploys_since(5_000).expect("read");
+    let seen: Vec<(&str, u64)> = deploys
+        .iter()
+        .map(|d| (d.agent.as_str(), d.ts_ms))
+        .collect();
+    assert_eq!(seen, [("claude", 5_000), ("grok", 6_000)]);
+    assert!(store.deploys_since(10_000).expect("read").is_empty());
+}
