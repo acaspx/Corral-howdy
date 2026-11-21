@@ -244,6 +244,11 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-USAGE-14** (Rust) "Keep order fixed" is switched from the settings and saved
 - **TP-USAGE-15** (Rust) The settings commands reach the running corral through the handle it attaches; before that they say the corral isn't running (`apps/desktop/src-tauri/tests/corral_settings.rs`)
 - **TP-USAGE-16** (TS) The main window's Corral section: "Your corral holds up to 8" when a 9th waits, a box per agent (full, the rest wait), each change sent to the core in the corral's order, a refused change leaves the boxes as they were, and "Keep order fixed" says deploys still count (`src/CorralSettings.test.tsx`)
+- **TP-PROMPT-01** (Rust) In the prompt bar, `@` and an agent's name sends the rest of the prompt to that agent, shown or hidden: any case, spaces in a name optional, or the agent's ID (`crates/corral-core/tests/mention.rs`)
+- **TP-PROMPT-02** (Rust) Several names at the start send the task to each, once; a name later in the prompt is part of the task
+- **TP-PROMPT-03** (Rust) Without a name at the start, the prompt isn't addressed (an email address isn't a name)
+- **TP-PROMPT-04** (Rust) An unknown name, `@` with no name, or no task says why; the name in the message is cleaned and capped
+- **TP-PROMPT-05** (Rust) Typing a name suggests the agents it could be, in the corral's order with hidden ones marked, never one already named, at most 8, each with the completed text
 - **TP-GLASS-01** Render snapshots n = 0–8 match baselines (tolerance-based)
 - **TP-GLASS-02** Reduce Transparency → opaque fill; Reduce Motion → no springs, caustics frozen
 - **TP-GLASS-03** Logo plate, fallback monogram and status ring contrast ≥ 4.5:1 (3:1 for rings) over light, dark and busy test wallpapers
