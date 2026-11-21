@@ -159,6 +159,8 @@ Progress: the nightly live smoke is wired (2026-11-19: `.github/workflows/live-s
 2. **Liquid-glass corral** (per S5): `CorralPanel` at bottom center, shape grammar up to an octagon, usage-ranked slots (top-left, clockwise), polar morph springs, drop tokens with agent logos and status rings, deploy (click / drag up / selected / all); working agents stay in the shape (ADR-014)
 2a. **Usage ranking in the core:** `usage_rank` projection, idle-gated publishing with hysteresis, "Keep order fixed" setting
 2b. **Shown set:** "Your corral holds up to 8" chooser when a 9th agent is added + Settings → Corral; hidden agents reachable via `@` in the prompt bar
+
+    Progress: the logic of both is in the core (2026-11-20, `corral_core::usage_rank`, TP-USAGE-01..05): the score, the rank, `reorder` with 10% hysteresis, `UsageOrder` (idle-gated, "Keep order fixed") and `ShownSet` (the first 8, a 9th asks, no auto-promotion). Next: the app saves them, feeds them deploys and the corral's idle state, and sends Swift the shown agents in order; then the chooser and the setting.
 3. **Hover cards + trace tree** (per S6; spec in [07 §8](07-brand-and-corral-surface.md)): paper hover card with plan progress, elapsed, spend and state-based buttons; trace tree of translucent prompt/task/subtask cards wired to drops; `plan_view` projection + `plan.updated` events in the core; logo import
 4. Checkpoint UI: approval box in the hover card (stepper for several pending, Touch ID for critical) + actionable notification; edit-args flow; nonce-bound approve; 300 ms input guard
 5. Main window: trace viewer (tree + waterfall), JSON copy. In two PRs:
