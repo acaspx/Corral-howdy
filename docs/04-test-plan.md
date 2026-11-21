@@ -250,10 +250,10 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-PROMPT-04** (Rust) An unknown name, `@` with no name, or no task says why; the name in the message is cleaned and capped
 - **TP-PROMPT-05** (Rust) Typing a name suggests the agents it could be, in the corral's order with hidden ones marked, never one already named, at most 8, each with the completed text
 - **TP-BAR-01** The prompt bar (07 §6.1) appears from the hotkey, a double-click on the corral's background, or dragging a drop up (that agent named), with no animation, and takes focus without bringing Corral's other windows forward; hotkey → typing p95 < 150 ms
-- **TP-BAR-02** (Rust) Who it goes to: names at the start, else the ⌘-clicked drops, else no one; Return never sends to more than was named or selected, and only Deploy all (or ⌘Return) sends to every shown agent, never a hidden one
-- **TP-BAR-03** (Rust) Busy agents are skipped, the others get the task, and the bar names who didn't; Deploy all's count leaves busy agents out
-- **TP-BAR-04** `@` suggestions: ↑↓ move, Return or Tab takes, a click takes, Esc closes the list but not the bar; hidden agents are marked; no list when nothing matches
-- **TP-BAR-05** The core's errors show under the bar with a glyph; Return does nothing while there's one, and the text stays
+- **TP-BAR-02** (Rust) Who it goes to: names at the start, else the ⌘-clicked drops (checked and deduped), else no one; Return never sends to more than was named or selected, and only Deploy all (or ⌘Return) sends, to the shown agents that are ready, never a hidden one. The bar shows it: chips, placeholder and the button's label and count (`crates/corral-core/tests/prompt_bar.rs`)
+- **TP-BAR-03** (Rust) Busy agents are skipped, the others get the task, and the bar names who didn't (and any other refusal, with the core's reason); Deploy all's count leaves busy agents out
+- **TP-BAR-04** `@` suggestions (rows with each agent's status, from the text before the cursor: Rust): ↑↓ move, Return or Tab takes, a click takes, Esc closes the list but not the bar; hidden agents are marked; no list when nothing matches
+- **TP-BAR-05** The core's errors show under the bar with a glyph (an unknown name only once it's finished, a missing task only on Return: Rust); Return does nothing while there's one, and the text stays
 - **TP-BAR-06** Closing without sending keeps the text until it's sent or cleared; opening the bar closes a pinned hover card
 - **TP-BAR-07** The bar never approves, denies or edits a checkpoint; VoiceOver reads the bar, its chips, the send button's full label and each suggestion (with "hidden"), and the whole path works from the keyboard
 - **TP-GLASS-01** Render snapshots n = 0–8 match baselines (tolerance-based)
