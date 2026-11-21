@@ -256,6 +256,7 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-BAR-05** The core's errors show under the bar with a glyph (an unknown name only once it's finished, a missing task only on Return: Rust); Return does nothing while there's one, and the text stays
 - **TP-BAR-06** Closing without sending keeps the text until it's sent or cleared; opening the bar closes a pinned hover card
 - **TP-BAR-07** The bar never approves, denies or edits a checkpoint; VoiceOver reads the bar, its chips, the send button's full label and each suggestion (with "hidden"), and the whole path works from the keyboard
+- **TP-BAR-08** (Rust + Swift) The bar's wire: edits and sends arrive typed and bounded (the text within the prompt limit, the cursor kept inside it on a character, at most 8 valid selected IDs, deduped); Rust answers with the bar's view for the agents in the corral's order with their status, echoing the edit's number, and a send's outcome (sent, a note with the text cleared, refused with the text kept); Swift decodes it bounded and drops a view older than its latest edit (`Fixtures/bridge/*prompt-bar*`, `src/bridge.rs`, `tests/prompt_bar_feed.rs`, `CorralPromptBarTests.swift`)
 - **TP-GLASS-01** Render snapshots n = 0–8 match baselines (tolerance-based)
 - **TP-GLASS-02** Reduce Transparency → opaque fill; Reduce Motion → no springs, caustics frozen
 - **TP-GLASS-03** Logo plate, fallback monogram and status ring contrast ≥ 4.5:1 (3:1 for rings) over light, dark and busy test wallpapers

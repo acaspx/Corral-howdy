@@ -1,0 +1,12 @@
+{
+  "v": 1,
+  "seq": 8,
+  "view": {
+    "chips": [],
+    "placeholder": "Type @ and a name, or pick agents in the corral",
+    "button": { "label": "Deploy all (1)", "enabled": true, "all": true },
+    "error": null,
+    "suggestions": []
+  },
+  "outcome": { "kind": "note", "text": "Sent to Claude. Grok is busy." }
+}

@@ -1,0 +1,13 @@
+{
+  "v": 1,
+  "seq": 7,
+  "view": {
+    "chips": ["Grok"],
+    "placeholder": "Give Grok a task",
+    "button": { "label": "Deploy", "enabled": true, "all": false },
+    "error": null,
+    "suggestions": [
+      { "id": "claude", "name": "Claude", "shown": true, "status": "ready", "completion": "@Claude " }
+    ]
+  }
+}
