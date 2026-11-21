@@ -140,7 +140,7 @@ The general way to give agents a task: one or several, by name, by selection, or
 
 **Errors** sit in one line under the bar, in the core's words, with an `exclamationmark.circle` glyph so they aren't color-only: "No agent is called nobody.", "Write an agent's name after @.", "Write a task after the agent's name." (TP-PROMPT-04). Return does nothing while there's an error, and the text stays.
 
-**After sending:** the bar closes. The named agents' rings turn in the corral and their trace columns rise (§8.3), which is the confirmation; there's no toast. One prompt sent to several agents later gets "3 results ready · Compare" (J12).
+**After sending:** the bar closes, unless an agent was busy or couldn't start: then it stays open with the note (e.g. "Sent to Claude and GPT. Grok is busy.") and the text cleared, since the others already have the task. Otherwise the named agents' rings turn in the corral and their trace columns rise (§8.3), which is the confirmation; there's no toast. One prompt sent to several agents later gets "3 results ready · Compare" (J12).
 
 **Safety:** the bar only gives tasks. It never approves, denies or edits a checkpoint, by text or (M6) by voice; those stay on the card (§8.2). The prompt is the user's own text: the core trims and caps it (`corral_core::controls`), and the agents' names and statuses it shows come from the core, bounded on arrival like everything Swift gets.
 
