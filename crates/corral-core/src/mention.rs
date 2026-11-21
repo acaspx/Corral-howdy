@@ -124,25 +124,53 @@ fn named<'a>(text: &str, agents: &'a [Addressee]) -> Option<(&'a Addressee, usiz
     best
 }
 
-/// Who `text` is for, and the task.
-pub fn address(text: &str, agents: &[Addressee]) -> Result<Prompt, MentionError> {
+/// The names at the start of a prompt so far, for the prompt bar while it's typed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Names {
+    /// The agents named, each once, in the order named.
+    pub agents: Vec<AgentId>,
+    /// A name that's finished (a space or punctuation follows it) but isn't an agent's, or an `@`
+    /// with no name. Nothing while a name is still being typed.
+    pub problem: Option<MentionError>,
+}
+
+/// Where reading the names at the start of a prompt stopped.
+enum Stop<'a> {
+    /// At the task.
+    Task(&'a str),
+    /// At a name that isn't an agent's; `finished` when something follows it.
+    Bad { error: MentionError, finished: bool },
+}
+
+fn parse<'a>(text: &'a str, agents: &[Addressee]) -> (Vec<AgentId>, Stop<'a>) {
     let mut rest = text.trim_start();
     let mut chosen: Vec<AgentId> = Vec::new();
     while let Some(after) = rest.strip_prefix('@') {
         let Some((agent, len)) = named(after, agents) else {
             let name = after.split(is_separator).next().unwrap_or_default();
-            if name.is_empty() {
-                return Err(MentionError::NoName);
-            }
-            let name = AgentText::new(name, MAX_NAME_CHARS);
-            return Err(MentionError::Unknown(name.as_str().to_owned()));
+            let finished = name.len() < after.len();
+            let error = if name.is_empty() {
+                MentionError::NoName
+            } else {
+                MentionError::Unknown(AgentText::new(name, MAX_NAME_CHARS).as_str().to_owned())
+            };
+            return (chosen, Stop::Bad { error, finished });
         };
         if !chosen.contains(&agent.id) {
             chosen.push(agent.id.clone());
         }
         rest = after[len..].trim_start_matches(is_separator);
     }
-    let task = rest.trim();
+    (chosen, Stop::Task(rest))
+}
+
+/// Who `text` is for, and the task.
+pub fn address(text: &str, agents: &[Addressee]) -> Result<Prompt, MentionError> {
+    let (chosen, stop) = parse(text, agents);
+    let task = match stop {
+        Stop::Task(task) => task.trim(),
+        Stop::Bad { error, .. } => return Err(error),
+    };
     if task.is_empty() {
         return Err(MentionError::NoTask);
     }
@@ -150,6 +178,25 @@ pub fn address(text: &str, agents: &[Addressee]) -> Result<Prompt, MentionError>
         agents: chosen,
         task: task.to_owned(),
     })
+}
+
+/// The names at the start of `text` so far, and any finished name that isn't an agent's.
+pub fn names(text: &str, agents: &[Addressee]) -> Names {
+    let (chosen, stop) = parse(text, agents);
+    let problem = match stop {
+        Stop::Bad {
+            error,
+            finished: true,
+        } => Some(error),
+        Stop::Bad {
+            finished: false, ..
+        }
+        | Stop::Task(_) => None,
+    };
+    Names {
+        agents: chosen,
+        problem,
+    }
 }
 
 /// The agents the name being typed at the end of `before_cursor` could be. Nothing unless a name
