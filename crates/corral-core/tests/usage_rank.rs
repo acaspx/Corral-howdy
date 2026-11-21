@@ -413,3 +413,29 @@ fn tp_usage_05_swift_gets_the_shown_agents_most_used_first() {
         "a saved shown agent that's gone is dropped"
     );
 }
+
+#[test]
+fn tp_usage_04_keep_order_fixed_is_off_unless_turned_on() {
+    let mut order = UsageOrder::new(ids(&["a"]), false);
+    assert!(!order.keeps_fixed());
+    order.set_keep_fixed(true);
+    assert!(order.keeps_fixed());
+}
+
+#[test]
+fn tp_usage_05_the_set_knows_every_agent_and_counts_the_hidden() {
+    let mut shown = ShownSet::default();
+    assert_eq!(shown.hidden_count(), 0);
+    for n in 0..10 {
+        shown.add(id(&format!("a{n}")));
+    }
+    assert_eq!(shown.known().len(), 10);
+    assert_eq!(shown.known()[9], id("a9"), "in the order added");
+    assert_eq!(shown.hidden_count(), 2);
+    let all: Vec<AgentId> = (0..10).map(|n| id(&format!("a{n}"))).collect();
+    assert_eq!(
+        ShownSet::restore(all.clone(), all).shown().len(),
+        8,
+        "a saved set over 8 keeps the first 8"
+    );
+}
