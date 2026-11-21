@@ -102,12 +102,49 @@ The prototype code is wired for plan A, and plan C's helper is kept in `CorralPa
 |---|---|
 | Hover a drop (120 ms intent delay) | Its hover card opens above it (§8.2). It stays open while the pointer is on the drop or the card, and closes 260 ms after leaving |
 | Click a drop, or focus it and press Space | Pins the hover card. For an idle agent the card opens on **New task** |
-| ⌘-click drops | Multi-select (accent ring); the prompt bar offers "Deploy selected" |
-| Double-click the corral background, or the summon hotkey | Prompt bar appears above the corral (text + mic), with no animation (§7) |
-| Drag a drop upward | Shortcut for "New task": the prompt bar opens attached to that agent. The drop stays in the corral |
+| ⌘-click drops | Multi-select (accent ring); the prompt bar sends to them (§6.1) |
+| Double-click the corral background, or the summon hotkey | Prompt bar appears above the corral, with no animation (§6.1) |
+| Drag a drop upward | Shortcut for "New task": the prompt bar opens with that agent named (§6.1). The drop stays in the corral |
 | Click a task card in the trace tree | Opens that run in the trace viewer (main window) |
 | Click a subtask stack | Fans the stack out into a list of every subtask with its status |
 | Recall-all hotkey, or **Stop all agents** in the corral's right-click menu (offered while an agent is working or waiting on you; shipped 2026-11-13) | Every working agent stops; trace columns fold back down into their drops |
+
+### 6.1 The prompt bar (spec, 2026-11-20)
+
+The general way to give agents a task: one or several, by name, by selection, or all of them. A drop's own card (§8.2) stays the way to give *that* agent a task. The bar is summoned many times a day, so it behaves like a command palette: instant, keyboard-first, gone once it has sent.
+
+**Opening and closing**
+- **Opens** with the summon hotkey (configurable; default ⌃⌥Space), a double-click on the corral's background, or dragging a drop upward. Dragging opens it with that agent already named (`@Grok `).
+- **Instant, no animation** (§7.4), including under Reduce Motion. The panel is made at launch and kept, so showing it is only ordering it front: hotkey → typing in under 150 ms at p95 (performance budgets).
+- Its own non-activating panel above the corral, centered on it with an 8 pt gap. It takes keyboard focus without bringing Corral's other windows forward (TP-PLACE-04). On the "On the desktop" level, the hotkey raises the corral with it (§5).
+- Opening it closes a pinned hover card: there's one place to type at a time. While it's open, the trace columns sit above it (moved up by its height, no animation).
+- **Closes** after sending, with Esc, the hotkey again, or a click anywhere else. Closing without sending keeps the text: it's there the next time the bar opens, until it's sent or cleared (⌘⌫).
+
+**Layout:** one row, glass with the prompt pill's dark tint (§8.4), a capsule 44 pt tall, as wide as the corral with a minimum of 480 pt and a maximum of 640 pt. Left to right:
+1. **Who it goes to:** a chip per agent, live as you type, e.g. `Grok` `Claude`, or `3 selected`. Empty when the prompt isn't addressed yet.
+2. **The text field**, SF Pro 15 pt. Its placeholder says what Return will do: "Type @ and a name, or pick agents in the corral" with nothing chosen, "Give Grok a task" for one agent, and "Give Grok, Claude and GPT a task" for several.
+3. **The mic button** (push-to-talk, M6). It isn't shown before voice ships; no dead controls.
+4. **The send button**, named for what it will do: **Deploy** for one agent, **Deploy to 3** for several, **Deploy all (5)** with nothing chosen.
+
+**Who it goes to:** the core decides (AGENTS.md rule 3: `corral_core::mention`, then the controls); Swift only shows the answer. In order:
+1. **Names at the start of the prompt** (`@Grok @Claude compare these`). A name matches in any case, with or without its spaces, or the agent's ID. A name later in the prompt is part of the task (TP-PROMPT-01..03).
+2. Otherwise, **the drops ⌘-clicked** in the corral.
+3. Otherwise **no one, until you say all.** Return doesn't send; **Deploy all** (the button, or ⌘Return) sends to every agent the corral shows. Hidden agents are reached by name, never by "all", so a hidden agent only works when you named it. Return alone never deploys more than you named or selected.
+- An agent that's working or waiting on you can't take a new task. The others still get it, and the bar says who didn't: "Sent to Claude and GPT. Grok is busy." In Deploy all, busy agents are left out, and the button's count leaves them out too.
+
+**`@` suggestions:** typing `@` at the start, or after a name there, opens a list just above the bar (TP-PROMPT-05).
+- **Rows:** up to 8 agents the name could be, in the corral's order with hidden agents last. Each row has the agent's logo, its name, and its status when it isn't ready ("Working", "Needs you"). Hidden agents are marked "hidden" in `ink.3`: reachable the same way, just not in the corral.
+- **Keys:** ↑ and ↓ move, Return or Tab takes the highlighted agent (the first, to start), and a click takes any. Esc closes the list but not the bar. Taking a suggestion completes the name and adds a space.
+- Paper material (§8.4), since rows are choices. Appears and changes with no animation.
+- No list when nothing matches; the error line says so once the name is finished (below).
+
+**Errors** sit in one line under the bar, in the core's words, with an `exclamationmark.circle` glyph so they aren't color-only: "No agent is called nobody.", "Write an agent's name after @.", "Write a task after the agent's name." (TP-PROMPT-04). Return does nothing while there's an error, and the text stays.
+
+**After sending:** the bar closes. The named agents' rings turn in the corral and their trace columns rise (§8.3), which is the confirmation; there's no toast. One prompt sent to several agents later gets "3 results ready · Compare" (J12).
+
+**Safety:** the bar only gives tasks. It never approves, denies or edits a checkpoint, by text or (M6) by voice; those stay on the card (§8.2). The prompt is the user's own text: the core trims and caps it (`corral_core::controls`), and the agents' names and statuses it shows come from the core, bounded on arrival like everything Swift gets.
+
+**Accessibility:** the bar is announced as "Prompt bar", a text field. Its chips read "Sends to Grok and Claude", and the send button reads its full label ("Deploy to 3"). The suggestion list announces its count, and each row reads "<Agent>, <status>", with "hidden" for hidden agents. Esc steps back: list, then bar. The whole path is keyboard-only: hotkey → type → ↑↓ → Return.
 
 ## 7. Motion
 
@@ -174,7 +211,7 @@ Opens above the hovered drop, centered and clamped to the screen edges, never co
 - **Hover** a drop: its card appears after 120 ms, in its own non-activating panel, so the app in front keeps focus. It stays while the pointer is on the drop or the card and closes 260 ms after the pointer leaves both.
 - **Click** a drop: the card is **pinned**. Its panel takes keyboard focus, so the cursor goes straight into the task field, without bringing Corral's other windows forward. While a card is pinned, hovering other drops doesn't swap it; clicking another drop pins that one instead.
 - **Close** a pinned card with **×** (top right), **Esc**, or a click anywhere else.
-- **The task field** sits at the bottom of the card (Return sends): "Give Scout a task" for an agent in the corral, "Ask a follow-up" on a done card (same session), "Give Scout a new task" after Stop. A working card shows Stop instead, and an error card offers Retry. The general prompt bar (M4) is separate: it slides up above the corral for `@agent`, voice and Deploy all.
+- **The task field** sits at the bottom of the card (Return sends): "Give Scout a task" for an agent in the corral, "Ask a follow-up" on a done card (same session), "Give Scout a new task" after Stop. A working card shows Stop instead, and an error card offers Retry. The general prompt bar (§6.1) is separate: it appears above the corral for `@agent`, voice and Deploy all.
 
 Contents, top to bottom:
 1. **Label:** `AGENT · PROVIDER` in maroon small caps, with a chevron that opens the trace
