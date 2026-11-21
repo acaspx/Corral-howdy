@@ -2,14 +2,15 @@ import { KeyIntake } from "./KeyIntake";
 import { keyApi as defaultKeyApi, type KeyApi } from "./keys";
 import { ProviderTools } from "./ProviderTools";
 import { providerToolsApi as defaultToolsApi, type ProviderToolsApi } from "./providerToolsApi";
+import { TraceViewer } from "./TraceViewer";
+import { tracesApi as defaultTracesApi, type TracesApi } from "./tracesApi";
 
 /**
  * The main window: Corral's deep-work surface (traces, agent and policy editors, spend, settings).
  * The corral, hover cards and trace tree are native Swift (docs/07-brand-and-corral-surface.md).
- * Walking skeleton: the API key field is the first real screen; the rest arrive in M4.
+ * The API keys, provider tools and traces are real; the other sections arrive in M4.
  */
 const sections = [
-  { title: "Traces", body: "Every model call, tool call and checkpoint for each run, in order." },
   { title: "Agents", body: "Create and edit agents, their providers, tools and budgets." },
   { title: "Policies", body: "What each agent may do on its own, and what stops for your approval." },
   { title: "Spend", body: "What each agent has cost, against its limits." },
@@ -18,9 +19,11 @@ const sections = [
 export function App({
   keyApi = defaultKeyApi,
   toolsApi = defaultToolsApi,
+  tracesApi = defaultTracesApi,
 }: {
   keyApi?: KeyApi;
   toolsApi?: ProviderToolsApi;
+  tracesApi?: TracesApi;
 }) {
   return (
     <main className="shell">
@@ -38,6 +41,7 @@ export function App({
       </ul>
       <KeyIntake api={keyApi} />
       <ProviderTools api={toolsApi} />
+      <TraceViewer api={tracesApi} />
       <p className="status" role="status">
         Walking skeleton: connect a key and its agent joins the corral; Grok and Claude take tasks
         today. Right-click the corral to place it, add linked apps, or stop all agents.

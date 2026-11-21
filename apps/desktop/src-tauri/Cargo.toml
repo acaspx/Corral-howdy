@@ -23,7 +23,8 @@ swift-rs = { version = "1.0.7", features = ["build"], optional = true }
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
-corral-core = { path = "../../../crates/corral-core" }
+# `ts`: the trace viewer's types for the main window (TP-IPC-06).
+corral-core = { path = "../../../crates/corral-core", features = ["ts"] }
 # `ts`: the TypeScript declarations of the types the main window sees (TP-IPC-06).
 corral-secrets = { path = "../../../crates/corral-secrets", features = ["ts"] }
 # Grok over xAI and the event store, for the walking skeleton's corral (SK-6).

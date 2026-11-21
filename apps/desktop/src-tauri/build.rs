@@ -10,6 +10,8 @@ const COMMANDS: &[&str] = &[
     "remove_provider_key",
     "provider_tools",
     "set_provider_tool",
+    "recent_runs",
+    "run_trace",
 ];
 
 fn main() {

@@ -163,7 +163,7 @@ Progress: the nightly live smoke is wired (2026-11-19: `.github/workflows/live-s
 4. Checkpoint UI: approval box in the hover card (stepper for several pending, Touch ID for critical) + actionable notification; edit-args flow; nonce-bound approve; 300 ms input guard
 5. Main window: trace viewer (tree + waterfall), JSON copy. In two PRs:
    1. ✅ The core: `corral_core::trace_view` derives the span tree from a run's events, and `Store::recent_runs` lists runs in one query (2026-11-20, TP-TV-01..10)
-   2. The viewer in the main window: the run list, the tree with its waterfall, filter by kind, copy as JSON
+   2. ✅ The viewer in the main window: the run list, the tree with its waterfall, filter by kind, the picked span's details, copy as JSON (2026-11-20, TP-TV-11..16)
 6. Agent editor + policy editor (shows effective decision per class)
 7. Storybook with fixture event streams for every component state
 8. Accessibility pass (keyboard-only deploy/approve/deny; VoiceOver labels)

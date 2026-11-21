@@ -6,7 +6,9 @@
 
 use crate::keys::Connected;
 use crate::provider_tools::{ProviderToolChoice, ProviderToolsView};
+use crate::traces::{RunListItem, RunListOutcome, RunTrace};
 use corral_adapters::agent::ProviderTool;
+use corral_core::trace_view::{Attribute, Span, SpanKind, SpanStatus, TraceView};
 use corral_secrets::{KeyStatus, Provider};
 use ts_rs::{Config, TS};
 
@@ -20,6 +22,14 @@ pub fn typescript() -> String {
         ProviderTool::decl(&cfg),
         ProviderToolChoice::decl(&cfg),
         ProviderToolsView::decl(&cfg),
+        RunListItem::decl(&cfg),
+        RunListOutcome::decl(&cfg),
+        RunTrace::decl(&cfg),
+        TraceView::decl(&cfg),
+        Span::decl(&cfg),
+        Attribute::decl(&cfg),
+        SpanKind::decl(&cfg),
+        SpanStatus::decl(&cfg),
     ];
     let mut out = String::from(
         "// Generated from the Rust types by apps/desktop/src-tauri/src/bindings.rs (TP-IPC-06).\n\

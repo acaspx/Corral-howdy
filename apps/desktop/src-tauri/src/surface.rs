@@ -33,6 +33,7 @@ use crate::logos::{LogoStore, fetch_missing};
 use crate::native;
 use crate::provider_tools::ProviderTools;
 use crate::touch_id::{Finished, TouchIdDesk};
+use crate::traces::Traces;
 use corral_adapters::agent::{MessagesAgent, ProviderTool, ResponsesAgent, ToolSetup};
 use corral_adapters::catalog::{AgentRouter, Switched, agent_for, agents_for, corral_agents};
 use corral_adapters::linked::{LinkChange, LinkedApp, LinkedSettings};
@@ -391,8 +392,12 @@ fn supervisor(
         .app_data_dir()
         .map_err(|e| format!("no app data folder: {e}"))?;
     std::fs::create_dir_all(&dir).map_err(|e| format!("couldn't create {}: {e}", dir.display()))?;
-    let store = Store::open(&dir.join("corral.db"))
-        .map_err(|e| format!("couldn't open the event store: {e}"))?;
+    let store = Arc::new(
+        Store::open(&dir.join("corral.db"))
+            .map_err(|e| format!("couldn't open the event store: {e}"))?,
+    );
+    // The main window's trace viewer reads the same store.
+    app.state::<Arc<Traces>>().attach(Arc::clone(&store));
     if let Some(banner) = store.integrity().banner() {
         eprintln!("corral: {banner}");
     }
@@ -452,7 +457,7 @@ fn supervisor(
         },
         ledger,
         Arc::new(driver),
-        feed.watch(Arc::new(store)),
+        feed.watch(store),
         clock,
     );
     built.set_soft_limit(Some(SOFT_LIMIT_MICRO_USD));
