@@ -6,7 +6,8 @@
 //! ADR-001 (`docs/adr/001-stack.md`) is the ADR AGENTS.md requires for this `unsafe`.
 
 use crate::bridge::{
-    self, AuthRequest, BridgeError, Intent, NotificationRequest, RosterSnapshot, Status,
+    self, AuthRequest, BridgeError, Intent, NotificationRequest, PromptBarSnapshot, RosterSnapshot,
+    Status,
 };
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::OnceLock;
@@ -22,6 +23,7 @@ unsafe extern "C" {
     fn corral_native_set_roster(bytes: *const u8, len: isize) -> i32;
     fn corral_native_notify(bytes: *const u8, len: isize) -> i32;
     fn corral_native_authenticate(bytes: *const u8, len: isize) -> i32;
+    fn corral_native_prompt_bar(bytes: *const u8, len: isize) -> i32;
     fn corral_native_stop() -> i32;
 }
 
@@ -124,6 +126,16 @@ pub fn authenticate(request: &AuthRequest) -> Result<(), NativeError> {
     let len = isize::try_from(bytes.len()).map_err(|_| Status::Rejected)?;
     // SAFETY: `bytes` is valid for `len` bytes for the duration of the call; Swift copies them.
     Status::check(unsafe { corral_native_authenticate(bytes.as_ptr(), len) })?;
+    Ok(())
+}
+
+/// Shows the prompt bar's answer to an edit or a send (docs/07 §6.1). Main thread only. Swift drops
+/// an answer older than its latest edit.
+pub fn prompt_bar(snapshot: &PromptBarSnapshot) -> Result<(), NativeError> {
+    let bytes = snapshot.to_bytes()?;
+    let len = isize::try_from(bytes.len()).map_err(|_| Status::Rejected)?;
+    // SAFETY: `bytes` is valid for `len` bytes for the duration of the call; Swift copies them.
+    Status::check(unsafe { corral_native_prompt_bar(bytes.as_ptr(), len) })?;
     Ok(())
 }
 

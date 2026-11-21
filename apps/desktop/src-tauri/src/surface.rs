@@ -26,13 +26,14 @@
 //! own site. The choice is kept in `linked-apps.json` ([`crate::linked`]).
 
 use crate::agent_tools::{agent_folder, allowing_provider_tools, file_tools};
-use crate::bridge::{AuthOutcome, BridgeError, Intent, RosterSnapshot};
+use crate::bridge::{AuthOutcome, BridgeError, Intent, PromptBarSnapshot, RosterSnapshot};
 use crate::corral_order::{CorralOrder, CorralSettingsView};
 use crate::corral_settings::{CorralControl, CorralSettings};
 use crate::keys::Keys;
 use crate::linked::LinkedStore;
 use crate::logos::{LogoStore, fetch_missing};
 use crate::native;
+use crate::prompt_bar_feed;
 use crate::provider_tools::ProviderTools;
 use crate::touch_id::{Finished, TouchIdDesk};
 use crate::traces::Traces;
@@ -49,6 +50,7 @@ use corral_core::controls::{ControlError, CorralControls};
 use corral_core::corral_view::{AgentCard, CorralTracker, DropState};
 use corral_core::event::{Event, EventBody};
 use corral_core::ids::{AgentId, CheckpointId};
+use corral_core::prompt_bar;
 use corral_core::run_card::{EditError, RunCard, RunCards};
 use corral_core::supervisor::{EventLog, RunDriver, Supervisor, SupervisorConfig, WatchedLog};
 use corral_core::usage_rank::{Deploy, WINDOW_MS};
@@ -798,6 +800,33 @@ impl CorralFeed {
     }
 }
 
+/// The prompt bar (docs/07 §6.1, TP-BAR-08): the core decides; these read the corral's state and
+/// pass the answer to Swift.
+impl CorralFeed {
+    /// The agents the prompt bar knows now, in the corral's order with their status.
+    fn bar_agents(&self) -> Vec<prompt_bar::BarAgent> {
+        let Ok(views) = self.views.lock() else {
+            eprintln!("corral: the corral's state is poisoned, so the prompt bar knows no agents");
+            return Vec::new();
+        };
+        let now = self.clock.now_ms();
+        let settings = views.order.settings(&views.all_cards);
+        prompt_bar_feed::bar_agents(&settings, |id| views.cards.card(id, now).map(|c| c.status))
+    }
+
+    /// Shows the prompt bar's answer, on the main thread.
+    fn send_bar(&self, answer: PromptBarSnapshot) {
+        let posted = self.app.run_on_main_thread(move || {
+            if let Err(e) = native::prompt_bar(&answer) {
+                eprintln!("corral: couldn't update the prompt bar: {e}");
+            }
+        });
+        if let Err(e) = posted {
+            eprintln!("corral: couldn't reach the main thread to update the prompt bar: {e}");
+        }
+    }
+}
+
 /// The main window's Corral section (TP-USAGE-15). The corral's order decides; a change is saved
 /// and the drops re-placed at once.
 impl CorralControl for CorralFeed {
@@ -862,6 +891,26 @@ fn on_intent(slot: &OnceLock<Corral>, result: Result<Intent, BridgeError>) {
         }
         Intent::OpenLinked(app) => corral.open_linked(app),
         Intent::CorralIdle(idle) => corral.feed.corral_idle(idle),
+        Intent::PromptBarEdited(edit) => {
+            let agents = corral.feed.bar_agents();
+            corral
+                .feed
+                .send_bar(prompt_bar_feed::edited(&edit, &agents));
+        }
+        Intent::PromptBarSend { edit, how } => {
+            let agents = corral.feed.bar_agents();
+            let feed = Arc::clone(&corral.feed);
+            let Some(controls) = corral.controls.clone() else {
+                feed.send_bar(prompt_bar_feed::tasks_off(&edit, &agents));
+                return;
+            };
+            tauri::async_runtime::spawn(async move {
+                let answer = prompt_bar_feed::sent(&edit, how, &agents, |agent, task| {
+                    controls.deploy(agent, task)
+                });
+                feed.send_bar(answer);
+            });
+        }
         Intent::StopAll => {
             let Some(controls) = corral.controls.clone() else {
                 eprintln!("corral: tasks are off, so Stop all had nothing to stop");

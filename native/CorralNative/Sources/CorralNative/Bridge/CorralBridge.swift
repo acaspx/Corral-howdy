@@ -2,7 +2,8 @@
 // The narrow C ABI between the Rust core and CorralNative (ADR-001, docs/01 §2).
 //
 //   Rust → Swift   corral_native_abi_version, corral_native_start, corral_native_set_roster,
-//                  corral_native_notify, corral_native_authenticate, corral_native_stop
+//                  corral_native_notify, corral_native_authenticate, corral_native_prompt_bar,
+//                  corral_native_stop
 //   Swift → Rust   one callback: (pointer, length) of a JSON intent (Fixtures/bridge/intent-*-v1.json)
 //
 // Notifications and Touch ID need a real app bundle: UNUserNotificationCenter refuses to work
@@ -36,7 +37,7 @@ public enum CorralBridgeStatus: Int32, Error, Sendable {
 }
 
 /// Bump when any signature or payload above changes. Rust refuses to start on a mismatch.
-public let corralNativeABIVersion: UInt32 = 2
+public let corralNativeABIVersion: UInt32 = 3
 
 @MainActor
 final class CorralBridgeModel: ObservableObject {
@@ -84,6 +85,8 @@ enum CorralBridge {
     static var cards: CorralCardController?
     static var callback: CorralIntentCallback?
     static let model = CorralBridgeModel()
+    /// The prompt bar's state: Rust's latest answer (docs/07 §6.1).
+    static let promptBar = CorralPromptBar()
     private static var screenObserver: NSObjectProtocol?
     private static let notificationDelegate = CorralNotificationDelegate()
     /// The Touch ID prompt that's up, if any. A second request is refused rather than queued.
@@ -243,6 +246,19 @@ enum CorralBridge {
         }
     }
 
+    /// Rust's answer for the prompt bar. An answer for an older edit is dropped, not an error.
+    static func setPromptBar(_ data: Data) -> CorralBridgeStatus {
+        guard panel != nil else { return .notStarted }
+        switch CorralPromptBarSnapshot.decode(data) {
+        case .failure(let error):
+            NSLog("CorralNative: prompt bar answer rejected (%@)", String(describing: error))
+            return .rejected
+        case .success(let answer):
+            promptBar.receive(answer)
+            return .ok
+        }
+    }
+
     /// The user picked where the corral sits.
     static func setLevel(_ level: CorralLevel) {
         model.level = level
@@ -321,6 +337,15 @@ public func corral_native_authenticate(_ bytes: UnsafePointer<UInt8>?, _ count: 
     switch borrowed(bytes, count, limit: CorralAuthRequest.maxBytes) {
     case .failure(let status): return status.rawValue
     case .success(let data): return MainActor.assumeIsolated { CorralBridge.authenticate(data).rawValue }
+    }
+}
+
+@_cdecl("corral_native_prompt_bar")
+public func corral_native_prompt_bar(_ bytes: UnsafePointer<UInt8>?, _ count: Int) -> Int32 {
+    guard Thread.isMainThread else { return CorralBridgeStatus.notMainThread.rawValue }
+    switch borrowed(bytes, count, limit: CorralPromptBarSnapshot.maxBytes) {
+    case .failure(let status): return status.rawValue
+    case .success(let data): return MainActor.assumeIsolated { CorralBridge.setPromptBar(data).rawValue }
     }
 }
 

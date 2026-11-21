@@ -57,6 +57,11 @@ public enum CorralIntent: Equatable, Sendable {
     /// Approve with Touch ID on a critical checkpoint: Rust has Swift's prompt ask macOS and
     /// decides on the result, which comes back as an auth result, never from the card.
     case approveWithTouchId(id: String, checkpoint: String)
+    /// The prompt bar's text or cursor changed (docs/07 §6.1): the cursor in UTF-8 bytes, and the
+    /// drops ⌘-clicked. Rust answers with what the bar shows.
+    case promptBarEdited(seq: UInt32, text: String, cursor: Int, selection: [String])
+    /// Return (`all` false) or Deploy all (`all` true) in the prompt bar. Rust decides who it goes to.
+    case promptBarSend(seq: UInt32, text: String, selection: [String], all: Bool)
 }
 
 /// Springs drops between layouts so the shape morphs instead of jumping.

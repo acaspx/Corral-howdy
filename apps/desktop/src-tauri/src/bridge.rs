@@ -9,6 +9,7 @@ use corral_core::controls::MAX_PROMPT_BYTES;
 use corral_core::corral_view::{CorralView, DropState};
 use corral_core::domain::{ActionClass, Risk};
 use corral_core::ids::{AgentId, CheckpointId};
+use corral_core::prompt_bar::{BarView, How};
 use corral_core::run_card::{
     CardAction, CardCheckpoint, CardField, CardStatus, EDIT_MAX_FIELDS, FIELD_KEY_MAX_CHARS,
     FieldKind, RunCard, RunCards,
@@ -18,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Must equal `corralNativeABIVersion` in `CorralBridge.swift`.
-pub const ABI_VERSION: u32 = 2;
+pub const ABI_VERSION: u32 = 3;
 /// Version of the JSON payloads below.
 pub const WIRE_VERSION: u32 = 1;
 /// The corral never shows more than an octagon (docs/07 §3).
@@ -457,6 +458,92 @@ impl AuthRequest {
     }
 }
 
+/// The prompt bar's text as Swift reports it (docs/07 §6.1, TP-BAR-08): already bounded.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BarEdit {
+    /// Swift's number for this edit; the answer echoes it, so Swift can drop an older one.
+    pub seq: u32,
+    /// The text, within the core's prompt limit.
+    pub text: String,
+    /// Where the cursor is, in UTF-8 bytes: inside the text, on a character.
+    pub cursor: usize,
+    /// The drops ⌘-clicked in the corral: at most 8 valid IDs, each once.
+    pub selection: Vec<AgentId>,
+}
+
+/// How a prompt bar send went.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BarOutcome {
+    /// Every agent got it: the bar closes.
+    Sent,
+    /// Some did and some didn't: the bar stays open with this, its text cleared.
+    Note(String),
+    /// Nothing was sent: the bar stays open with this, its text kept.
+    Refused(String),
+}
+
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+enum BarOutcomeWire<'a> {
+    Sent,
+    Note { text: &'a str },
+    Refused { text: &'a str },
+}
+
+impl Serialize for BarOutcome {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Sent => BarOutcomeWire::Sent,
+            Self::Note(text) => BarOutcomeWire::Note { text },
+            Self::Refused(text) => BarOutcomeWire::Refused { text },
+        }
+        .serialize(serializer)
+    }
+}
+
+/// What the prompt bar shows, for an edit or after a send (`prompt-bar-v1.json`,
+/// `corral_native_prompt_bar`). The core decides all of it; Swift bounds it again.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PromptBarSnapshot {
+    v: u32,
+    seq: u32,
+    view: BarView,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    outcome: Option<BarOutcome>,
+}
+
+impl PromptBarSnapshot {
+    /// The answer to edit or send `seq`.
+    pub fn new(seq: u32, view: BarView, outcome: Option<BarOutcome>) -> Self {
+        Self {
+            v: WIRE_VERSION,
+            seq,
+            view,
+            outcome,
+        }
+    }
+
+    /// The edit or send it answers.
+    pub fn seq(&self) -> u32 {
+        self.seq
+    }
+
+    /// What the bar shows.
+    pub fn view(&self) -> &BarView {
+        &self.view
+    }
+
+    /// How a send went; `None` for an edit.
+    pub fn outcome(&self) -> Option<&BarOutcome> {
+        self.outcome.as_ref()
+    }
+
+    /// The JSON bytes passed to `corral_native_prompt_bar`.
+    pub fn to_bytes(&self) -> Result<Vec<u8>, BridgeError> {
+        serde_json::to_vec(self).map_err(BridgeError::Encode)
+    }
+}
+
 /// What the user did in the corral, as reported by Swift. Typed, never a raw string (TP-BRIDGE-02).
 /// Swift only reports; Rust decides what happens (AGENTS.md rule 3).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -561,6 +648,15 @@ pub enum Intent {
         changes: BTreeMap<String, String>,
         /// The gesture.
         how: Approval,
+    },
+    /// The prompt bar's text or cursor changed: Rust answers with what it shows.
+    PromptBarEdited(BarEdit),
+    /// Return or Deploy all in the prompt bar: Rust decides who it goes to and sends it.
+    PromptBarSend {
+        /// The text and selection (the cursor is at the end).
+        edit: BarEdit,
+        /// Return, or Deploy all.
+        how: How,
     },
 }
 
@@ -698,6 +794,18 @@ enum IntentWire {
         id: String,
         checkpoint: String,
     },
+    PromptBarEdited {
+        seq: u32,
+        text: String,
+        cursor: u64,
+        selection: Vec<String>,
+    },
+    PromptBarSend {
+        seq: u32,
+        text: String,
+        selection: Vec<String>,
+        all: bool,
+    },
 }
 
 /// Why something crossing the bridge was refused.
@@ -810,6 +918,26 @@ pub fn decode_intent(bytes: &[u8]) -> Result<Intent, BridgeError> {
         IntentWire::OpenLinked { id } => Ok(Intent::OpenLinked(linked_app(&id)?)),
         IntentWire::StopAll {} => Ok(Intent::StopAll),
         IntentWire::CorralIdle { idle } => Ok(Intent::CorralIdle(idle)),
+        IntentWire::PromptBarEdited {
+            seq,
+            text,
+            cursor,
+            selection,
+        } => Ok(Intent::PromptBarEdited(bar_edit(
+            seq,
+            text,
+            Some(cursor),
+            selection,
+        )?)),
+        IntentWire::PromptBarSend {
+            seq,
+            text,
+            selection,
+            all,
+        } => Ok(Intent::PromptBarSend {
+            edit: bar_edit(seq, text, None, selection)?,
+            how: if all { How::All } else { How::Return },
+        }),
         IntentWire::ApproveCheckpoint {
             id,
             checkpoint,
@@ -875,6 +1003,40 @@ fn gesture(how: CardGesture) -> Approval {
 
 fn linked_app(id: &str) -> Result<LinkedApp, BridgeError> {
     LinkedApp::from_id(id).ok_or(BridgeError::BadLinked)
+}
+
+/// The prompt bar's text, cursor and selection from Swift, bounded. With no cursor, it's at the end.
+fn bar_edit(
+    seq: u32,
+    text: String,
+    cursor: Option<u64>,
+    selection: Vec<String>,
+) -> Result<BarEdit, BridgeError> {
+    if text.len() > MAX_PROMPT_BYTES {
+        return Err(BridgeError::PromptTooLong(text.len()));
+    }
+    if selection.len() > MAX_SHOWN {
+        return Err(BridgeError::BadGroup(selection.len()));
+    }
+    let mut picked: Vec<AgentId> = Vec::with_capacity(selection.len());
+    for id in selection {
+        let id = agent_id(id)?;
+        if !picked.contains(&id) {
+            picked.push(id);
+        }
+    }
+    let mut at = cursor.map_or(text.len(), |c| {
+        usize::try_from(c).map_or(text.len(), |c| c.min(text.len()))
+    });
+    while !text.is_char_boundary(at) {
+        at -= 1;
+    }
+    Ok(BarEdit {
+        seq,
+        text,
+        cursor: at,
+        selection: picked,
+    })
 }
 
 fn agent_id(id: String) -> Result<AgentId, BridgeError> {
