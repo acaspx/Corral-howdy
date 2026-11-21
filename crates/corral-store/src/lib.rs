@@ -20,6 +20,7 @@
 use corral_core::event::{Event, EventBody, EventError, EventKind, FailureReason, RunFailed};
 use corral_core::ids::{AgentId, RunId, SpanId};
 use corral_core::supervisor::{EventLog, LogError};
+use corral_core::usage_rank::{Deploy, deploys};
 use rusqlite::{
     Connection, OpenFlags, OptionalExtension, Transaction, TransactionBehavior, params,
 };
@@ -380,6 +381,22 @@ impl Store {
         runs.reverse();
         runs.sort_by_key(|run| std::cmp::Reverse(run.queued_ms));
         Ok(runs)
+    }
+
+    /// Every deploy (`run.queued`) at or after `since_ms`, in log order: what seeds the corral's
+    /// usage order at launch (TP-USAGE-06). One query.
+    pub fn deploys_since(&self, since_ms: u64) -> Result<Vec<Deploy>, StoreError> {
+        let since = to_db(since_ms, "since")?;
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare_cached(&format!(
+            "SELECT {COLUMNS} FROM events WHERE kind = 'run.queued' AND ts >= ?1 ORDER BY id"
+        ))?;
+        let rows = stmt.query_map(params![since], Row::read)?;
+        let mut events = Vec::new();
+        for row in rows {
+            events.push(row?.event()?);
+        }
+        Ok(deploys(&events))
     }
 
     /// Every `usage.reported` at or after `since_ms`, with its run's agent, in log order: one query

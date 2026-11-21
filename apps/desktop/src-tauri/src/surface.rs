@@ -27,6 +27,7 @@
 
 use crate::agent_tools::{agent_folder, allowing_provider_tools, file_tools};
 use crate::bridge::{AuthOutcome, BridgeError, Intent, RosterSnapshot};
+use crate::corral_order::CorralOrder;
 use crate::keys::Keys;
 use crate::linked::LinkedStore;
 use crate::logos::{LogoStore, fetch_missing};
@@ -45,10 +46,11 @@ use corral_core::budget::{BudgetConfig, SpendLedger};
 use corral_core::clock::{Clock, SystemClock};
 use corral_core::controls::{ControlError, CorralControls};
 use corral_core::corral_view::{AgentCard, CorralTracker};
-use corral_core::event::Event;
+use corral_core::event::{Event, EventBody};
 use corral_core::ids::{AgentId, CheckpointId};
 use corral_core::run_card::{EditError, RunCard, RunCards};
 use corral_core::supervisor::{EventLog, RunDriver, Supervisor, SupervisorConfig, WatchedLog};
+use corral_core::usage_rank::{Deploy, WINDOW_MS};
 use corral_policy::{Approval, Scope};
 use corral_secrets::{Provider, SecretStore};
 use corral_store::Store;
@@ -332,9 +334,22 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
     let keys = app.state::<Keys>().0.clone();
     let connected = connected(keys.as_ref());
     let clock: Arc<dyn Clock> = Arc::new(SystemClock);
+    // The usage order, as saved; the log's deploys seed it once the store is open.
+    let mut order = CorralOrder::open(data_dir.as_ref().map(|d| d.join("corral-order.json")));
+    if let Some(problem) = order.problem() {
+        eprintln!("corral: {problem}");
+    }
+    let all_cards = corral_agents(&connected, &linked);
+    let placed = order.place(all_cards.clone(), clock.now_ms());
+    if placed.choose_shown {
+        eprintln!("corral: the corral holds up to 8 agents; a new one is hidden until you choose");
+    }
+    save_order(&mut order);
     let feed = Arc::new(CorralFeed {
         views: Mutex::new(Views {
-            corral: CorralTracker::new(corral_agents(&connected, &linked)),
+            corral: CorralTracker::new(placed.cards),
+            order,
+            all_cards,
             cards: RunCards::default(),
             logos: HashMap::new(),
             linked,
@@ -405,6 +420,14 @@ fn supervisor(
         Ok(failed) if failed.is_empty() => {}
         Ok(failed) => eprintln!("corral: marked {} unfinished runs as failed", failed.len()),
         Err(e) => eprintln!("corral: couldn't close out unfinished runs: {e}"),
+    }
+    // The last 90 days of deploys, so the corral opens most used first (TP-USAGE-06). Without
+    // them the saved order stands.
+    match store.deploys_since(clock.now_ms().saturating_sub(WINDOW_MS)) {
+        Ok(deploys) => feed.seed_usage(deploys),
+        Err(e) => {
+            eprintln!("corral: couldn't read recent deploys, so the order stays as saved: {e}")
+        }
     }
     // This month's spend, so relaunching doesn't reset the monthly caps (TP-BUD-07). Failing to
     // read it fails closed: counting from nothing could spend past a cap.
@@ -531,6 +554,10 @@ fn id_source() -> Arc<dyn Fn() -> String + Send + Sync> {
 
 struct Views {
     corral: CorralTracker,
+    /// The corral's usage order and shown set (TP-USAGE-06..09).
+    order: CorralOrder,
+    /// Every agent, before the order picks and sorts the shown ones.
+    all_cards: Vec<AgentCard>,
     cards: RunCards,
     /// Logo paths by agent.
     logos: HashMap<AgentId, String>,
@@ -595,16 +622,44 @@ impl CorralFeed {
         }))
     }
 
-    /// Replaces the corral's agents and, if the corral changed, sends the new roster.
+    /// Replaces the corral's agents and, if the corral changed, sends the new roster. The usage
+    /// order picks and sorts the shown ones (TP-USAGE-07, 08).
     fn set_agents(&self, cards: Vec<AgentCard>, linked: LinkedSettings) {
         let Ok(mut views) = self.views.lock() else {
             eprintln!("corral: the corral view is poisoned; the corral stops updating");
             return;
         };
-        let drops_changed = views.corral.set_agents(cards);
+        views.all_cards = cards.clone();
+        let placed = views.order.place(cards, self.clock.now_ms());
+        if placed.choose_shown {
+            eprintln!(
+                "corral: the corral holds up to 8 agents; a new one is hidden until you choose"
+            );
+        }
+        save_order(&mut views.order);
+        let drops_changed = views.corral.set_agents(placed.cards);
         let links_changed = views.linked != linked;
         views.linked = linked;
         if drops_changed || links_changed {
+            self.send(self.snapshot(&views));
+        }
+    }
+
+    /// At launch, once the store is open: the last 90 days of deploys, and the order they give,
+    /// published before anything can be under the pointer (TP-USAGE-06).
+    fn seed_usage(&self, deploys: Vec<Deploy>) {
+        let Ok(mut views) = self.views.lock() else {
+            eprintln!("corral: the corral view is poisoned; the corral stops updating");
+            return;
+        };
+        let now = self.clock.now_ms();
+        if !views.order.seed(deploys, now) {
+            return;
+        }
+        save_order(&mut views.order);
+        let cards = views.all_cards.clone();
+        let placed = views.order.place(cards, now);
+        if views.corral.set_agents(placed.cards) {
             self.send(self.snapshot(&views));
         }
     }
@@ -644,6 +699,16 @@ impl CorralFeed {
             eprintln!("corral: the corral view is poisoned; the corral stops updating");
             return;
         };
+        // Deploys count toward the usage order at once; a new order waits for the corral to be
+        // idle (TP-USAGE-07).
+        if let EventBody::RunQueued(queued) = &event.body {
+            views.order.deployed(queued.agent_id.clone(), event.ts);
+        }
+        if let EventBody::RunCompleted(_) | EventBody::RunFailed(_) | EventBody::RunCancelled(_) =
+            &event.body
+        {
+            views.order.run_ended(event.ts);
+        }
         // The supervisor already validated the event; a refusal here means the views diverged.
         let drop_changed = views.corral.observe(event).unwrap_or_else(|e| {
             eprintln!("corral: the corral view refused {:?}: {e}", event.kind());
@@ -801,6 +866,13 @@ fn on_intent(slot: &OnceLock<Corral>, result: Result<Intent, BridgeError>) {
         | Intent::NotificationFailed { .. } => {
             eprintln!("corral: intent {intent:?} (handled in a later milestone)");
         }
+    }
+}
+
+/// Saves the corral's order. A failure is logged; the corral keeps working unsaved.
+fn save_order(order: &mut CorralOrder) {
+    if let Err(e) = order.save() {
+        eprintln!("corral: {e}");
     }
 }
 

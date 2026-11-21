@@ -233,6 +233,10 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-USAGE-03** (Rust) Neighbors swap only when the challenger leads by ≥ 10% (no flip-flop on near-ties; property test)
 - **TP-USAGE-04** (Rust) "Keep order fixed" freezes the order; deploys still count toward the score
 - **TP-USAGE-05** (Rust) Shown set ≤ 8; adding a 9th agent emits a `corral.choose_shown` prompt and changes nothing until answered; removing a shown agent never auto-promotes a hidden one
+- **TP-USAGE-06** (Rust) The app keeps the order, "Keep order fixed", the agents and the shown set in `corral-order.json` and publishes a new order at launch, seeded with the last 90 days of deploys from the log (`Store::deploys_since`, one query); a first launch keeps the catalog order (`apps/desktop/src-tauri/tests/corral_order.rs`)
+- **TP-USAGE-07** (Rust) While Corral runs, a deploy counts at once but a new order waits for the corral to be idle; agents join (at the end) and leave at once; deploys older than 90 days stop counting
+- **TP-USAGE-08** (Rust) The roster Swift gets has the shown agents only, most used first: a 9th agent stays hidden and asks to choose; removing a shown agent never promotes it
+- **TP-USAGE-09** (Rust) A saved order that can't be read (not JSON, another version, unknown fields, over 16 KB) starts afresh and says why; without an app data folder it still works; a save that fails says why
 - **TP-GLASS-01** Render snapshots n = 0–8 match baselines (tolerance-based)
 - **TP-GLASS-02** Reduce Transparency → opaque fill; Reduce Motion → no springs, caustics frozen
 - **TP-GLASS-03** Logo plate, fallback monogram and status ring contrast ≥ 4.5:1 (3:1 for rings) over light, dark and busy test wallpapers
