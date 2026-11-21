@@ -410,3 +410,74 @@ fn tp_usage_12_a_waiting_order_is_published_only_when_swift_says_idle_and_nothin
     );
     assert!(!order.settle(false), "nothing more to publish");
 }
+
+// ---- TP-USAGE-13, 14: the main window's Corral settings ----------------------------------------
+
+#[test]
+fn tp_usage_13_the_settings_list_every_agent_in_the_corrals_order_with_what_shows() {
+    let dir = Scratch::new();
+    let nine = ["a", "b", "c", "d", "e", "f", "g", "h", "i"];
+    let (mut order, _) = launch(&dir.file(), &nine[..8], vec![]);
+    order.place(cards(&nine), NOW);
+    let view = order.settings(&cards(&nine));
+    let json = serde_json::to_value(&view).expect("json");
+    assert_eq!(json["maxShown"], 8);
+    assert_eq!(json["keepFixed"], false);
+    assert_eq!(json["needsChoice"], true, "a 9th agent is waiting");
+    let agents = json["agents"].as_array().expect("agents");
+    assert_eq!(agents.len(), 9);
+    assert_eq!(
+        agents[0],
+        serde_json::json!({"id": "a", "name": "A", "shown": true})
+    );
+    assert_eq!(
+        agents[8],
+        serde_json::json!({"id": "i", "name": "I", "shown": false})
+    );
+}
+
+#[test]
+fn tp_usage_13_choosing_what_shows_is_saved_and_answers_the_question() {
+    let dir = Scratch::new();
+    let nine = ["a", "b", "c", "d", "e", "f", "g", "h", "i"];
+    let (mut order, _) = launch(&dir.file(), &nine[..8], vec![]);
+    order.place(cards(&nine), NOW);
+    let picks: Vec<AgentId> = ["i", "a", "b", "c", "d", "e", "f", "g"]
+        .iter()
+        .map(|id| AgentId::from(*id))
+        .collect();
+    order.choose_shown(&picks).expect("eight");
+    assert!(!order.needs_choice());
+    let placed = order.place(cards(&nine), NOW);
+    assert!(ids(&placed.cards).contains(&"i") && !ids(&placed.cards).contains(&"h"));
+    order.save().expect("saved");
+    let shown = saved(&dir.file())["shown"].clone();
+    assert!(
+        shown
+            .as_array()
+            .expect("shown")
+            .contains(&serde_json::json!("i"))
+    );
+
+    let nine_picks: Vec<AgentId> = nine.iter().map(|id| AgentId::from(*id)).collect();
+    let err = order.choose_shown(&nine_picks).expect_err("too many");
+    assert!(err.contains("up to 8"), "{err}");
+    let err = order
+        .choose_shown(&[AgentId::from("stranger")])
+        .expect_err("not an agent");
+    assert!(err.contains("isn't one of your agents"), "{err}");
+}
+
+#[test]
+fn tp_usage_14_keep_order_fixed_is_switched_and_saved() {
+    let dir = Scratch::new();
+    let (mut order, _) = launch(&dir.file(), &["grok", "claude"], vec![]);
+    order.set_keep_fixed(true);
+    assert!(order.keeps_fixed());
+    assert!(order.settings(&cards(&["grok", "claude"])).keep_fixed);
+    order.save().expect("saved");
+    assert_eq!(saved(&dir.file())["keepFixed"], true);
+    order.set_keep_fixed(false);
+    order.save().expect("saved");
+    assert_eq!(saved(&dir.file())["keepFixed"], false);
+}
