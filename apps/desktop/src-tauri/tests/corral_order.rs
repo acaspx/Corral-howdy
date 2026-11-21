@@ -366,3 +366,47 @@ fn tp_usage_07_an_order_published_when_idle_is_saved_and_a_removed_agent_is_forg
     );
     assert_eq!(order.hidden_count(), 0);
 }
+
+// ---- TP-USAGE-12: publishing when the corral is idle ------------------------------------------
+
+fn waiting_order(dir: &Scratch) -> CorralOrder {
+    let (mut order, _) = launch(&dir.file(), &["grok", "claude"], vec![]);
+    for deploy in deploys("claude", 4) {
+        order.deployed(deploy.agent, deploy.ts_ms);
+    }
+    order.run_ended(NOW);
+    assert!(order.has_pending());
+    order
+}
+
+#[test]
+fn tp_usage_12_a_waiting_order_is_published_only_when_swift_says_idle_and_nothing_waits_on_you() {
+    let dir = Scratch::new();
+    let mut order = waiting_order(&dir);
+    assert!(
+        !order.settle(false),
+        "Rust assumes busy until Swift reports"
+    );
+    assert!(order.has_pending());
+
+    order.set_corral_idle(true);
+    assert!(!order.settle(true), "a checkpoint is waiting on the user");
+    assert!(order.has_pending());
+
+    order.set_corral_idle(false);
+    assert!(!order.settle(false), "the pointer is on the corral");
+
+    order.set_corral_idle(true);
+    assert!(order.settle(false), "idle: published");
+    assert!(!order.has_pending());
+    assert_eq!(
+        ids(&order.place(cards(&["grok", "claude"]), NOW).cards),
+        ["claude", "grok"]
+    );
+    order.save().expect("saved");
+    assert_eq!(
+        saved(&dir.file())["order"],
+        serde_json::json!(["claude", "grok"])
+    );
+    assert!(!order.settle(false), "nothing more to publish");
+}

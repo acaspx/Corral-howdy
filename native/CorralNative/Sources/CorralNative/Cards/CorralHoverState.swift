@@ -27,6 +27,13 @@ public struct CorralHoverState: Equatable, Sendable {
 
     public init() {}
 
+    /// Whether the corral is idle: the pointer is on no drop and not on the card, and no card is
+    /// opening or showing (pinned or not). Rust applies a waiting usage order only then
+    /// (TP-USAGE-11), so a drop never slides out from under the pointer.
+    public var isIdle: Bool {
+        shown == nil && opening == nil && overDrop == nil && !overCard
+    }
+
     /// When `tick` next needs to run, if anything is waiting.
     public var deadline: TimeInterval? {
         switch (openAt, closeAt) {
@@ -105,5 +112,19 @@ public struct CorralHoverState: Equatable, Sendable {
     private mutating func scheduleClose(at now: TimeInterval) {
         guard shown != nil, !overCard, closeAt == nil else { return }
         closeAt = now + Self.closeDelay
+    }
+}
+
+/// Sends the corral's idle state only when it changes, starting with the first (TP-USAGE-11).
+public struct CorralIdleReporter: Equatable, Sendable {
+    private var last: Bool?
+
+    public init() {}
+
+    /// The state to send, or nil when Rust already has it.
+    public mutating func report(_ idle: Bool) -> Bool? {
+        guard idle != last else { return nil }
+        last = idle
+        return idle
     }
 }

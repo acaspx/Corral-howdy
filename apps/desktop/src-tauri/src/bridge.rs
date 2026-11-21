@@ -517,6 +517,9 @@ pub enum Intent {
     OpenLinked(LinkedApp),
     /// Stop all agents, from the right-click menu (Recall-all).
     StopAll,
+    /// The corral turned idle (true) or busy (false): no hover, no card opening or open. Rust
+    /// applies a waiting usage order only while it's idle (TP-USAGE-10).
+    CorralIdle(bool),
     /// Approve on a card's approval box. The policy checks the gesture; a card only ever
     /// reports a click or a key (never Touch ID or voice).
     ApproveCheckpoint {
@@ -670,6 +673,9 @@ enum IntentWire {
         id: String,
     },
     StopAll {},
+    CorralIdle {
+        idle: bool,
+    },
     ApproveCheckpoint {
         id: String,
         checkpoint: String,
@@ -803,6 +809,7 @@ pub fn decode_intent(bytes: &[u8]) -> Result<Intent, BridgeError> {
         IntentWire::HideLinked { id } => Ok(Intent::HideLinked(linked_app(&id)?)),
         IntentWire::OpenLinked { id } => Ok(Intent::OpenLinked(linked_app(&id)?)),
         IntentWire::StopAll {} => Ok(Intent::StopAll),
+        IntentWire::CorralIdle { idle } => Ok(Intent::CorralIdle(idle)),
         IntentWire::ApproveCheckpoint {
             id,
             checkpoint,
@@ -2049,5 +2056,36 @@ mod touch_id_tests {
             decode_intent(bytes.as_bytes()),
             Err(BridgeError::Malformed(_))
         ));
+    }
+}
+
+#[cfg(test)]
+mod corral_idle_tests {
+    use super::*;
+
+    const IDLE: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/intent-corral-idle-v1.json");
+
+    #[test]
+    fn tp_usage_10_swift_reports_when_the_corral_is_idle() {
+        assert_eq!(
+            decode_intent(IDLE.as_bytes()).expect("corralIdle"),
+            Intent::CorralIdle(true)
+        );
+        assert_eq!(
+            decode_intent(br#"{"v":1,"intent":{"kind":"corralIdle","idle":false}}"#).expect("busy"),
+            Intent::CorralIdle(false)
+        );
+    }
+
+    #[test]
+    fn tp_usage_10_a_malformed_report_is_refused() {
+        for bad in [
+            r#"{"v":1,"intent":{"kind":"corralIdle"}}"#,
+            r#"{"v":1,"intent":{"kind":"corralIdle","idle":"yes"}}"#,
+            r#"{"v":1,"intent":{"kind":"corralIdle","idle":true,"id":"grok"}}"#,
+        ] {
+            assert!(decode_intent(bad.as_bytes()).is_err(), "{bad}");
+        }
     }
 }
