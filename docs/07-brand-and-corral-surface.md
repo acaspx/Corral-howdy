@@ -47,7 +47,7 @@ Rules:
   - **Score** = deploys in the last 90 days, each weighted by recency (14-day half-life), so this week's habits count more than last month's.
   - **Tie-breaks:** most recent deploy, then the order agents were added. This keeps the order stable.
   - **Recomputed** whenever a run completes or an agent is added or removed.
-- **When it moves:** a new order is applied only when the corral is idle, meaning no hover, drag, open card or pending checkpoint, so a drop never slides out from under the pointer. Two neighbors swap only when the challenger's score beats the incumbent's by at least 10%, so near-ties don't flicker back and forth.
+- **When it moves:** a new order is applied only when the corral is idle, meaning no hover, drag, open card or pending checkpoint, so a drop never slides out from under the pointer. Swift reports idle and busy (`corralIdle`, from `CorralHoverState.isIdle`: no drop or card under the pointer, no card opening or open); Rust adds the pending-checkpoint check and assumes busy until Swift's first report. The corral has no drag gesture yet; when it does, a drag is busy too. Two neighbors swap only when the challenger's score beats the incumbent's by at least 10%, so near-ties don't flicker back and forth.
 - **How it moves:** drops glide *around* the ring to their new slots (springs in polar coordinates, shortest arc). They never cut across the hollow center.
 - Ranking counts every agent, including hidden ones. Shown drops take slots by their relative rank. Starting a task doesn't move a drop, but finishing one can change the order the next time the corral is idle.
 - **Optional setting "Keep order fixed"** (off by default) freezes the current order for people who prefer muscle memory to adaptivity.
