@@ -2051,3 +2051,34 @@ mod touch_id_tests {
         ));
     }
 }
+
+#[cfg(test)]
+mod corral_idle_tests {
+    use super::*;
+
+    const IDLE: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/intent-corral-idle-v1.json");
+
+    #[test]
+    fn tp_usage_10_swift_reports_when_the_corral_is_idle() {
+        assert_eq!(
+            decode_intent(IDLE.as_bytes()).expect("corralIdle"),
+            Intent::CorralIdle(true)
+        );
+        assert_eq!(
+            decode_intent(br#"{"v":1,"intent":{"kind":"corralIdle","idle":false}}"#).expect("busy"),
+            Intent::CorralIdle(false)
+        );
+    }
+
+    #[test]
+    fn tp_usage_10_a_malformed_report_is_refused() {
+        for bad in [
+            r#"{"v":1,"intent":{"kind":"corralIdle"}}"#,
+            r#"{"v":1,"intent":{"kind":"corralIdle","idle":"yes"}}"#,
+            r#"{"v":1,"intent":{"kind":"corralIdle","idle":true,"id":"grok"}}"#,
+        ] {
+            assert!(decode_intent(bad.as_bytes()).is_err(), "{bad}");
+        }
+    }
+}

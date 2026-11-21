@@ -237,6 +237,9 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-USAGE-07** (Rust) While Corral runs, a deploy counts at once but a new order waits for the corral to be idle; agents join (at the end) and leave at once; deploys older than 90 days stop counting
 - **TP-USAGE-08** (Rust) The roster Swift gets has the shown agents only, most used first: a 9th agent stays hidden and asks to choose; removing a shown agent never promotes it
 - **TP-USAGE-09** (Rust) A saved order that can't be read (not JSON, another version, unknown fields, over 16 KB) starts afresh and says why; without an app data folder it still works; a save that fails says why
+- **TP-USAGE-10** (Rust + Swift) Swift reports when the corral turns idle or busy as a typed `corralIdle` intent, matching `intent-corral-idle-v1.json`; a malformed report is refused (`bridge.rs`, `CorralIdleTests.swift`)
+- **TP-USAGE-11** (Swift) The corral is idle with the pointer on no drop and not on the card, no card opening and no card open or pinned; only changes are reported, starting with the first state
+- **TP-USAGE-12** (Rust) A waiting order is published only when Swift's last report was idle and no checkpoint waits on the user; until Swift reports, Rust assumes busy; it's checked when Swift reports, when a run ends and when a checkpoint is answered (`apps/desktop/src-tauri/tests/corral_order.rs`)
 - **TP-GLASS-01** Render snapshots n = 0–8 match baselines (tolerance-based)
 - **TP-GLASS-02** Reduce Transparency → opaque fill; Reduce Motion → no springs, caustics frozen
 - **TP-GLASS-03** Logo plate, fallback monogram and status ring contrast ≥ 4.5:1 (3:1 for rings) over light, dark and busy test wallpapers
