@@ -294,3 +294,17 @@ fn tp_bar_03_a_reason_without_a_full_stop_gets_one() {
         "Sent to Grok. Claude couldn't start: the supervisor's state is poisoned."
     );
 }
+
+#[test]
+fn tp_bar_05_no_error_line_while_a_name_is_being_typed_mid_prompt() {
+    let all = agents();
+    let mid = view("@cl plan it", "@cl", &[], &all);
+    assert_eq!(mid.suggestions.len(), 1);
+    assert_eq!(mid.error, None, "the cursor is in the name");
+    assert!(mid.button.enabled);
+    assert_eq!(
+        view("@cl plan it", "@cl plan it", &[], &all).error,
+        Some("No agent is called cl.".to_owned()),
+        "once the cursor has left it"
+    );
+}

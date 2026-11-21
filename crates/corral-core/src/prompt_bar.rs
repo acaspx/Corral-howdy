@@ -7,8 +7,8 @@
 //!   when named.
 //! - **Busy agents** are skipped: the others get the task, and a note names who didn't.
 //! - **What it shows:** a chip per agent it goes to, a placeholder saying what Return does, the
-//!   send button's label and count, an error line once a name is finished, and the suggestions
-//!   with each agent's status.
+//!   send button's label and count, an error line once a name is finished (not while it's being
+//!   typed, wherever the cursor is), and the suggestions with each agent's status.
 
 use crate::controls::ControlError;
 use crate::ids::{AgentId, RunId};
@@ -163,7 +163,28 @@ pub fn view(
 ) -> BarView {
     let known = addressees(agents);
     let names = mention::names(text, &known);
-    let error = names.problem.map(|e| e.to_string());
+    let suggestions = if text.starts_with(before_cursor) {
+        mention::suggest(before_cursor, &known)
+            .into_iter()
+            .filter_map(|s| {
+                find(agents, &s.id).map(|a| SuggestionRow {
+                    id: s.id.as_str().to_owned(),
+                    name: s.name,
+                    shown: s.shown,
+                    status: a.status,
+                    completion: s.completion,
+                })
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    // While a name is being typed (suggestions show), it isn't finished, wherever the cursor is.
+    let error = if suggestions.is_empty() {
+        names.problem.map(|e| e.to_string())
+    } else {
+        None
+    };
     let picked = selected(selection, agents);
     let picked_names: Vec<String> = picked.iter().map(|a| a.agent.name.clone()).collect();
 
@@ -197,22 +218,6 @@ pub fn view(
         PICK_SOMEONE.to_owned()
     } else {
         format!("Give {} a task", and_list(&picked_names))
-    };
-    let suggestions = if text.starts_with(before_cursor) {
-        mention::suggest(before_cursor, &known)
-            .into_iter()
-            .filter_map(|s| {
-                find(agents, &s.id).map(|a| SuggestionRow {
-                    id: s.id.as_str().to_owned(),
-                    name: s.name,
-                    shown: s.shown,
-                    status: a.status,
-                    completion: s.completion,
-                })
-            })
-            .collect()
-    } else {
-        Vec::new()
     };
     BarView {
         chips,

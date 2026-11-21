@@ -1,0 +1,10 @@
+{
+  "v": 1,
+  "intent": {
+    "kind": "promptBarEdited",
+    "seq": 7,
+    "text": "@cl plan the trip",
+    "cursor": 3,
+    "selection": ["grok"]
+  }
+}

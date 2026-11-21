@@ -1,0 +1,10 @@
+{
+  "v": 1,
+  "intent": {
+    "kind": "promptBarSend",
+    "seq": 8,
+    "text": "@claude @grok plan the trip",
+    "selection": [],
+    "all": false
+  }
+}

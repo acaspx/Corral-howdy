@@ -9,6 +9,7 @@ use corral_core::controls::MAX_PROMPT_BYTES;
 use corral_core::corral_view::{CorralView, DropState};
 use corral_core::domain::{ActionClass, Risk};
 use corral_core::ids::{AgentId, CheckpointId};
+use corral_core::prompt_bar::{BarView, How};
 use corral_core::run_card::{
     CardAction, CardCheckpoint, CardField, CardStatus, EDIT_MAX_FIELDS, FIELD_KEY_MAX_CHARS,
     FieldKind, RunCard, RunCards,
@@ -18,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Must equal `corralNativeABIVersion` in `CorralBridge.swift`.
-pub const ABI_VERSION: u32 = 2;
+pub const ABI_VERSION: u32 = 3;
 /// Version of the JSON payloads below.
 pub const WIRE_VERSION: u32 = 1;
 /// The corral never shows more than an octagon (docs/07 §3).
@@ -457,6 +458,92 @@ impl AuthRequest {
     }
 }
 
+/// The prompt bar's text as Swift reports it (docs/07 §6.1, TP-BAR-08): already bounded.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BarEdit {
+    /// Swift's number for this edit; the answer echoes it, so Swift can drop an older one.
+    pub seq: u32,
+    /// The text, within the core's prompt limit.
+    pub text: String,
+    /// Where the cursor is, in UTF-8 bytes: inside the text, on a character.
+    pub cursor: usize,
+    /// The drops ⌘-clicked in the corral: at most 8 valid IDs, each once.
+    pub selection: Vec<AgentId>,
+}
+
+/// How a prompt bar send went.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BarOutcome {
+    /// Every agent got it: the bar closes.
+    Sent,
+    /// Some did and some didn't: the bar stays open with this, its text cleared.
+    Note(String),
+    /// Nothing was sent: the bar stays open with this, its text kept.
+    Refused(String),
+}
+
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+enum BarOutcomeWire<'a> {
+    Sent,
+    Note { text: &'a str },
+    Refused { text: &'a str },
+}
+
+impl Serialize for BarOutcome {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Sent => BarOutcomeWire::Sent,
+            Self::Note(text) => BarOutcomeWire::Note { text },
+            Self::Refused(text) => BarOutcomeWire::Refused { text },
+        }
+        .serialize(serializer)
+    }
+}
+
+/// What the prompt bar shows, for an edit or after a send (`prompt-bar-v1.json`,
+/// `corral_native_prompt_bar`). The core decides all of it; Swift bounds it again.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PromptBarSnapshot {
+    v: u32,
+    seq: u32,
+    view: BarView,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    outcome: Option<BarOutcome>,
+}
+
+impl PromptBarSnapshot {
+    /// The answer to edit or send `seq`.
+    pub fn new(seq: u32, view: BarView, outcome: Option<BarOutcome>) -> Self {
+        Self {
+            v: WIRE_VERSION,
+            seq,
+            view,
+            outcome,
+        }
+    }
+
+    /// The edit or send it answers.
+    pub fn seq(&self) -> u32 {
+        self.seq
+    }
+
+    /// What the bar shows.
+    pub fn view(&self) -> &BarView {
+        &self.view
+    }
+
+    /// How a send went; `None` for an edit.
+    pub fn outcome(&self) -> Option<&BarOutcome> {
+        self.outcome.as_ref()
+    }
+
+    /// The JSON bytes passed to `corral_native_prompt_bar`.
+    pub fn to_bytes(&self) -> Result<Vec<u8>, BridgeError> {
+        serde_json::to_vec(self).map_err(BridgeError::Encode)
+    }
+}
+
 /// What the user did in the corral, as reported by Swift. Typed, never a raw string (TP-BRIDGE-02).
 /// Swift only reports; Rust decides what happens (AGENTS.md rule 3).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -561,6 +648,15 @@ pub enum Intent {
         changes: BTreeMap<String, String>,
         /// The gesture.
         how: Approval,
+    },
+    /// The prompt bar's text or cursor changed: Rust answers with what it shows.
+    PromptBarEdited(BarEdit),
+    /// Return or Deploy all in the prompt bar: Rust decides who it goes to and sends it.
+    PromptBarSend {
+        /// The text and selection (the cursor is at the end).
+        edit: BarEdit,
+        /// Return, or Deploy all.
+        how: How,
     },
 }
 
@@ -698,6 +794,18 @@ enum IntentWire {
         id: String,
         checkpoint: String,
     },
+    PromptBarEdited {
+        seq: u32,
+        text: String,
+        cursor: u64,
+        selection: Vec<String>,
+    },
+    PromptBarSend {
+        seq: u32,
+        text: String,
+        selection: Vec<String>,
+        all: bool,
+    },
 }
 
 /// Why something crossing the bridge was refused.
@@ -810,6 +918,26 @@ pub fn decode_intent(bytes: &[u8]) -> Result<Intent, BridgeError> {
         IntentWire::OpenLinked { id } => Ok(Intent::OpenLinked(linked_app(&id)?)),
         IntentWire::StopAll {} => Ok(Intent::StopAll),
         IntentWire::CorralIdle { idle } => Ok(Intent::CorralIdle(idle)),
+        IntentWire::PromptBarEdited {
+            seq,
+            text,
+            cursor,
+            selection,
+        } => Ok(Intent::PromptBarEdited(bar_edit(
+            seq,
+            text,
+            Some(cursor),
+            selection,
+        )?)),
+        IntentWire::PromptBarSend {
+            seq,
+            text,
+            selection,
+            all,
+        } => Ok(Intent::PromptBarSend {
+            edit: bar_edit(seq, text, None, selection)?,
+            how: if all { How::All } else { How::Return },
+        }),
         IntentWire::ApproveCheckpoint {
             id,
             checkpoint,
@@ -875,6 +1003,40 @@ fn gesture(how: CardGesture) -> Approval {
 
 fn linked_app(id: &str) -> Result<LinkedApp, BridgeError> {
     LinkedApp::from_id(id).ok_or(BridgeError::BadLinked)
+}
+
+/// The prompt bar's text, cursor and selection from Swift, bounded. With no cursor, it's at the end.
+fn bar_edit(
+    seq: u32,
+    text: String,
+    cursor: Option<u64>,
+    selection: Vec<String>,
+) -> Result<BarEdit, BridgeError> {
+    if text.len() > MAX_PROMPT_BYTES {
+        return Err(BridgeError::PromptTooLong(text.len()));
+    }
+    if selection.len() > MAX_SHOWN {
+        return Err(BridgeError::BadGroup(selection.len()));
+    }
+    let mut picked: Vec<AgentId> = Vec::with_capacity(selection.len());
+    for id in selection {
+        let id = agent_id(id)?;
+        if !picked.contains(&id) {
+            picked.push(id);
+        }
+    }
+    let mut at = cursor.map_or(text.len(), |c| {
+        usize::try_from(c).map_or(text.len(), |c| c.min(text.len()))
+    });
+    while !text.is_char_boundary(at) {
+        at -= 1;
+    }
+    Ok(BarEdit {
+        seq,
+        text,
+        cursor: at,
+        selection: picked,
+    })
 }
 
 fn agent_id(id: String) -> Result<AgentId, BridgeError> {
@@ -2087,5 +2249,188 @@ mod corral_idle_tests {
         ] {
             assert!(decode_intent(bad.as_bytes()).is_err(), "{bad}");
         }
+    }
+}
+
+#[cfg(test)]
+mod prompt_bar_tests {
+    use super::*;
+    use corral_core::prompt_bar::{BarAgent, BarStatus, How, view};
+    use serde_json::Value;
+
+    const EDITED: &str = include_str!(
+        "../../../../native/CorralNative/Fixtures/bridge/intent-prompt-bar-edited-v1.json"
+    );
+    const SEND: &str = include_str!(
+        "../../../../native/CorralNative/Fixtures/bridge/intent-prompt-bar-send-v1.json"
+    );
+    const BAR: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/prompt-bar-v1.json");
+    const NOTE: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/prompt-bar-note-v1.json");
+
+    fn json(bytes: &[u8]) -> Value {
+        serde_json::from_slice(bytes).expect("json")
+    }
+
+    fn agents() -> Vec<BarAgent> {
+        [
+            ("grok", "Grok", BarStatus::Working),
+            ("claude", "Claude", BarStatus::Ready),
+        ]
+        .into_iter()
+        .map(|(id, name, status)| BarAgent {
+            agent: corral_core::mention::Addressee {
+                id: AgentId::from(id),
+                name: name.to_owned(),
+                shown: true,
+            },
+            status,
+        })
+        .collect()
+    }
+
+    fn intent(body: &str) -> Result<Intent, BridgeError> {
+        decode_intent(format!(r#"{{"v":1,"intent":{body}}}"#).as_bytes())
+    }
+
+    #[test]
+    fn tp_bar_08_an_edit_and_a_send_arrive_typed_as_the_fixtures_show() {
+        assert_eq!(
+            decode_intent(EDITED.as_bytes()).expect("edited"),
+            Intent::PromptBarEdited(BarEdit {
+                seq: 7,
+                text: "@cl plan the trip".to_owned(),
+                cursor: 3,
+                selection: vec![AgentId::from("grok")],
+            })
+        );
+        assert_eq!(
+            decode_intent(SEND.as_bytes()).expect("send"),
+            Intent::PromptBarSend {
+                edit: BarEdit {
+                    seq: 8,
+                    text: "@claude @grok plan the trip".to_owned(),
+                    cursor: 27,
+                    selection: vec![],
+                },
+                how: How::Return,
+            }
+        );
+        let all = intent(
+            r#"{"kind":"promptBarSend","seq":9,"text":"go","selection":["grok","grok"],"all":true}"#,
+        );
+        let Ok(Intent::PromptBarSend { edit, how }) = all else {
+            panic!("send: {all:?}");
+        };
+        assert_eq!(
+            (how, edit.selection),
+            (How::All, vec![AgentId::from("grok")]),
+            "deduped"
+        );
+    }
+
+    #[test]
+    fn tp_bar_08_the_cursor_is_kept_inside_the_text_on_a_character() {
+        let at = |text: &str, cursor: u64| {
+            let body = format!(
+                r#"{{"kind":"promptBarEdited","seq":1,"text":{},"cursor":{cursor},"selection":[]}}"#,
+                serde_json::to_string(text).expect("text")
+            );
+            let Ok(Intent::PromptBarEdited(edit)) = intent(&body) else {
+                panic!("edited");
+            };
+            edit.cursor
+        };
+        assert_eq!(at("@cl", 99), 3, "past the end");
+        assert_eq!(at("@é", 2), 1, "inside a character: back to its start");
+        assert_eq!(at("@é", 3), 3);
+        assert_eq!(at("", u64::MAX), 0);
+    }
+
+    #[test]
+    fn tp_bar_08_bad_edits_and_sends_are_refused() {
+        let long = "x".repeat(MAX_PROMPT_BYTES + 1);
+        let nine: Vec<String> = (0..9).map(|i| format!("\"a{i}\"")).collect();
+        for bad in [
+            format!(
+                r#"{{"kind":"promptBarEdited","seq":1,"text":"{long}","cursor":0,"selection":[]}}"#
+            ),
+            format!(
+                r#"{{"kind":"promptBarSend","seq":1,"text":"{long}","selection":[],"all":false}}"#
+            ),
+            format!(
+                r#"{{"kind":"promptBarEdited","seq":1,"text":"go","cursor":0,"selection":[{}]}}"#,
+                nine.join(",")
+            ),
+            r#"{"kind":"promptBarEdited","seq":1,"text":"go","cursor":0,"selection":[""]}"#
+                .to_owned(),
+            r#"{"kind":"promptBarEdited","seq":1,"text":"go","cursor":-1,"selection":[]}"#
+                .to_owned(),
+            r#"{"kind":"promptBarEdited","seq":1,"text":"go","selection":[]}"#.to_owned(),
+            r#"{"kind":"promptBarSend","seq":1,"text":"go","selection":[]}"#.to_owned(),
+            r#"{"kind":"promptBarSend","seq":1,"text":"go","selection":[],"all":false,"cursor":2}"#
+                .to_owned(),
+        ] {
+            assert!(intent(&bad).is_err(), "{}", &bad[..bad.len().min(120)]);
+        }
+    }
+
+    #[test]
+    fn tp_bar_08_the_bars_view_goes_to_swift_as_the_fixtures_show() {
+        let shown = PromptBarSnapshot::new(
+            7,
+            view(
+                "@cl plan the trip",
+                "@cl",
+                &[AgentId::from("grok")],
+                &agents(),
+            ),
+            None,
+        );
+        assert_eq!(
+            json(&shown.to_bytes().expect("bytes")),
+            json(BAR.as_bytes())
+        );
+        let noted = PromptBarSnapshot::new(
+            8,
+            view("", "", &[], &agents()),
+            Some(BarOutcome::Note("Sent to Claude. Grok is busy.".to_owned())),
+        );
+        assert_eq!(
+            json(&noted.to_bytes().expect("bytes")),
+            json(NOTE.as_bytes())
+        );
+        let sent = PromptBarSnapshot::new(9, view("", "", &[], &agents()), Some(BarOutcome::Sent));
+        assert_eq!(
+            json(&sent.to_bytes().expect("bytes"))["outcome"],
+            serde_json::json!({"kind": "sent"})
+        );
+        let refused = PromptBarSnapshot::new(
+            9,
+            view("go", "go", &[], &agents()),
+            Some(BarOutcome::Refused("Grok is busy.".to_owned())),
+        );
+        assert_eq!(
+            json(&refused.to_bytes().expect("bytes"))["outcome"],
+            serde_json::json!({"kind": "refused", "text": "Grok is busy."})
+        );
+    }
+
+    #[test]
+    fn tp_bar_08_a_full_length_text_and_eight_selected_drops_are_taken() {
+        let full = "x".repeat(MAX_PROMPT_BYTES);
+        let eight: Vec<String> = (0..MAX_SHOWN).map(|i| format!("\"a{i}\"")).collect();
+        let body = format!(
+            r#"{{"kind":"promptBarSend","seq":1,"text":"{full}","selection":[{}],"all":false}}"#,
+            eight.join(",")
+        );
+        let Ok(Intent::PromptBarSend { edit, .. }) = intent(&body) else {
+            panic!("refused");
+        };
+        assert_eq!(
+            (edit.text.len(), edit.selection.len()),
+            (MAX_PROMPT_BYTES, MAX_SHOWN)
+        );
     }
 }

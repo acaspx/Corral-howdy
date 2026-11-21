@@ -11,6 +11,8 @@ pub mod bridge;
 #[cfg(all(target_os = "macos", feature = "native"))]
 #[allow(unsafe_code)] // the C ABI; see the module docs and docs/adr/001-stack.md
 pub mod native;
+#[cfg(any(test, all(target_os = "macos", feature = "native")))]
+pub mod prompt_bar_feed;
 #[cfg(all(target_os = "macos", feature = "native"))]
 pub mod surface;
 #[cfg(any(test, all(target_os = "macos", feature = "native")))]
