@@ -19,6 +19,7 @@ pub mod touch_id;
 pub mod agent_tools;
 pub mod bindings;
 pub mod corral_order;
+pub mod corral_settings;
 pub mod keys;
 pub mod linked;
 pub mod logos;
@@ -93,6 +94,9 @@ pub fn run() {
             provider_tools::set_provider_tool,
             traces::recent_runs,
             traces::run_trace,
+            corral_settings::corral_settings,
+            corral_settings::set_corral_shown,
+            corral_settings::set_keep_order_fixed,
         ])
         .setup(|app| {
             let show = MenuItem::with_id(app, MENU_SHOW, "Show Corral", true, None::<&str>)?;
@@ -122,6 +126,9 @@ pub fn run() {
             )));
             // The trace viewer reads the event store once the corral opens it.
             app.manage(std::sync::Arc::new(traces::Traces::default()));
+            app.manage(std::sync::Arc::new(
+                corral_settings::CorralSettings::default(),
+            ));
 
             // The corral, wired to the core: Grok's drop deploys through the supervisor, and every
             // logged event updates the drops and their cards (SK-6).

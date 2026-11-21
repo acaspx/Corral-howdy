@@ -27,7 +27,8 @@
 
 use crate::agent_tools::{agent_folder, allowing_provider_tools, file_tools};
 use crate::bridge::{AuthOutcome, BridgeError, Intent, RosterSnapshot};
-use crate::corral_order::CorralOrder;
+use crate::corral_order::{CorralOrder, CorralSettingsView};
+use crate::corral_settings::{CorralControl, CorralSettings};
 use crate::keys::Keys;
 use crate::linked::LinkedStore;
 use crate::logos::{LogoStore, fetch_missing};
@@ -358,6 +359,9 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
         clock: Arc::clone(&clock),
     });
     feed.publish_now()?;
+    // The main window's Corral section changes this corral.
+    app.state::<Arc<CorralSettings>>()
+        .attach(Arc::clone(&feed) as Arc<dyn CorralControl>);
     feed.start_ticking();
 
     // Only the agents Corral runs take tasks; linked drops never do (ADR-005).
@@ -793,6 +797,38 @@ impl CorralFeed {
         }
     }
 }
+
+/// The main window's Corral section (TP-USAGE-15). The corral's order decides; a change is saved
+/// and the drops re-placed at once.
+impl CorralControl for CorralFeed {
+    fn settings(&self) -> Result<CorralSettingsView, String> {
+        let views = self.views.lock().map_err(|_| POISONED.to_owned())?;
+        Ok(views.order.settings(&views.all_cards))
+    }
+
+    fn choose_shown(&self, ids: Vec<String>) -> Result<CorralSettingsView, String> {
+        let mut views = self.views.lock().map_err(|_| POISONED.to_owned())?;
+        let picks: Vec<AgentId> = ids.iter().map(|id| AgentId::from(id.as_str())).collect();
+        views.order.choose_shown(&picks)?;
+        save_order(&mut views.order);
+        let cards = views.all_cards.clone();
+        let placed = views.order.place(cards, self.clock.now_ms());
+        if views.corral.set_agents(placed.cards) {
+            self.send(self.snapshot(&views));
+        }
+        Ok(views.order.settings(&views.all_cards))
+    }
+
+    fn keep_order_fixed(&self, keep: bool) -> Result<CorralSettingsView, String> {
+        let mut views = self.views.lock().map_err(|_| POISONED.to_owned())?;
+        views.order.set_keep_fixed(keep);
+        save_order(&mut views.order);
+        Ok(views.order.settings(&views.all_cards))
+    }
+}
+
+/// What the Corral section says when the corral view is poisoned.
+const POISONED: &str = "The corral stopped updating after an error. Restart Corral to change it.";
 
 /// Swift reports what the user did and never decides (AGENTS.md rule 3); this shell doesn't
 /// decide either. Tasks, Stop, Send back and Retry go to the core's controls, off the main
