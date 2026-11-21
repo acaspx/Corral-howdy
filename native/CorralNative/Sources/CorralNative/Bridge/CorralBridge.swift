@@ -55,14 +55,21 @@ struct CorralBridgeRoot: View {
         CorralGlassView(agents: model.agents, hiddenCount: model.hiddenCount, onIntent: { intent in
             MainActor.assumeIsolated {
                 // A click on a drop opens its card here; the card's buttons and field talk to Rust.
-                if case .openAgent(let id) = intent {
-                    CorralBridge.cards?.dropClicked(id)
-                } else {
-                    CorralBridge.emit(intent)
+                // A double-click on the background opens the prompt bar, which talks to Rust.
+                switch intent {
+                case .openAgent(let id): CorralBridge.cards?.dropClicked(id)
+                case .summonPromptBar: CorralBridge.bar?.open()
+                default: CorralBridge.emit(intent)
                 }
             }
         }, onHoverDrop: { id, inside in
             MainActor.assumeIsolated { CorralBridge.cards?.swiftUIHover(drop: id, inside: inside) }
+        }, onSelectionChange: { ids in
+            MainActor.assumeIsolated { CorralBridge.bar?.setSelection(ids) }
+        }, onDragUp: { id in
+            MainActor.assumeIsolated {
+                CorralBridge.bar?.open(naming: CorralBridge.model.agents.first(where: { $0.id == id })?.name)
+            }
         })
         .contextMenu {
             CorralLevelMenu(current: model.level) { level in
@@ -83,6 +90,8 @@ enum CorralBridge {
     static var panel: CorralPanel?
     /// Each drop's card (SK-6): hover, pin, the task field and the buttons.
     static var cards: CorralCardController?
+    /// The prompt bar's window (docs/07 §6.1).
+    static var bar: CorralPromptBarController?
     static var callback: CorralIntentCallback?
     static let model = CorralBridgeModel()
     /// The prompt bar's state: Rust's latest answer (docs/07 §6.1).
@@ -100,6 +109,11 @@ enum CorralBridge {
         cards = CorralCardController(corralPanel: panel) { intent in
             MainActor.assumeIsolated { CorralBridge.emit(intent) }
         }
+        bar = CorralPromptBarController(corralPanel: panel, answer: promptBar, onIntent: { intent in
+            MainActor.assumeIsolated { CorralBridge.emit(intent) }
+        }, onOpen: {
+            MainActor.assumeIsolated { CorralBridge.cards?.dismiss() }
+        })
         place()
         panel.orderFrontRegardless()
         // Displays plugged in, unplugged or rearranged: put the corral back at the bottom centre.
@@ -254,7 +268,7 @@ enum CorralBridge {
             NSLog("CorralNative: prompt bar answer rejected (%@)", String(describing: error))
             return .rejected
         case .success(let answer):
-            promptBar.receive(answer)
+            if promptBar.receive(answer) { bar?.received(answer.outcome) }
             return .ok
         }
     }
@@ -270,6 +284,8 @@ enum CorralBridge {
         guard let panel else { return .notStarted }
         cards?.stop()
         cards = nil
+        bar?.stop()
+        bar = nil
         panel.orderOut(nil)
         self.panel = nil
         callback = nil

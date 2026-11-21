@@ -161,6 +161,14 @@ public struct CorralGlassView: View {
     public var onIntent: (CorralIntent) -> Void
     /// The pointer entered (true) or left (false) a drop. Drives the hover card (Spike S6).
     public var onHoverDrop: ((String, Bool) -> Void)?
+    /// The drops ⌘-clicked, in the corral's order, whenever that changes (the prompt bar sends to
+    /// them, docs/07 §6.1).
+    public var onSelectionChange: (([String]) -> Void)?
+    /// A drop was dragged upward: the prompt bar opens with that agent named (docs/07 §6).
+    public var onDragUp: ((String) -> Void)?
+
+    /// How far up a drop must be dragged to open the prompt bar for it.
+    static let dragUpDistance: CGFloat = 40
 
     @StateObject private var morph = CorralMorph()
     @State private var selection: Set<String> = []
@@ -171,9 +179,13 @@ public struct CorralGlassView: View {
     private let start = Date()
 
     public init(agents: [CorralAgentToken], hiddenCount: Int = 0, onIntent: @escaping (CorralIntent) -> Void,
-                onHoverDrop: ((String, Bool) -> Void)? = nil) {
+                onHoverDrop: ((String, Bool) -> Void)? = nil,
+                onSelectionChange: (([String]) -> Void)? = nil,
+                onDragUp: ((String) -> Void)? = nil) {
         self.agents = agents; self.hiddenCount = hiddenCount; self.onIntent = onIntent
         self.onHoverDrop = onHoverDrop
+        self.onSelectionChange = onSelectionChange
+        self.onDragUp = onDragUp
     }
 
     public var body: some View {
@@ -210,6 +222,13 @@ public struct CorralGlassView: View {
                 } else {
                     plainGlass(target.canvas, pivot: target.pivot)
                 }
+                // A double-click on the corral's background opens the prompt bar (docs/07 §6.1).
+                // Below the drops, so a click on a drop is still the drop's.
+                Color.clear
+                    .frame(width: target.canvas.width, height: target.canvas.height)
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2) { onIntent(.summonPromptBar) }
+                    .accessibilityHidden(true)
                 ForEach(morph.blobs.filter { b in agents.contains { $0.id == b.id } }) { blob in
                     if let agent = agents.first(where: { $0.id == blob.id }) {
                         token(agent, blob: blob, pivot: target.pivot)
@@ -224,7 +243,9 @@ public struct CorralGlassView: View {
             // Fires on deploy/return AND on usage reorders (same IDs, new order).
             morph.setTarget(CorralLayout.layout(rankedIDs: agents.map(\.id), metrics: metrics).blobs,
                             reduceMotion: reduceMotion)
+            selectionChanged()
         }
+        .onChange(of: selection) { _, _ in selectionChanged() }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilitySummary)
     }
@@ -261,10 +282,23 @@ public struct CorralGlassView: View {
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 24).onEnded { drag in
+                if drag.translation.height <= -Self.dragUpDistance { onDragUp?(agent.id) }
+            })
         .onHover { inside in onHoverDrop?(agent.id, inside) }
         .position(x: pivot.x + blob.offset.x, y: pivot.y + blob.offset.y)
         .accessibilityLabel("\(agent.name), \(statusText(agent.status)), number \(blob.rank) by use")
-        .accessibilityHint("Opens the agent. Command-click to select for group deploy.")
+        .accessibilityHint("Opens the agent. Command-click to select it for the prompt bar.")
+    }
+
+    /// Reports the selection in the corral's order, leaving out drops that have gone.
+    private func selectionChanged() {
+        onSelectionChange?(Self.ordered(selection, in: agents.map(\.id)))
+    }
+
+    nonisolated static func ordered(_ selection: Set<String>, in ids: [String]) -> [String] {
+        ids.filter(selection.contains)
     }
 
     @ViewBuilder
