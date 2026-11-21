@@ -55,6 +55,7 @@ public final class CorralCardController {
     private let panel: CorralCardPanel
     private let host: NSHostingView<AnyView>
     private var state = CorralHoverState()
+    private var idleReporter = CorralIdleReporter()
     private var agents: [CorralAgentToken] = []
     private var cards: [String: CorralRunCard] = [:]
     private var deadlineTimer: Timer?
@@ -145,6 +146,10 @@ public final class CorralCardController {
     }
 
     private func render() {
+        // Every change to the hover state ends here, so the idle report is never stale.
+        if let idle = idleReporter.report(state.isIdle) {
+            send(.corralIdle(idle))
+        }
         guard let id = state.shown, let agent = agents.first(where: { $0.id == id }),
               let drop = dropFrame(id) else {
             if panel.isVisible {

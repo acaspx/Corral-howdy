@@ -44,6 +44,9 @@ public enum CorralIntent: Equatable, Sendable {
     case openLinked(id: String)
     /// Stop all agents, from the right-click menu (Recall-all). Rust stops every working run.
     case stopAll
+    /// The corral turned idle (true) or busy (false): no hover, no card opening or open. Rust
+    /// applies a waiting usage order only while it's idle (TP-USAGE-10).
+    case corralIdle(Bool)
     /// Approve and Deny on a card's approval box (M2). They carry the checkpoint's single-use ID;
     /// Rust answers only the checkpoint that card shows, and the policy checks the gesture.
     case approveCheckpoint(id: String, checkpoint: String, forRun: Bool)

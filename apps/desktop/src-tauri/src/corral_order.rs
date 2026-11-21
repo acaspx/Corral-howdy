@@ -5,8 +5,9 @@
 //!
 //! - **At launch** a new order is published, seeded with the last 90 days of deploys from the log,
 //!   before anything can be under the pointer.
-//! - **While Corral runs** a deploy counts at once, but a new order waits for the corral to be idle
-//!   ([`CorralOrder::idle`]; Swift reports that from the next PR, so for now it's the next launch).
+//! - **While Corral runs** a deploy counts at once, but a new order waits for the corral to be idle:
+//!   Swift's last report was idle (no hover, no card opening or open) and no checkpoint waits on
+//!   the user ([`CorralOrder::settle`], TP-USAGE-12). Until Swift reports, Rust assumes busy.
 //!   Agents join (at the end) and leave at once.
 //! - **A 9th agent** stays hidden and asks the user to choose ([`Placed::choose_shown`]).
 //! - **Failing safe:** a saved order that can't be read starts afresh and says why
@@ -60,6 +61,8 @@ pub struct CorralOrder {
     deploys: Vec<Deploy>,
     problem: Option<String>,
     dirty: bool,
+    /// Swift's last report: the corral is idle. False until Swift reports.
+    corral_idle: bool,
 }
 
 fn agent_ids(ids: Vec<String>) -> Vec<AgentId> {
@@ -130,6 +133,7 @@ impl CorralOrder {
             deploys: Vec::new(),
             problem,
             dirty: false,
+            corral_idle: false,
         }
     }
 
@@ -231,6 +235,21 @@ impl CorralOrder {
         let changed = self.usage.idle();
         self.dirty |= changed;
         changed
+    }
+
+    /// Swift's report: the corral turned idle (true) or busy (false).
+    pub fn set_corral_idle(&mut self, idle: bool) {
+        self.corral_idle = idle;
+    }
+
+    /// Publishes a waiting order if the corral is idle: Swift's last report was idle and no
+    /// checkpoint waits on the user. Checked when Swift reports, when a run ends and when a
+    /// checkpoint is answered. Returns whether the order changed.
+    pub fn settle(&mut self, checkpoint_waiting: bool) -> bool {
+        if !self.corral_idle || checkpoint_waiting {
+            return false;
+        }
+        self.idle()
     }
 
     /// Writes the order if it changed: a temporary file, then a rename. With no path, nothing.

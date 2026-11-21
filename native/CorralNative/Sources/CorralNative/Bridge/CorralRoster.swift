@@ -198,6 +198,7 @@ public enum CorralIntentWire {
         var how: String? = nil
         var note: String? = nil
         var changes: [String: String]? = nil
+        var idle: Bool? = nil
     }
 
     public static func encode(_ intent: CorralIntent) -> Data? {
@@ -214,6 +215,7 @@ public enum CorralIntentWire {
         case .hideLinked(let id): body = Body(kind: "hideLinked", id: id)
         case .openLinked(let id): body = Body(kind: "openLinked", id: id)
         case .stopAll: body = Body(kind: "stopAll")
+        case .corralIdle(let idle): body = Body(kind: "corralIdle", idle: idle)
         case .approveCheckpoint(let id, let checkpoint, let forRun):
             // A card only ever reports a click; Touch ID and voice never come this way.
             body = Body(kind: "approveCheckpoint", id: id, checkpoint: checkpoint,

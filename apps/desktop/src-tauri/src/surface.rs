@@ -45,7 +45,7 @@ use corral_adapters::transport::{ReqwestTransport, Transport};
 use corral_core::budget::{BudgetConfig, SpendLedger};
 use corral_core::clock::{Clock, SystemClock};
 use corral_core::controls::{ControlError, CorralControls};
-use corral_core::corral_view::{AgentCard, CorralTracker};
+use corral_core::corral_view::{AgentCard, CorralTracker, DropState};
 use corral_core::event::{Event, EventBody};
 use corral_core::ids::{AgentId, CheckpointId};
 use corral_core::run_card::{EditError, RunCard, RunCards};
@@ -664,6 +664,19 @@ impl CorralFeed {
         }
     }
 
+    /// Swift's report that the corral turned idle or busy (TP-USAGE-10). Idle with an order
+    /// waiting and nothing waiting on the user, the new order is sent.
+    fn corral_idle(&self, idle: bool) {
+        let Ok(mut views) = self.views.lock() else {
+            eprintln!("corral: the corral view is poisoned; the corral stops updating");
+            return;
+        };
+        views.order.set_corral_idle(idle);
+        if settle(&mut views, self.clock.now_ms()) {
+            self.send(self.snapshot(&views));
+        }
+    }
+
     /// Shows `agent`'s logo from `path`, if it's new.
     fn set_logo(&self, agent: AgentId, path: String) {
         let Ok(mut views) = self.views.lock() else {
@@ -718,7 +731,30 @@ impl CorralFeed {
             eprintln!("corral: the run cards refused {:?}: {e}", event.kind());
             false
         });
-        if drop_changed || card_changed {
+        // A run ending or a checkpoint answered can leave the corral idle with an order waiting.
+        let order_changed = match &event.body {
+            EventBody::RunCompleted(_)
+            | EventBody::RunFailed(_)
+            | EventBody::RunCancelled(_)
+            | EventBody::CheckpointResolved(_) => settle(&mut views, self.clock.now_ms()),
+            EventBody::RunQueued(_)
+            | EventBody::RunStarted(_)
+            | EventBody::PlanUpdated(_)
+            | EventBody::ModelRequest(_)
+            | EventBody::ModelDelta(_)
+            | EventBody::ModelResponse(_)
+            | EventBody::ToolRequested(_)
+            | EventBody::PolicyDecided(_)
+            | EventBody::CheckpointOpened(_)
+            | EventBody::ToolStarted(_)
+            | EventBody::ToolResult(_)
+            | EventBody::UsageReported(_)
+            | EventBody::BudgetWarned(_)
+            | EventBody::RunPaused(_)
+            | EventBody::RunResumed(_)
+            | EventBody::SessionClosed(_) => false,
+        };
+        if drop_changed || card_changed || order_changed {
             self.send(self.snapshot(&views));
         }
     }
@@ -789,6 +825,7 @@ fn on_intent(slot: &OnceLock<Corral>, result: Result<Intent, BridgeError>) {
             });
         }
         Intent::OpenLinked(app) => corral.open_linked(app),
+        Intent::CorralIdle(idle) => corral.feed.corral_idle(idle),
         Intent::StopAll => {
             let Some(controls) = corral.controls.clone() else {
                 eprintln!("corral: tasks are off, so Stop all had nothing to stop");
@@ -867,6 +904,24 @@ fn on_intent(slot: &OnceLock<Corral>, result: Result<Intent, BridgeError>) {
             eprintln!("corral: intent {intent:?} (handled in a later milestone)");
         }
     }
+}
+
+/// Publishes a waiting usage order if the corral is idle and no drop waits on the user
+/// (TP-USAGE-12), and re-places the drops. Returns whether the corral changed.
+fn settle(views: &mut Views, now_ms: u64) -> bool {
+    let waiting = views
+        .corral
+        .view()
+        .drops
+        .iter()
+        .any(|drop| drop.state == DropState::NeedsYou);
+    if !views.order.settle(waiting) {
+        return false;
+    }
+    save_order(&mut views.order);
+    let cards = views.all_cards.clone();
+    let placed = views.order.place(cards, now_ms);
+    views.corral.set_agents(placed.cards)
 }
 
 /// Saves the corral's order. A failure is logged; the corral keeps working unsaved.
