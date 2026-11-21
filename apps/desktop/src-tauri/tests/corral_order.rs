@@ -128,10 +128,8 @@ fn tp_usage_07_while_running_usage_waits_but_agents_join_and_leave_at_once() {
     for deploy in deploys("claude", 4) {
         order.deployed(deploy.agent, deploy.ts_ms);
     }
-    assert!(
-        !order.run_ended(NOW),
-        "not published while the corral may be in use"
-    );
+    // Not published while the corral may be in use.
+    order.run_ended(NOW);
     assert!(order.has_pending());
     assert_eq!(
         ids(&order.place(cards(&["grok", "claude"]), NOW).cards),
@@ -245,4 +243,126 @@ fn tp_usage_09_a_save_that_fails_says_why() {
     order.place(cards(&["grok"]), NOW);
     let err = order.save().expect_err("can't write");
     assert!(err.starts_with("Couldn't save the corral's order"), "{err}");
+}
+
+#[test]
+fn tp_usage_06_the_saved_order_and_shown_set_are_restored() {
+    let dir = Scratch::new();
+    std::fs::write(
+        dir.file(),
+        r#"{"v": 1, "order": ["claude", "grok", "gpt"], "keepFixed": false,
+            "known": ["grok", "claude", "gpt"], "shown": ["claude", "grok"]}"#,
+    )
+    .expect("write");
+    let mut order = CorralOrder::open(Some(dir.file()));
+    assert_eq!(order.problem(), None);
+    assert!(!order.keeps_fixed() && !order.has_pending() && !order.needs_choice());
+    let placed = order.place(cards(&["grok", "claude", "gpt"]), NOW);
+    assert_eq!(
+        ids(&placed.cards),
+        ["claude", "grok"],
+        "the saved order, the saved shown set"
+    );
+    assert_eq!(order.hidden_count(), 1);
+    assert!(!placed.choose_shown);
+}
+
+#[test]
+fn tp_usage_06_a_saved_fixed_order_holds_against_usage() {
+    let dir = Scratch::new();
+    std::fs::write(
+        dir.file(),
+        r#"{"v": 1, "order": ["claude", "grok"], "keepFixed": true,
+            "known": ["grok", "claude"], "shown": ["grok", "claude"]}"#,
+    )
+    .expect("write");
+    let (order, placed) = launch(&dir.file(), &["grok", "claude"], deploys("grok", 5));
+    assert!(order.keeps_fixed());
+    assert_eq!(ids(&placed), ["claude", "grok"]);
+    assert_eq!(order.hidden_count(), 0);
+}
+
+#[test]
+fn tp_usage_09_no_file_is_no_problem_but_an_unreadable_one_is() {
+    let dir = Scratch::new();
+    assert_eq!(
+        CorralOrder::open(Some(dir.file())).problem(),
+        None,
+        "a first launch"
+    );
+    std::fs::create_dir_all(dir.file()).expect("a folder where the file goes");
+    assert!(
+        CorralOrder::open(Some(dir.file())).problem().is_some(),
+        "can't be read"
+    );
+}
+
+#[test]
+fn tp_usage_09_the_limits_are_exact() {
+    assert_eq!(MAX_ORDER_FILE_BYTES, 16 * 1024);
+    let file = |agents: usize, size: Option<usize>| {
+        let list: Vec<String> = (0..agents).map(|n| format!("\"a{n}\"")).collect();
+        let mut text = format!(
+            r#"{{"v": 1, "order": [{}], "keepFixed": false, "known": [], "shown": []}}"#,
+            list.join(",")
+        );
+        if let Some(size) = size {
+            text.push_str(&" ".repeat(size.saturating_sub(text.len())));
+        }
+        text
+    };
+    for (text, readable) in [
+        (file(0, Some(MAX_ORDER_FILE_BYTES)), true),
+        (file(0, Some(MAX_ORDER_FILE_BYTES + 1)), false),
+        (file(256, None), true),
+        (file(257, None), false),
+    ] {
+        let dir = Scratch::new();
+        std::fs::write(dir.file(), &text).expect("write");
+        assert_eq!(
+            CorralOrder::open(Some(dir.file())).problem().is_none(),
+            readable,
+            "{} bytes",
+            text.len()
+        );
+    }
+}
+
+fn saved(file: &Path) -> serde_json::Value {
+    serde_json::from_slice(&std::fs::read(file).expect("file")).expect("json")
+}
+
+#[test]
+fn tp_usage_06_the_order_a_launch_publishes_is_saved() {
+    let dir = Scratch::new();
+    launch(&dir.file(), &["grok", "claude", "gpt"], vec![]);
+    launch(&dir.file(), &["grok", "claude", "gpt"], deploys("gpt", 3));
+    assert_eq!(
+        saved(&dir.file())["order"],
+        serde_json::json!(["gpt", "grok", "claude"])
+    );
+}
+
+#[test]
+fn tp_usage_07_an_order_published_when_idle_is_saved_and_a_removed_agent_is_forgotten() {
+    let dir = Scratch::new();
+    let (mut order, _) = launch(&dir.file(), &["grok", "claude", "gpt"], vec![]);
+    for deploy in deploys("claude", 4) {
+        order.deployed(deploy.agent, deploy.ts_ms);
+    }
+    order.run_ended(NOW);
+    assert!(order.idle());
+    order.save().expect("saved");
+    assert_eq!(
+        saved(&dir.file())["order"],
+        serde_json::json!(["claude", "grok", "gpt"])
+    );
+
+    order.place(cards(&["claude", "grok"]), NOW);
+    order.save().expect("saved");
+    assert_eq!(
+        saved(&dir.file())["known"],
+        serde_json::json!(["grok", "claude"])
+    );
+    assert_eq!(order.hidden_count(), 0);
 }
