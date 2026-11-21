@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-keep-order-fixed"
+description = "Enables the set_keep_order_fixed command without any pre-configured scope."
+commands.allow = ["set_keep_order_fixed"]
+
+[[permission]]
+identifier = "deny-set-keep-order-fixed"
+description = "Denies the set_keep_order_fixed command without any pre-configured scope."
+commands.deny = ["set_keep_order_fixed"]

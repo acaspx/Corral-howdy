@@ -112,6 +112,38 @@ view: TraceView,
  */
 json: string, };
 
+export type CorralSettingsView = {
+/**
+ * Every agent.
+ */
+agents: Array<CorralAgentChoice>,
+/**
+ * "Keep order fixed" is on.
+ */
+keepFixed: boolean,
+/**
+ * An agent was added to a full corral and the user hasn't chosen which 8 show.
+ */
+needsChoice: boolean,
+/**
+ * The most agents the corral shows.
+ */
+maxShown: number, };
+
+export type CorralAgentChoice = {
+/**
+ * The agent.
+ */
+id: string,
+/**
+ * Its name, e.g. "Grok".
+ */
+name: string,
+/**
+ * Whether the corral shows it.
+ */
+shown: boolean, };
+
 export type TraceView = {
 /**
  * The run.

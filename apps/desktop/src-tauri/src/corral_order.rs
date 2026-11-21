@@ -10,6 +10,8 @@
 //!   the user ([`CorralOrder::settle`], TP-USAGE-12). Until Swift reports, Rust assumes busy.
 //!   Agents join (at the end) and leave at once.
 //! - **A 9th agent** stays hidden and asks the user to choose ([`Placed::choose_shown`]).
+//! - **The main window's Corral section** lists the agents with what shows, chooses which 8 show
+//!   and switches "Keep order fixed" ([`CorralOrder::settings`], TP-USAGE-13, 14).
 //! - **Failing safe:** a saved order that can't be read starts afresh and says why
 //!   ([`CorralOrder::problem`]); it's replaced on the next save. Without an app data folder it
 //!   still works, unsaved.
@@ -50,6 +52,33 @@ pub struct Placed {
     /// An agent was added to a full corral: the user should choose which 8 show
     /// (`corral.choose_shown`).
     pub choose_shown: bool,
+}
+
+/// One agent in the main window's Corral section.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CorralAgentChoice {
+    /// The agent.
+    pub id: String,
+    /// Its name, e.g. "Grok".
+    pub name: String,
+    /// Whether the corral shows it.
+    pub shown: bool,
+}
+
+/// The main window's Corral section: every agent, the shown ones first in the corral's order,
+/// then the hidden ones in the order they arrived.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CorralSettingsView {
+    /// Every agent.
+    pub agents: Vec<CorralAgentChoice>,
+    /// "Keep order fixed" is on.
+    pub keep_fixed: bool,
+    /// An agent was added to a full corral and the user hasn't chosen which 8 show.
+    pub needs_choice: bool,
+    /// The most agents the corral shows.
+    pub max_shown: u32,
 }
 
 /// The corral's order and shown set, as the app keeps them.
@@ -160,6 +189,57 @@ impl CorralOrder {
     /// How many agents aren't shown.
     pub fn hidden_count(&self) -> usize {
         self.shown.hidden_count()
+    }
+
+    /// The main window's Corral section, naming the agents from `cards` (the agents now).
+    pub fn settings(&self, cards: &[AgentCard]) -> CorralSettingsView {
+        let shown = self.shown.in_order(self.usage.order());
+        let hidden = self
+            .shown
+            .known()
+            .iter()
+            .filter(|id| !shown.contains(id))
+            .cloned();
+        let agents = shown
+            .iter()
+            .cloned()
+            .map(|id| (id, true))
+            .chain(hidden.map(|id| (id, false)))
+            .filter_map(|(id, shown)| {
+                cards
+                    .iter()
+                    .find(|c| c.id == id)
+                    .map(|c| CorralAgentChoice {
+                        id: id.as_str().to_owned(),
+                        name: c.name.clone(),
+                        shown,
+                    })
+            })
+            .collect();
+        CorralSettingsView {
+            agents,
+            keep_fixed: self.usage.keeps_fixed(),
+            needs_choice: self.shown.needs_choice(),
+            max_shown: MAX_SHOWN as u32,
+        }
+    }
+
+    /// The user's choice of which agents show: at most 8, each one of theirs. Answers the question
+    /// a 9th agent asked.
+    pub fn choose_shown(&mut self, picks: &[AgentId]) -> Result<(), String> {
+        self.shown
+            .choose(picks)
+            .map_err(|e| format!("Couldn't change what the corral shows: {e}."))?;
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// Turns "Keep order fixed" on or off. Deploys still count either way.
+    pub fn set_keep_fixed(&mut self, keep_fixed: bool) {
+        if self.usage.keeps_fixed() != keep_fixed {
+            self.usage.set_keep_fixed(keep_fixed);
+            self.dirty = true;
+        }
     }
 
     /// Drops deploys too old to count, so memory doesn't grow; the score ignores them anyway.

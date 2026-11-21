@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-corral-settings"
+description = "Enables the corral_settings command without any pre-configured scope."
+commands.allow = ["corral_settings"]
+
+[[permission]]
+identifier = "deny-corral-settings"
+description = "Denies the corral_settings command without any pre-configured scope."
+commands.deny = ["corral_settings"]

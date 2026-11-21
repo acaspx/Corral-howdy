@@ -4,6 +4,7 @@
 //! the core can't drift. The `invoke` wrappers stay small and hand-written next to the components
 //! (`keys.ts`, `providerToolsApi.ts`), typed with these.
 
+use crate::corral_order::{CorralAgentChoice, CorralSettingsView};
 use crate::keys::Connected;
 use crate::provider_tools::{ProviderToolChoice, ProviderToolsView};
 use crate::traces::{RunListItem, RunListOutcome, RunTrace};
@@ -25,6 +26,8 @@ pub fn typescript() -> String {
         RunListItem::decl(&cfg),
         RunListOutcome::decl(&cfg),
         RunTrace::decl(&cfg),
+        CorralSettingsView::decl(&cfg),
+        CorralAgentChoice::decl(&cfg),
         TraceView::decl(&cfg),
         Span::decl(&cfg),
         Attribute::decl(&cfg),

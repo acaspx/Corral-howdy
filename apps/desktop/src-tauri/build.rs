@@ -12,6 +12,9 @@ const COMMANDS: &[&str] = &[
     "set_provider_tool",
     "recent_runs",
     "run_trace",
+    "corral_settings",
+    "set_corral_shown",
+    "set_keep_order_fixed",
 ];
 
 fn main() {

@@ -240,6 +240,10 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-USAGE-10** (Rust + Swift) Swift reports when the corral turns idle or busy as a typed `corralIdle` intent, matching `intent-corral-idle-v1.json`; a malformed report is refused (`bridge.rs`, `CorralIdleTests.swift`)
 - **TP-USAGE-11** (Swift) The corral is idle with the pointer on no drop and not on the card, no card opening and no card open or pinned; only changes are reported, starting with the first state
 - **TP-USAGE-12** (Rust) A waiting order is published only when Swift's last report was idle and no checkpoint waits on the user; until Swift reports, Rust assumes busy; it's checked when Swift reports, when a run ends and when a checkpoint is answered (`apps/desktop/src-tauri/tests/corral_order.rs`)
+- **TP-USAGE-13** (Rust) The Corral settings list every agent in the corral's order with whether it shows, whether a 9th is waiting, and "Keep order fixed"; choosing what shows (at most 8, the user's own agents) is saved and answers the question (`apps/desktop/src-tauri/tests/corral_order.rs`)
+- **TP-USAGE-14** (Rust) "Keep order fixed" is switched from the settings and saved
+- **TP-USAGE-15** (Rust) The settings commands reach the running corral through the handle it attaches; before that they say the corral isn't running (`apps/desktop/src-tauri/tests/corral_settings.rs`)
+- **TP-USAGE-16** (TS) The main window's Corral section: "Your corral holds up to 8" when a 9th waits, a box per agent (full, the rest wait), each change sent to the core in the corral's order, a refused change leaves the boxes as they were, and "Keep order fixed" says deploys still count (`src/CorralSettings.test.tsx`)
 - **TP-GLASS-01** Render snapshots n = 0–8 match baselines (tolerance-based)
 - **TP-GLASS-02** Reduce Transparency → opaque fill; Reduce Motion → no springs, caustics frozen
 - **TP-GLASS-03** Logo plate, fallback monogram and status ring contrast ≥ 4.5:1 (3:1 for rings) over light, dark and busy test wallpapers

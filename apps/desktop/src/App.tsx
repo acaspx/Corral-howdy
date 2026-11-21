@@ -1,3 +1,5 @@
+import { CorralSettings } from "./CorralSettings";
+import { corralSettingsApi as defaultCorralApi, type CorralSettingsApi } from "./corralSettingsApi";
 import { KeyIntake } from "./KeyIntake";
 import { keyApi as defaultKeyApi, type KeyApi } from "./keys";
 import { ProviderTools } from "./ProviderTools";
@@ -8,7 +10,7 @@ import { tracesApi as defaultTracesApi, type TracesApi } from "./tracesApi";
 /**
  * The main window: Corral's deep-work surface (traces, agent and policy editors, spend, settings).
  * The corral, hover cards and trace tree are native Swift (docs/07-brand-and-corral-surface.md).
- * The API keys, provider tools and traces are real; the other sections arrive in M4.
+ * The API keys, provider tools, the corral's settings and traces are real; the other sections arrive in M4.
  */
 const sections = [
   { title: "Agents", body: "Create and edit agents, their providers, tools and budgets." },
@@ -20,10 +22,12 @@ export function App({
   keyApi = defaultKeyApi,
   toolsApi = defaultToolsApi,
   tracesApi = defaultTracesApi,
+  corralApi = defaultCorralApi,
 }: {
   keyApi?: KeyApi;
   toolsApi?: ProviderToolsApi;
   tracesApi?: TracesApi;
+  corralApi?: CorralSettingsApi;
 }) {
   return (
     <main className="shell">
@@ -41,6 +45,7 @@ export function App({
       </ul>
       <KeyIntake api={keyApi} />
       <ProviderTools api={toolsApi} />
+      <CorralSettings api={corralApi} />
       <TraceViewer api={tracesApi} />
       <p className="status" role="status">
         Walking skeleton: connect a key and its agent joins the corral; Grok and Claude take tasks
