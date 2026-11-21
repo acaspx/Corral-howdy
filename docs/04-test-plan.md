@@ -228,8 +228,8 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-RANK-04** Octagon tie-break picks the higher vertex
 - **TP-RANK-05** Shader payload follows ring order so bridges trace the ring
 - **TP-RANK-06** A reorder moves drops around the ring (polar spring), never through the center
-- **TP-USAGE-01** (Rust) Score = 90-day deploys with 14-day half-life; tie-break by last deploy, then creation order
-- **TP-USAGE-02** (Rust) New order is published only when the corral reports idle (no hover, drag, open card, pending checkpoint)
+- **TP-USAGE-01** (Rust) Score = 90-day deploys (`run.queued`) with 14-day half-life; tie-break by last deploy, then creation order (`crates/corral-core/tests/usage_rank.rs`)
+- **TP-USAGE-02** (Rust) New order is published only when the corral reports idle (no hover, drag, open card, pending checkpoint); agents join (at the end) and leave at once without moving the others
 - **TP-USAGE-03** (Rust) Neighbors swap only when the challenger leads by ≥ 10% (no flip-flop on near-ties; property test)
 - **TP-USAGE-04** (Rust) "Keep order fixed" freezes the order; deploys still count toward the score
 - **TP-USAGE-05** (Rust) Shown set ≤ 8; adding a 9th agent emits a `corral.choose_shown` prompt and changes nothing until answered; removing a shown agent never auto-promotes a hidden one
