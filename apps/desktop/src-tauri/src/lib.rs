@@ -18,6 +18,7 @@ pub mod touch_id;
 
 pub mod agent_tools;
 pub mod bindings;
+pub mod corral_order;
 pub mod keys;
 pub mod linked;
 pub mod logos;
