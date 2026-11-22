@@ -28,6 +28,10 @@ public struct CorralCardView: View {
     let onTask: (String) -> Void
     let onClose: () -> Void
     let onPointerInside: (Bool) -> Void
+    /// "2 of 3" when several checkpoints wait (TP-CHK-21).
+    let step: String?
+    /// An arrow: -1 back, +1 on.
+    let onStep: (Int) -> Void
 
     @State private var text = ""
     /// Whether the approval box shows the whole detail. Starts collapsed for every checkpoint.
@@ -42,7 +46,9 @@ public struct CorralCardView: View {
                 onButton: @escaping (CorralCardModel.Button) -> Void,
                 onTask: @escaping (String) -> Void,
                 onClose: @escaping () -> Void,
-                onPointerInside: @escaping (Bool) -> Void) {
+                onPointerInside: @escaping (Bool) -> Void,
+                step: String? = nil,
+                onStep: @escaping (Int) -> Void = { _ in }) {
         self.model = model
         self.pinned = pinned
         self.focusRequest = focusRequest
@@ -50,6 +56,8 @@ public struct CorralCardView: View {
         self.onTask = onTask
         self.onClose = onClose
         self.onPointerInside = onPointerInside
+        self.step = step
+        self.onStep = onStep
     }
 
     public var body: some View {
@@ -153,6 +161,29 @@ public struct CorralCardView: View {
             draft = [:]
             guardrail = CorralInputGuard(shownAt: ProcessInfo.processInfo.systemUptime)
         }
+    }
+
+    /// "‹ 2 of 3 ›": steps through the checkpoints waiting on the card. A step shows another
+    /// checkpoint, so the box starts collapsed and the 300 ms guard re-arms (TP-CHK-21).
+    private func stepper(_ step: String) -> some View {
+        HStack(spacing: 4) {
+            Button { onStep(-1) } label: {
+                Image(systemName: "chevron.left").font(.system(size: 10, weight: .bold))
+                    .frame(width: 18, height: 18).contentShape(Rectangle())
+            }
+            .accessibilityLabel("Previous checkpoint")
+            Text(step)
+                .font(.caption2.weight(.semibold).monospacedDigit())
+                .foregroundStyle(Self.ink.opacity(0.6))
+                .accessibilityLabel("Checkpoint \(step)")
+            Button { onStep(1) } label: {
+                Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold))
+                    .frame(width: 18, height: 18).contentShape(Rectangle())
+            }
+            .accessibilityLabel("Next checkpoint")
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Self.ink.opacity(0.6))
     }
 
     /// A segment per subtask, then the "Now:" line (docs/07 §8.2 item 4, TP-HOVER-03).
@@ -350,10 +381,16 @@ public struct CorralCardView: View {
     /// for the class and the risk. Drawn only from the core's checkpoint.
     private func approvalBox(_ approval: CorralCardModel.Approval) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("NEEDS YOUR APPROVAL")
-                .font(.caption2.weight(.semibold))
-                .tracking(1.1)
-                .foregroundStyle(Self.maroon)
+            HStack(spacing: 6) {
+                Text("NEEDS YOUR APPROVAL")
+                    .font(.caption2.weight(.semibold))
+                    .tracking(1.1)
+                    .foregroundStyle(Self.maroon)
+                if let step {
+                    Spacer(minLength: 6)
+                    stepper(step)
+                }
+            }
             Text(approval.title)
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(Self.ink)

@@ -14,7 +14,8 @@
 //! - **A waiting checkpoint** puts its approval box on the card, drawn only from
 //!   `checkpoint.opened`, which the core wrote (M2 item 4, TP-CHK-07). Its title and detail are
 //!   cleaned and capped like agent text, because the detail quotes the agent's arguments
-//!   verbatim. With more than one waiting, the oldest shows first.
+//!   verbatim. With more than one waiting, the oldest shows first and the card steps through the
+//!   rest; an answer may be for any of them ([`RunCards::waits_on`], TP-CHK-19).
 //!
 //! - **Edit** (TP-CHK-13..14): while a checkpoint waits, the card says which of the call's
 //!   arguments it may change, from the `tool.requested` the checkpoint is for. Each top-level text
@@ -398,7 +399,8 @@ impl RunCards {
         checkpoint: &CheckpointId,
         changes: &BTreeMap<String, String>,
     ) -> Result<Value, EditError> {
-        if !self.shows_checkpoint(agent, checkpoint) {
+        // The card steps through every checkpoint waiting on it (TP-CHK-19).
+        if !self.waits_on(agent, checkpoint) {
             return Err(EditError::NotShown);
         }
         let (args, fields) = self
@@ -430,6 +432,56 @@ impl RunCards {
             }
         }
         Ok(args)
+    }
+
+    /// Every checkpoint waiting on `agent`'s card, oldest first, each with its fields when the
+    /// call can be edited. The card shows the first and steps through the rest (TP-CHK-19). A
+    /// run that has ended waits on nothing.
+    pub fn waiting(&self, agent: &AgentId) -> Vec<(CardCheckpoint, Option<Vec<CardField>>)> {
+        let Some(record) = self.latest.get(agent).and_then(|run| self.runs.get(run)) else {
+            return Vec::new();
+        };
+        if status(record.life.phase()) != Some(CardStatus::NeedsYou) {
+            return Vec::new();
+        }
+        record
+            .waiting
+            .iter()
+            .map(|checkpoint| {
+                let fields = record
+                    .editable
+                    .get(&checkpoint.id)
+                    .map(|(_, fields)| fields.clone());
+                (checkpoint.clone(), fields)
+            })
+            .collect()
+    }
+
+    /// Whether `checkpoint` waits on `agent`'s card, so the card can show it and an answer from
+    /// that card is for something the user could see there (TP-CHK-19). Never another agent's
+    /// checkpoint, nor one already answered.
+    pub fn waits_on(&self, agent: &AgentId, checkpoint: &CheckpointId) -> bool {
+        self.waiting(agent)
+            .iter()
+            .any(|(waiting, _)| waiting.id == *checkpoint)
+    }
+
+    /// `agent`'s card at `now_ms` showing `checkpoint`, one of those waiting on it, with that
+    /// call's fields: the card as the user stepped to it (Touch ID asks for what it shows).
+    pub fn card_showing(
+        &self,
+        agent: &AgentId,
+        checkpoint: &CheckpointId,
+        now_ms: u64,
+    ) -> Option<RunCard> {
+        let (shown, fields) = self
+            .waiting(agent)
+            .into_iter()
+            .find(|(waiting, _)| waiting.id == *checkpoint)?;
+        let mut card = self.card(agent, now_ms)?;
+        card.checkpoint = Some(shown);
+        card.edit = fields;
+        Some(card)
     }
 
     /// Whether `checkpoint` is the one `agent`'s card shows now, so an answer from that card is

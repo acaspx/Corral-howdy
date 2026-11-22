@@ -65,6 +65,8 @@ public final class CorralCardController {
     private var polledDrop: String?
     private var polledCard = false
     private var focusRequest = 0
+    /// The checkpoint each card was stepped to, by ID, so a step survives others being answered.
+    private var steps: [String: String] = [:]
 
     public init(corralPanel: CorralPanel, onIntent: @escaping (CorralIntent) -> Void) {
         self.corralPanel = corralPanel
@@ -158,7 +160,8 @@ public final class CorralCardController {
             }
             return
         }
-        let model = CorralCardModel(agentName: agent.name, card: cards[id], linkedApp: agent.linkedApp)
+        let base = CorralCardModel(agentName: agent.name, card: cards[id], linkedApp: agent.linkedApp)
+        let model = base.showing(base.index(of: steps[id]))
         host.rootView = AnyView(
             CorralCardView(
                 model: model,
@@ -179,6 +182,14 @@ public final class CorralCardController {
                 },
                 onPointerInside: { [weak self] inside in
                     MainActor.assumeIsolated { self?.swiftUICardHover(inside) }
+                },
+                step: model.step,
+                onStep: { [weak self] delta in
+                    MainActor.assumeIsolated {
+                        let next = model.showing(model.stepped(from: model.shownIndex, by: delta))
+                        self?.steps[id] = next.approval?.checkpointID
+                        self?.render()
+                    }
                 }
             )
             .id(id)

@@ -219,6 +219,10 @@ pub struct CardSnapshot {
     /// The approval box, while a checkpoint waits (M2).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint: Option<CheckpointSnapshot>,
+    /// The other checkpoints waiting on the card, oldest first, behind the one it shows; added by
+    /// [`RosterSnapshot::with_queue`] when there's more than one (TP-CHK-20).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub queue: Option<Vec<CheckpointSnapshot>>,
     /// The run's progress, once it has subtasks; added by [`RosterSnapshot::with_plans`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub plan: Option<PlanSnapshot>,
@@ -386,6 +390,7 @@ impl From<&RunCard> for CardSnapshot {
                         .map(|fields| fields.iter().map(FieldSnapshot::from).collect()),
                     ..CheckpointSnapshot::from(checkpoint)
                 }),
+            queue: None,
             plan: None,
         }
     }
@@ -464,6 +469,27 @@ impl RosterSnapshot {
             muse: settings.muse,
             dot: settings.dot.map(DotLook::id),
         });
+        self
+    }
+
+    /// Adds the other checkpoints waiting on each card, behind the one it shows, with their
+    /// fields; the card steps through them (TP-CHK-20).
+    pub fn with_queue(mut self, cards: &RunCards) -> Self {
+        for card in &mut self.cards {
+            let waiting = cards.waiting(&card.id);
+            card.queue = (waiting.len() > 1).then(|| {
+                waiting
+                    .iter()
+                    .skip(1)
+                    .map(|(checkpoint, fields)| CheckpointSnapshot {
+                        fields: fields
+                            .as_ref()
+                            .map(|fields| fields.iter().map(FieldSnapshot::from).collect()),
+                        ..CheckpointSnapshot::from(checkpoint)
+                    })
+                    .collect()
+            });
+        }
         self
     }
 

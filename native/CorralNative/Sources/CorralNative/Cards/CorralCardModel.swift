@@ -162,8 +162,12 @@ public struct CorralCardModel: Equatable, Sendable {
     public var answerTruncated: Bool
     /// Why the run failed.
     public var error: String?
-    /// The approval box, while a checkpoint waits.
+    /// The approval box, while a checkpoint waits: the one the card is stepped to.
     public var approval: Approval?
+    /// Every checkpoint waiting, oldest first; `approval` is the one at `shownIndex` (TP-CHK-21).
+    public private(set) var approvals: [Approval] = []
+    /// Which of `approvals` the card shows.
+    public private(set) var shownIndex = 0
     /// The buttons, in the core's order. The first is the primary one.
     public var buttons: [Button]
     /// The task field's placeholder, or nil when the card has no field.
@@ -239,6 +243,7 @@ public struct CorralCardModel: Equatable, Sendable {
         error = card.error
         let approval = card.checkpoint.map(Approval.init)
         self.approval = approval
+        approvals = approval.map { [$0] + card.queue.map(Approval.init) } ?? []
         buttons = card.actions.compactMap { action -> Button? in
             switch action {
             case .stop: .stop
@@ -256,6 +261,43 @@ public struct CorralCardModel: Equatable, Sendable {
         } else {
             nil
         }
+    }
+
+    /// How many checkpoints the card can step through.
+    public var stepCount: Int { approvals.count }
+
+    /// "2 of 3" over the approval box, when more than one waits.
+    public var step: String? {
+        stepCount > 1 ? "\(shownIndex + 1) of \(stepCount)" : nil
+    }
+
+    /// The card stepped to checkpoint `index` (clamped): its approval box, and Approve and Deny
+    /// for it. Everything else stays.
+    public func showing(_ index: Int) -> CorralCardModel {
+        guard !approvals.isEmpty else { return self }
+        var model = self
+        let at = min(max(index, 0), approvals.count - 1)
+        let shown = approvals[at]
+        model.shownIndex = at
+        model.approval = shown
+        model.buttons = buttons.map { button in
+            switch button {
+            case .approve: .approve(checkpoint: shown.checkpointID, touchID: shown.risk == .critical)
+            case .deny: .deny(checkpoint: shown.checkpointID)
+            case .stop, .sendBack, .retry, .open, .allowForRun, .approveEdited: button
+            }
+        }
+        return model
+    }
+
+    /// Where checkpoint `id` is in the queue; the oldest when it's gone (answered elsewhere).
+    public func index(of id: String?) -> Int {
+        approvals.firstIndex { $0.checkpointID == id } ?? 0
+    }
+
+    /// One step from `index` by `delta`, kept within the queue.
+    public func stepped(from index: Int, by delta: Int) -> Int {
+        min(max(index + delta, 0), max(stepCount - 1, 0))
     }
 
     /// The intent a button sends.
