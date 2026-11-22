@@ -1,0 +1,25 @@
+{
+  "v": 1,
+  "agents": [
+    { "id": "claude", "name": "Claude", "monogram": "Cl", "status": "working" }
+  ],
+  "hidden": 0,
+  "cards": [
+    {
+      "id": "claude",
+      "status": "working",
+      "prompt": "Tidy my notes",
+      "promptTruncated": false,
+      "elapsedMs": 3000,
+      "spend": "$0.00",
+      "answerTruncated": false,
+      "actions": ["stop"],
+      "plan": {
+        "step": 2,
+        "total": 5,
+        "now": "Group",
+        "segments": ["done", "current", "pending", "pending", "pending"]
+      }
+    }
+  ]
+}

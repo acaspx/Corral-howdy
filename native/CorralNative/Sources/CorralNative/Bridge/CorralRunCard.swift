@@ -174,11 +174,64 @@ public struct CorralRunCard: Equatable, Sendable {
     public var actions: [Action]
     /// The checkpoint waiting on the user, if any.
     public var checkpoint: Checkpoint?
+    /// The run's progress, once it has subtasks (TP-HOVER-03).
+    public var plan: Plan?
+
+    /// A card's progress: a segment per subtask, and the current one for the "Now:" line. The
+    /// core decided it; one that doesn't add up is dropped and the card shows without it.
+    public struct Plan: Equatable, Sendable {
+        public static let maxSegments = 100
+        public static let maxTitleLength = 80
+
+        public enum Segment: String, Equatable, Sendable {
+            case pending, current, done, skipped, failed
+        }
+
+        /// The current subtask's place, from 1.
+        public var step: Int?
+        public var total: Int
+        /// The current subtask's title.
+        public var now: String?
+        public var segments: [Segment]
+
+        public init(step: Int?, total: Int, now: String?, segments: [Segment]) {
+            self.step = step; self.total = total; self.now = now; self.segments = segments
+        }
+
+        init?(_ wire: Wire) {
+            let segments = wire.segments.compactMap(Segment.init(rawValue:))
+            guard segments.count == wire.segments.count, (1...Self.maxSegments).contains(wire.total),
+                  segments.count == wire.total else { return nil }
+            if let step = wire.step {
+                guard (1...wire.total).contains(step), segments[step - 1] == .current else { return nil }
+            }
+            self.step = wire.step
+            total = wire.total
+            now = wire.now.map { CorralRunCard.clean($0, max: Self.maxTitleLength).text }
+            self.segments = segments
+        }
+
+        struct Wire: Decodable {
+            let step: Int?
+            let total: Int
+            let now: String?
+            let segments: [String]
+
+            init(from decoder: Decoder) throws {
+                try rejectUnknownKeys(decoder, allowed: ["step", "total", "now", "segments"])
+                let c = try decoder.container(keyedBy: AnyKey.self)
+                step = try c.decodeIfPresent(Int.self, forKey: AnyKey("step"))
+                total = try c.decode(Int.self, forKey: AnyKey("total"))
+                now = try c.decodeIfPresent(String.self, forKey: AnyKey("now"))
+                segments = try c.decode([String].self, forKey: AnyKey("segments"))
+            }
+        }
+    }
 
     /// A card as the core would send it, for previews and the playground.
     public init(status: Status, prompt: String, elapsedMs: Int, spend: String,
                 answer: String? = nil, error: String? = nil, actions: [Action],
-                checkpoint: Checkpoint? = nil) {
+                checkpoint: Checkpoint? = nil, plan: Plan? = nil) {
         self.status = status
         self.prompt = prompt
         promptTruncated = false
@@ -189,6 +242,7 @@ public struct CorralRunCard: Equatable, Sendable {
         self.error = error
         self.actions = actions
         self.checkpoint = checkpoint
+        self.plan = plan
     }
 
     /// A card from the wire, or nil for a status this build doesn't know.
@@ -214,6 +268,7 @@ public struct CorralRunCard: Equatable, Sendable {
             actions.append(action)
         }
         self.actions = actions
+        plan = wire.plan.flatMap { Plan($0) }
     }
 
     /// Removes control and format characters except line breaks and the zero-width joiner, and
@@ -241,11 +296,12 @@ public struct CorralRunCard: Equatable, Sendable {
         let error: String?
         let actions: [String]
         let checkpoint: Checkpoint.Wire?
+        let plan: Plan.Wire?
 
         init(from decoder: Decoder) throws {
             try rejectUnknownKeys(decoder, allowed: [
                 "id", "status", "prompt", "promptTruncated", "elapsedMs", "spend", "answer",
-                "answerTruncated", "error", "actions", "checkpoint",
+                "answerTruncated", "error", "actions", "checkpoint", "plan",
             ])
             let c = try decoder.container(keyedBy: AnyKey.self)
             id = try c.decode(String.self, forKey: AnyKey("id"))
@@ -259,6 +315,7 @@ public struct CorralRunCard: Equatable, Sendable {
             error = try c.decodeIfPresent(String.self, forKey: AnyKey("error"))
             actions = try c.decode([String].self, forKey: AnyKey("actions"))
             checkpoint = try c.decodeIfPresent(Checkpoint.Wire.self, forKey: AnyKey("checkpoint"))
+            plan = try c.decodeIfPresent(Plan.Wire.self, forKey: AnyKey("plan"))
         }
     }
 }

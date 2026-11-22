@@ -1,0 +1,20 @@
+{
+  "v": 1,
+  "agents": [
+    { "id": "claude", "name": "Claude", "monogram": "Cl", "status": "working" }
+  ],
+  "hidden": 0,
+  "trace": {
+    "columns": [
+      {
+        "id": "claude",
+        "status": "working",
+        "prompt": "Tidy my notes",
+        "promptTruncated": false,
+        "subtask": { "step": 2, "total": 5, "title": "Group" },
+        "next": ["Summarize", "Email"]
+      }
+    ],
+    "more": 0
+  }
+}
