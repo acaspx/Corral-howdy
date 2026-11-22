@@ -206,3 +206,21 @@ fn tp_trace_02_only_what_comes_after_the_current_subtask_peeks_out() {
     let peek: Vec<&str> = tree.columns[0].next.iter().map(AgentText::as_str).collect();
     assert_eq!(peek, ["Summarize"]);
 }
+
+#[test]
+fn tp_trace_05_a_task_cards_click_opens_the_run_its_card_follows() {
+    let mut log = Log::new();
+    assert!(log.cards.run_of(&AgentId::from("grok")).is_none());
+    log.start("r1", "grok", "Plan the trip");
+    assert_eq!(
+        log.cards.run_of(&AgentId::from("grok")),
+        Some(&RunId::from("r1"))
+    );
+    log.finish("r1");
+    log.start("r2", "grok", "Plan another");
+    assert_eq!(
+        log.cards.run_of(&AgentId::from("grok")),
+        Some(&RunId::from("r2")),
+        "the latest run"
+    );
+}

@@ -19,6 +19,7 @@ const MAIN_WINDOW_PERMISSIONS: &[&str] = &[
     "allow-corral-settings",
     "allow-set-corral-shown",
     "allow-set-keep-order-fixed",
+    "allow-take-open-run",
 ];
 
 fn main_window_capability() -> serde_json::Value {

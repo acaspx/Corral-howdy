@@ -2860,3 +2860,27 @@ mod trace_names_tests {
         assert!(columns(&sent).is_empty());
     }
 }
+
+#[cfg(test)]
+mod open_trace_tests {
+    use super::*;
+
+    const OPEN: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/intent-open-trace-v1.json");
+
+    #[test]
+    fn tp_trace_05_a_task_card_click_arrives_as_the_fixture_shows() {
+        assert_eq!(
+            decode_intent(OPEN.as_bytes()).expect("open"),
+            Intent::OpenTrace(AgentId::from("claude"))
+        );
+        for bad in [
+            r#"{"v":1,"intent":{"kind":"openTrace","id":""}}"#,
+            r#"{"v":1,"intent":{"kind":"openTrace","id":"has space"}}"#,
+            r#"{"v":1,"intent":{"kind":"openTrace"}}"#,
+            r#"{"v":1,"intent":{"kind":"openTrace","id":"claude","run":"r1"}}"#,
+        ] {
+            assert!(decode_intent(bad.as_bytes()).is_err(), "{bad}");
+        }
+    }
+}
