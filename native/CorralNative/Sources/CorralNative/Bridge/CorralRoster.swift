@@ -31,6 +31,8 @@ public struct CorralRoster: Equatable, Sendable {
     public var cards: [String: CorralRunCard] = [:]
     /// Which linked apps show, for the right-click menu (`roster-linked-v1.json`).
     public var links = CorralLinks(muse: false, dot: nil)
+    /// The trace tree above the corral (`roster-trace-v1.json`); empty when nothing is running.
+    public var trace = CorralTrace.empty
 
     public enum DecodeError: Error, Equatable, Sendable {
         case empty
@@ -83,7 +85,7 @@ public struct CorralRoster: Equatable, Sendable {
         let links = CorralLinks(muse: wire.links?.muse ?? false,
                                 dot: dot.flatMap(nonEmpty(max: maxLookLength)))
         return .success(CorralRoster(agents: shown, hiddenCount: min(hidden, maxHidden), cards: cards,
-                                     links: links))
+                                     links: links, trace: wire.trace.map { CorralTrace($0) } ?? .empty))
     }
 
     /// Cleaned and bounded, or nil when nothing is left.
@@ -126,6 +128,7 @@ public struct CorralRoster: Equatable, Sendable {
         let hidden: Int
         let cards: [CorralRunCard.Wire]?
         let links: Links?
+        let trace: CorralTrace.Wire?
 
         struct Links: Decodable {
             let muse: Bool?
@@ -155,13 +158,14 @@ public struct CorralRoster: Equatable, Sendable {
         }
 
         init(from decoder: Decoder) throws {
-            try rejectUnknownKeys(decoder, allowed: ["v", "agents", "hidden", "cards", "links"])
+            try rejectUnknownKeys(decoder, allowed: ["v", "agents", "hidden", "cards", "links", "trace"])
             let c = try decoder.container(keyedBy: AnyKey.self)
             v = try c.decode(Int.self, forKey: AnyKey("v"))
             agents = try c.decode([Agent].self, forKey: AnyKey("agents"))
             hidden = try c.decode(Int.self, forKey: AnyKey("hidden"))
             cards = try c.decodeIfPresent([CorralRunCard.Wire].self, forKey: AnyKey("cards"))
             links = try c.decodeIfPresent(Links.self, forKey: AnyKey("links"))
+            trace = try c.decodeIfPresent(CorralTrace.Wire.self, forKey: AnyKey("trace"))
         }
     }
 }
