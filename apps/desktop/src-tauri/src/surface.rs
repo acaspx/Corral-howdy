@@ -811,6 +811,30 @@ impl CorralFeed {
     }
 }
 
+/// A task card in the trace tree opens its run in the main window's trace viewer (TP-TRACE-05).
+impl CorralFeed {
+    fn open_trace(&self, agent: &AgentId) {
+        let run = match self.views.lock() {
+            Ok(views) => views.cards.run_of(agent).cloned(),
+            Err(_) => {
+                eprintln!("corral: the corral's state is poisoned, so its traces can't be opened");
+                return;
+            }
+        };
+        // No run to show (it was never started, or the card was cleared): nothing to open.
+        let Some(run) = run else { return };
+        self.app.state::<Arc<Traces>>().open_run(run);
+        crate::show_main_window(&self.app);
+        // The viewer also takes the run when the window comes forward, so a failed nudge only
+        // delays it.
+        if let Some(window) = self.app.get_webview_window("main")
+            && let Err(e) = window.eval(crate::traces::OPEN_RUN_SCRIPT)
+        {
+            eprintln!("corral: couldn't tell the trace viewer to open the run: {e}");
+        }
+    }
+}
+
 /// The prompt bar (docs/07 §6.1, TP-BAR-08): the core decides; these read the corral's state and
 /// pass the answer to Swift.
 impl CorralFeed {
@@ -911,6 +935,7 @@ fn on_intent(slot: &OnceLock<Corral>, result: Result<Intent, BridgeError>) {
         }
         Intent::OpenLinked(app) => corral.open_linked(app),
         Intent::CorralIdle(idle) => corral.feed.corral_idle(idle),
+        Intent::OpenTrace(agent) => corral.feed.open_trace(&agent),
         Intent::PromptBarEdited(edit) => {
             let agents = corral.feed.bar_agents();
             corral

@@ -73,7 +73,7 @@ fn decide(event: ShellEvent) -> ShellAction {
     }
 }
 
-fn show_main_window(app: &AppHandle) {
+pub(crate) fn show_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         // Best effort: if the window can't be shown, the tray stays usable and nothing is lost.
         // There is no safer fallback to report to.
@@ -96,6 +96,7 @@ pub fn run() {
             provider_tools::set_provider_tool,
             traces::recent_runs,
             traces::run_trace,
+            traces::take_open_run,
             corral_settings::corral_settings,
             corral_settings::set_corral_shown,
             corral_settings::set_keep_order_fixed,

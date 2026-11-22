@@ -333,6 +333,12 @@ impl RunCards {
         Ok(())
     }
 
+    /// The run `agent`'s card follows: the one its trace tree column and "Trace ›" open
+    /// (TP-TRACE-05).
+    pub fn run_of(&self, agent: &AgentId) -> Option<&RunId> {
+        self.latest.get(agent)
+    }
+
     /// When the run `agent`'s card follows was queued, or `None` when it has no run.
     pub fn queued_at(&self, agent: &AgentId) -> Option<u64> {
         let run = self.latest.get(agent)?;

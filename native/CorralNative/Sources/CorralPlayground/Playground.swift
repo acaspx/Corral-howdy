@@ -129,6 +129,8 @@ final class PlaygroundModel: ObservableObject {
             note("approveWithTouchId \(name(of: id)) \(checkpoint)")
         case .editCheckpoint(let id, let checkpoint, let changes):
             note("editCheckpoint \(name(of: id)) \(checkpoint): \(changes.keys.sorted().joined(separator: ", "))")
+        case .openTrace(let id):
+            note("openTrace \(name(of: id))")
         case .promptBarEdited(let seq, let text, let cursor, _):
             note("promptBarEdited #\(seq) at \(cursor): \(text)")
         case .promptBarSend(let seq, let text, let selection, let all):

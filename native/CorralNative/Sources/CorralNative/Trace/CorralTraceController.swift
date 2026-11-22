@@ -1,7 +1,9 @@
 // CorralTraceController.swift
 // The trace tree's window (docs/07 §8.3): its own borderless panel at the corral's level, rising
-// from the corral's top (or above the open prompt bar), click-through for now. Shown only while
-// something runs; never animated. Clicks on its cards come with TP-TRACE-05.
+// from the corral's top (or above the open prompt bar). Shown only while something runs; never
+// animated. A task card opens its run in the trace viewer (Rust finds the run); a subtask stack
+// fans out (TP-TRACE-05). The panel never takes focus, and clicks between its cards reach what's
+// underneath.
 
 import AppKit
 import SwiftUI
@@ -14,7 +16,6 @@ final class CorralTracePanel: NSPanel {
         isOpaque = false
         backgroundColor = .clear
         hasShadow = false
-        ignoresMouseEvents = true
         hidesOnDeactivate = false
         animationBehavior = .none
         collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
@@ -31,17 +32,32 @@ public final class CorralTraceController {
     private let panel = CorralTracePanel()
     private let host: NSHostingView<AnyView>
 
-    public init(corralPanel: CorralPanel) {
+    /// The last tree shown, to redraw it when a stack fans out.
+    private var shown: (trace: CorralTrace, rankedIDs: [String], barFrame: CGRect?)?
+
+    /// `onIntent`: a task card's click, for Rust.
+    public init(corralPanel: CorralPanel, onIntent: @escaping (CorralIntent) -> Void) {
         self.corralPanel = corralPanel
         host = CorralHostingView(rootView: AnyView(EmptyView()))
         host.sizingOptions = []
         panel.contentView = host
         host.rootView = AnyView(CorralTraceRoot(model: model))
+        model.onOpen = { id in onIntent(.openTrace(id: id)) }
+        model.onFan = { [weak self] id in
+            MainActor.assumeIsolated { self?.fan(id) }
+        }
+    }
+
+    private func fan(_ id: String) {
+        model.fanned = CorralTraceLayout.toggled(model.fanned, id)
+        if let shown { update(trace: shown.trace, rankedIDs: shown.rankedIDs, barFrame: shown.barFrame) }
     }
 
     /// Shows `trace` over the corral's drops (`rankedIDs`, in the corral's order). `barFrame`: the
     /// open prompt bar's window, which the tree then sits above.
     public func update(trace: CorralTrace, rankedIDs: [String], barFrame: CGRect?) {
+        shown = (trace, rankedIDs, barFrame)
+        model.fanned = CorralTraceLayout.kept(model.fanned, columns: trace.columns.map(\.id))
         guard CorralTraceLayout.shows(trace) else {
             panel.orderOut(nil)
             return

@@ -822,6 +822,8 @@ pub enum Intent {
         /// The gesture.
         how: Approval,
     },
+    /// A task card in the trace tree was clicked: open its run in the trace viewer (TP-TRACE-05).
+    OpenTrace(AgentId),
     /// The prompt bar's text or cursor changed: Rust answers with what it shows.
     PromptBarEdited(BarEdit),
     /// Return or Deploy all in the prompt bar: Rust decides who it goes to and sends it.
@@ -967,6 +969,9 @@ enum IntentWire {
         id: String,
         checkpoint: String,
     },
+    OpenTrace {
+        id: String,
+    },
     PromptBarEdited {
         seq: u32,
         text: String,
@@ -1091,6 +1096,7 @@ pub fn decode_intent(bytes: &[u8]) -> Result<Intent, BridgeError> {
         IntentWire::OpenLinked { id } => Ok(Intent::OpenLinked(linked_app(&id)?)),
         IntentWire::StopAll {} => Ok(Intent::StopAll),
         IntentWire::CorralIdle { idle } => Ok(Intent::CorralIdle(idle)),
+        IntentWire::OpenTrace { id } => Ok(Intent::OpenTrace(agent_id(id)?)),
         IntentWire::PromptBarEdited {
             seq,
             text,
