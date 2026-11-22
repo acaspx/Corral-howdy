@@ -33,6 +33,7 @@ use crate::domain::{ActionClass, Risk};
 use crate::event::{Event, EventBody};
 use crate::ids::{AgentId, CheckpointId, RunId, ToolCallId};
 use crate::lifecycle::{Lifecycle, Phase, next};
+use crate::plan_view::PlanView;
 use serde_json::{Map, Number, Value};
 use std::collections::{BTreeMap, HashMap};
 
@@ -193,6 +194,8 @@ struct Record {
     /// Each waiting checkpoint's arguments and fields, when it was a tool call that can be
     /// edited.
     editable: HashMap<CheckpointId, (Value, Vec<CardField>)>,
+    /// The run's subtasks (TP-HOVER-03).
+    plan: PlanView,
 }
 
 /// Keeps every agent's card up to date from the event stream.
@@ -203,8 +206,8 @@ pub struct RunCards {
 }
 
 impl RunCards {
-    /// Applies one logged event. Returns `true` when what a card shows changed, apart from the
-    /// clock: streamed text and `model.request` don't count, so callers republish only when
+    /// Applies one logged event. Returns `true` when what a card shows changed, its plan
+    /// included, apart from the clock: streamed text and `model.request` don't count, so callers republish only when
     /// needed (and tick once a second while [`Self::is_ticking`]). A refused event changes
     /// nothing.
     pub fn observe(&mut self, event: &Event) -> Result<bool, ViewError> {
@@ -234,9 +237,9 @@ impl RunCards {
                 .map(|r| r.agent.clone())
                 .ok_or_else(|| ViewError::UnknownRun(event.run_id.clone()))?,
         };
-        let before = self.card(&agent, 0);
+        let before = (self.card(&agent, 0), self.plan(&agent).cloned());
         self.apply(event)?;
-        Ok(self.card(&agent, 0) != before)
+        Ok((self.card(&agent, 0), self.plan(&agent).cloned()) != before)
     }
 
     fn apply(&mut self, event: &Event) -> Result<(), ViewError> {
@@ -256,6 +259,7 @@ impl RunCards {
                     waiting: Vec::new(),
                     requested: None,
                     editable: HashMap::new(),
+                    plan: PlanView::default(),
                 },
             );
             self.latest
@@ -267,6 +271,7 @@ impl RunCards {
             .get_mut(&event.run_id)
             .ok_or_else(|| ViewError::UnknownRun(event.run_id.clone()))?;
         record.life = next(&record.life, event)?;
+        record.plan.observe(&event.body);
         match &event.body {
             EventBody::RunStarted(_) => record.started_ms = Some(event.ts),
             EventBody::ModelResponse(response) => record.answer = Some(response.text.clone()),
@@ -324,6 +329,12 @@ impl RunCards {
             | EventBody::SessionClosed(_) => {}
         }
         Ok(())
+    }
+
+    /// The subtasks of the run `agent`'s card follows, or `None` when it has no run.
+    pub fn plan(&self, agent: &AgentId) -> Option<&PlanView> {
+        let run = self.latest.get(agent)?;
+        self.runs.get(run).map(|record| &record.plan)
     }
 
     /// `agent`'s card at `now_ms`, or `None` when it's in the corral with no session.
