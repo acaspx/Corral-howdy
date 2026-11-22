@@ -9,11 +9,13 @@ use corral_core::controls::MAX_PROMPT_BYTES;
 use corral_core::corral_view::{CorralView, DropState};
 use corral_core::domain::{ActionClass, Risk};
 use corral_core::ids::{AgentId, CheckpointId};
+use corral_core::plan_view::{PlanView, SubtaskStatus};
 use corral_core::prompt_bar::{BarView, How};
 use corral_core::run_card::{
     CardAction, CardCheckpoint, CardField, CardStatus, EDIT_MAX_FIELDS, FIELD_KEY_MAX_CHARS,
     FieldKind, RunCard, RunCards,
 };
+use corral_core::trace_tree::{TraceColumn, TraceTree};
 use corral_policy::{Approval, Scope};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -47,6 +49,126 @@ pub struct RosterSnapshot {
     /// nothing is linked.
     #[serde(skip_serializing_if = "Option::is_none")]
     links: Option<LinksSnapshot>,
+    /// The trace tree above the corral (`roster-trace-v1.json`, docs/07 §8.3). Absent when
+    /// nothing is running.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    trace: Option<TraceSnapshot>,
+}
+
+/// The trace tree, as the core chose it ([`corral_core::trace_tree`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TraceSnapshot {
+    /// At most 3 columns, in order.
+    pub columns: Vec<ColumnSnapshot>,
+    /// Running beyond those: "+N more running".
+    pub more: usize,
+}
+
+/// One column: the prompt pill, the task card and the subtask stack.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ColumnSnapshot {
+    /// The agent whose run it is; the wire ends at its drop or the hidden bead.
+    pub id: AgentId,
+    /// Queued, working or needs-you.
+    pub status: CardStatusWire,
+    /// The task.
+    pub prompt: String,
+    /// Whether the task was cut to fit.
+    pub prompt_truncated: bool,
+    /// The current subtask, once there is one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subtask: Option<SubtaskSnapshot>,
+    /// What's left after it, at most 2.
+    pub next: Vec<String>,
+}
+
+/// The current subtask in a column: "Subtask 2 of 5".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SubtaskSnapshot {
+    /// Its place, from 1.
+    pub step: usize,
+    /// How many there are.
+    pub total: usize,
+    /// Its title (agent text).
+    pub title: String,
+}
+
+impl From<&TraceColumn> for ColumnSnapshot {
+    fn from(column: &TraceColumn) -> Self {
+        Self {
+            id: column.agent.clone(),
+            status: column.status.into(),
+            prompt: column.prompt.as_str().to_owned(),
+            prompt_truncated: column.prompt.is_truncated(),
+            subtask: column.subtask.as_ref().map(|s| SubtaskSnapshot {
+                step: s.step,
+                total: s.total,
+                title: s.title.as_str().to_owned(),
+            }),
+            next: column.next.iter().map(|t| t.as_str().to_owned()).collect(),
+        }
+    }
+}
+
+/// A card's progress (`roster-plan-v1.json`, TP-HOVER-03): a segment per subtask, and the
+/// current one for the "Now:" line.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PlanSnapshot {
+    /// The current subtask's place, from 1.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub step: Option<usize>,
+    /// How many there are.
+    pub total: usize,
+    /// The current subtask's title (agent text).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub now: Option<String>,
+    /// Each subtask's status, in order.
+    pub segments: Vec<SegmentWire>,
+}
+
+/// A progress segment, as Swift's `CorralRunCard.Plan.Segment`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SegmentWire {
+    /// Not started.
+    Pending,
+    /// Being worked on.
+    Current,
+    /// Finished.
+    Done,
+    /// Dropped or denied.
+    Skipped,
+    /// Failed.
+    Failed,
+}
+
+impl From<SubtaskStatus> for SegmentWire {
+    fn from(status: SubtaskStatus) -> Self {
+        match status {
+            SubtaskStatus::Pending => Self::Pending,
+            SubtaskStatus::Current => Self::Current,
+            SubtaskStatus::Done => Self::Done,
+            SubtaskStatus::Skipped => Self::Skipped,
+            SubtaskStatus::Failed => Self::Failed,
+        }
+    }
+}
+
+impl PlanSnapshot {
+    /// A card's progress, or `None` while the run has no subtasks.
+    pub fn from_plan(plan: &PlanView) -> Option<Self> {
+        if plan.total() == 0 {
+            return None;
+        }
+        let current = plan.current();
+        Some(Self {
+            step: current.map(|(at, _)| at + 1),
+            total: plan.total(),
+            now: current.map(|(_, s)| s.title.as_str().to_owned()),
+            segments: plan.subtasks().iter().map(|s| s.status.into()).collect(),
+        })
+    }
 }
 
 /// Which linked apps show (ADR-005).
@@ -89,6 +211,9 @@ pub struct CardSnapshot {
     /// The approval box, while a checkpoint waits (M2).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint: Option<CheckpointSnapshot>,
+    /// The run's progress, once it has subtasks; added by [`RosterSnapshot::with_plans`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plan: Option<PlanSnapshot>,
 }
 
 /// A waiting checkpoint, from the core's `checkpoint.opened` only. Swift draws the approval box
@@ -253,6 +378,7 @@ impl From<&RunCard> for CardSnapshot {
                         .map(|fields| fields.iter().map(FieldSnapshot::from).collect()),
                     ..CheckpointSnapshot::from(checkpoint)
                 }),
+            plan: None,
         }
     }
 }
@@ -305,6 +431,7 @@ impl RosterSnapshot {
             hidden: u32::try_from(hidden).unwrap_or(u32::MAX),
             cards: Vec::new(),
             links: None,
+            trace: None,
         }
     }
 
@@ -328,6 +455,23 @@ impl RosterSnapshot {
         self.links = (!settings.is_empty()).then(|| LinksSnapshot {
             muse: settings.muse,
             dot: settings.dot.map(DotLook::id),
+        });
+        self
+    }
+
+    /// Adds each card's progress, from the run its card follows (TP-HOVER-03).
+    pub fn with_plans(mut self, cards: &RunCards) -> Self {
+        for card in &mut self.cards {
+            card.plan = cards.plan(&card.id).and_then(PlanSnapshot::from_plan);
+        }
+        self
+    }
+
+    /// Adds the trace tree, when anything is running (docs/07 §8.3, TP-TRACE-02, TP-TRACE-06).
+    pub fn with_trace(mut self, tree: &TraceTree) -> Self {
+        self.trace = (!tree.columns.is_empty()).then(|| TraceSnapshot {
+            columns: tree.columns.iter().map(ColumnSnapshot::from).collect(),
+            more: tree.more,
         });
         self
     }

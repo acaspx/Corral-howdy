@@ -18,5 +18,6 @@ pub mod plan_view;
 pub mod prompt_bar;
 pub mod run_card;
 pub mod supervisor;
+pub mod trace_tree;
 pub mod trace_view;
 pub mod usage_rank;
