@@ -101,6 +101,15 @@ enum CorralBridge {
     static var bar: CorralPromptBarController?
     /// The shortcut that opens it.
     static var hotkey: CorralHotkey?
+    /// The trace tree above the corral (docs/07 §8.3).
+    static var trace: CorralTraceController?
+    /// The latest trace tree from Rust.
+    static var latestTrace = CorralTrace.empty
+
+    /// Redraws the trace tree over the corral as it is now.
+    static func showTrace() {
+        trace?.update(trace: latestTrace, rankedIDs: model.agents.map(\.id), barFrame: bar?.shownFrame)
+    }
     static var callback: CorralIntentCallback?
     static let model = CorralBridgeModel()
     /// The prompt bar's state: Rust's latest answer (docs/07 §6.1).
@@ -126,8 +135,10 @@ enum CorralBridge {
         bar?.onShown = { shown in
             MainActor.assumeIsolated {
                 CorralBridge.panel?.apply(level: shown ? CorralBridge.model.level.whileBarOpen : CorralBridge.model.level)
+                CorralBridge.showTrace()
             }
         }
+        trace = CorralTraceController(corralPanel: panel)
         hotkey = CorralHotkey {
             MainActor.assumeIsolated { CorralBridge.bar?.summon() }
         }
@@ -274,6 +285,8 @@ enum CorralBridge {
             model.links = roster.links
             place()
             cards?.update(agents: roster.agents, cards: roster.cards)
+            latestTrace = roster.trace
+            showTrace()
             return .ok
         }
     }
@@ -297,6 +310,7 @@ enum CorralBridge {
         level.save()
         let open = bar?.isOpen ?? false
         panel?.apply(level: open ? level.whileBarOpen : level)
+        showTrace()
     }
 
     /// The user picked the prompt bar's shortcut.
@@ -314,6 +328,8 @@ enum CorralBridge {
         bar = nil
         hotkey?.stop()
         hotkey = nil
+        trace?.stop()
+        trace = nil
         panel.orderOut(nil)
         self.panel = nil
         callback = nil

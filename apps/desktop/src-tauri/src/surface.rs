@@ -710,6 +710,13 @@ impl CorralFeed {
         RosterSnapshot::with_cards(&views.corral.view(), &views.cards, self.clock.now_ms())
             .with_plans(&views.cards)
             .with_trace(&trace_tree(&views.cards, &agents))
+            .with_column_names(|id| {
+                views
+                    .all_cards
+                    .iter()
+                    .find(|card| &card.id == id)
+                    .map(|card| card.name.clone())
+            })
             .with_logos(|id| views.logos.get(id).cloned())
             .with_linked(&views.linked)
     }

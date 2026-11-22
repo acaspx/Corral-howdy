@@ -37,6 +37,10 @@ public struct CorralTrace: Equatable, Sendable {
         public var subtask: Subtask?
         /// What's left after the current subtask, at most 2.
         public var next: [String]
+        /// The agent's name; a hidden agent has no drop to take it from.
+        public var name: String? = nil
+        /// The agent's logo, checked like a drop's (ADR-015).
+        public var logoPath: String? = nil
     }
 
     /// At most 3, in the core's order.
@@ -68,7 +72,9 @@ public struct CorralTrace: Equatable, Sendable {
             columns.append(Column(
                 id: column.id, status: status, prompt: prompt.text,
                 promptTruncated: column.promptTruncated || prompt.cut, subtask: subtask,
-                next: column.next.prefix(Self.maxPeek).map { CorralRunCard.clean($0, max: Self.maxTitleLength).text }))
+                next: column.next.prefix(Self.maxPeek).map { CorralRunCard.clean($0, max: Self.maxTitleLength).text },
+                name: column.name.map { CorralRoster.sanitize($0, max: CorralRoster.maxNameLength) },
+                logoPath: column.logo.flatMap { CorralLogo.isValidPath($0) ? $0 : nil }))
         }
         self.columns = columns
         more = min(max(wire.more, 0) + overflow, Self.maxMore)
@@ -95,9 +101,12 @@ public struct CorralTrace: Equatable, Sendable {
         let promptTruncated: Bool
         let subtask: SubtaskWire?
         let next: [String]
+        let name: String?
+        let logo: String?
 
         init(from decoder: Decoder) throws {
-            try rejectUnknownKeys(decoder, allowed: ["id", "status", "prompt", "promptTruncated", "subtask", "next"])
+            try rejectUnknownKeys(decoder, allowed: ["id", "name", "logo", "status", "prompt", "promptTruncated",
+                                                     "subtask", "next"])
             let c = try decoder.container(keyedBy: AnyKey.self)
             id = try c.decode(String.self, forKey: AnyKey("id"))
             status = try c.decode(String.self, forKey: AnyKey("status"))
@@ -105,6 +114,8 @@ public struct CorralTrace: Equatable, Sendable {
             promptTruncated = try c.decode(Bool.self, forKey: AnyKey("promptTruncated"))
             subtask = try c.decodeIfPresent(SubtaskWire.self, forKey: AnyKey("subtask"))
             next = try c.decode([String].self, forKey: AnyKey("next"))
+            name = try c.decodeIfPresent(String.self, forKey: AnyKey("name"))
+            logo = try c.decodeIfPresent(String.self, forKey: AnyKey("logo"))
         }
     }
 

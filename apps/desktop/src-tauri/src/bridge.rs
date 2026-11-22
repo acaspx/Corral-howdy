@@ -70,6 +70,12 @@ pub struct TraceSnapshot {
 pub struct ColumnSnapshot {
     /// The agent whose run it is; the wire ends at its drop or the hidden bead.
     pub id: AgentId,
+    /// Its name, added by [`RosterSnapshot::with_column_names`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Its logo file, added by [`RosterSnapshot::with_logos`] (ADR-015).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub logo: Option<String>,
     /// Queued, working or needs-you.
     pub status: CardStatusWire,
     /// The task.
@@ -98,6 +104,8 @@ impl From<&TraceColumn> for ColumnSnapshot {
     fn from(column: &TraceColumn) -> Self {
         Self {
             id: column.agent.clone(),
+            name: None,
+            logo: None,
             status: column.status.into(),
             prompt: column.prompt.as_str().to_owned(),
             prompt_truncated: column.prompt.is_truncated(),
@@ -480,6 +488,19 @@ impl RosterSnapshot {
     pub fn with_logos(mut self, logo_for: impl Fn(&AgentId) -> Option<String>) -> Self {
         for agent in &mut self.agents {
             agent.logo = logo_for(&agent.id);
+        }
+        // The trace tree's task cards too: hidden agents have columns but no drop.
+        for column in self.trace.iter_mut().flat_map(|t| t.columns.iter_mut()) {
+            column.logo = logo_for(&column.id);
+        }
+        self
+    }
+
+    /// Adds each trace column's agent name, from `name_for`: a hidden agent has a column but no
+    /// drop, so the roster's agents don't name it (TP-TRACE-02).
+    pub fn with_column_names(mut self, name_for: impl Fn(&AgentId) -> Option<String>) -> Self {
+        for column in self.trace.iter_mut().flat_map(|t| t.columns.iter_mut()) {
+            column.name = name_for(&column.id);
         }
         self
     }
