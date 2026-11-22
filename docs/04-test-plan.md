@@ -293,7 +293,7 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-LINK-05** A linked drop's card says it isn't managed, offers only Open, and has no task field
 - **TP-HOVER-01** Hover opens the card after 120 ms and keeps it while the pointer is on the drop or the card; it closes 260 ms after leaving; a click pins it
 - **TP-HOVER-02** The button set matches the state table in 07 §8.2 for idle, working, needs-you, done and error (snapshot per state)
-- **TP-HOVER-03** Progress segments and "Now:" line match the run's `plan_view` and spend projections
+- **TP-HOVER-03** Progress segments and "Now:" line match the run's `plan_view` and spend projections (the roster's card carries them: `src/bridge.rs`, `Fixtures/bridge/roster-plan-v1.json`; Swift decodes them bounded: `CorralTraceWireTests.swift`)
 - **TP-HOVER-04** Hover alone never sends an approve intent; Approve needs a click or Return on the focused button
 - **TP-HOVER-05** Buttons ignore input for 300 ms after the card appears
 - **TP-HOVER-06** Approve sends the nonce of the checkpoint shown; if a newer checkpoint replaced it, the core rejects the stale nonce and the card refreshes
@@ -319,11 +319,11 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-TV-15** (TS) Filtering by kind (model calls, tool calls, checkpoints, marks, everything) keeps the run and the kind picked
 - **TP-TV-16** (TS) "Copy as JSON" copies the run's events and says so; a copy that fails says why; agent text is shown as text, never markup
 - **TP-TRACE-01** (Rust) `plan_view` builds subtasks from `plan.updated` events (each update replaces the plan), falling back to the run's tool calls when no plan is published (done, failed, or skipped when denied by policy or at a checkpoint); titles are agent text and the list keeps at most 100 (`crates/corral-core/tests/plan_view.rs`)
-- **TP-TRACE-02** At most 3 columns; extra runs collapse into "+N more running"; needs-you columns sort first
+- **TP-TRACE-02** At most 3 columns; extra runs collapse into "+N more running"; needs-you columns sort first, then the newest. Each column has the prompt, the current subtask ("2 of 5") and up to 2 that peek out below it (the core's choice: `crates/corral-core/tests/trace_tree.rs`; the roster carries it: `src/bridge.rs`, `Fixtures/bridge/roster-trace-v1.json`)
 - **TP-TRACE-03** Each column's wire ends at its agent's drop (or the hidden bead) after a shape morph or a usage reorder
 - **TP-TRACE-04** Advancing a subtask moves the stack; finishing and Send back fold the column into the drop
 - **TP-TRACE-05** Clicking a task card opens that run in the trace viewer; clicking the stack fans it out
-- **TP-TRACE-06** Nothing running → no trace tree, and the corral idles at zero frames
+- **TP-TRACE-06** Nothing running → no trace tree (a finished run has no column; the roster then has no `trace`), and the corral idles at zero frames
 - **TP-MOTION-01** With Reduce Motion on, every moment in 07 §7 uses its Reduce Motion column: no springs, no scale or travel, fades only (snapshot per moment)
 - **TP-MOTION-02** A working drop's turning ring doesn't keep the glass `TimelineView` running: with only status animations active, the morph timeline is paused (idle-frames budget, 04 §7)
 - **TP-MOTION-03** Needs-you pulses exactly three times per new checkpoint, then holds steady

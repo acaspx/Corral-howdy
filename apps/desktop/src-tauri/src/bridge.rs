@@ -2506,3 +2506,133 @@ mod prompt_bar_logo_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod trace_wire_tests {
+    use super::*;
+    use corral_core::corral_view::{AgentCard, DropView};
+    use corral_core::event::{
+        Event, EventBody, PlanStep, PlanUpdated, RunQueued, RunStarted, StepStatus,
+    };
+    use corral_core::ids::{RunId, SessionId, SpanId};
+    use corral_core::trace_tree::trace_tree;
+    use serde_json::Value;
+
+    const PLAN: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/roster-plan-v1.json");
+    const TRACE: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/roster-trace-v1.json");
+
+    fn ev(ts: u64, body: EventBody) -> Event {
+        Event {
+            run_id: RunId::from("r1"),
+            seq: ts,
+            ts,
+            span_id: SpanId::from("s"),
+            parent_span_id: None,
+            body,
+        }
+    }
+
+    /// Claude working on "Tidy my notes", on the 2nd of 5 planned steps (with `plan`).
+    fn cards(plan: bool) -> RunCards {
+        let mut cards = RunCards::default();
+        let mut events = vec![
+            ev(
+                0,
+                EventBody::RunQueued(RunQueued {
+                    agent_id: AgentId::from("claude"),
+                    session_id: SessionId::from("s1"),
+                    prompt: "Tidy my notes".into(),
+                }),
+            ),
+            ev(
+                1_000,
+                EventBody::RunStarted(RunStarted {
+                    adapter: "fake".into(),
+                }),
+            ),
+        ];
+        if plan {
+            events.push(ev(
+                1_500,
+                EventBody::PlanUpdated(PlanUpdated {
+                    steps: ["Read", "Group", "Summarize", "Email", "File"]
+                        .iter()
+                        .enumerate()
+                        .map(|(i, title)| PlanStep {
+                            title: (*title).into(),
+                            status: match i {
+                                0 => StepStatus::Done,
+                                1 => StepStatus::InProgress,
+                                _ => StepStatus::Pending,
+                            },
+                        })
+                        .collect(),
+                }),
+            ));
+        }
+        for e in &events {
+            cards.observe(e).expect("legal");
+        }
+        cards
+    }
+
+    fn view() -> CorralView {
+        CorralView {
+            drops: vec![DropView {
+                agent: AgentCard {
+                    id: AgentId::from("claude"),
+                    name: "Claude".into(),
+                    monogram: "Cl".into(),
+                },
+                state: DropState::Working,
+            }],
+            hidden: 0,
+        }
+    }
+
+    fn json(snapshot: &RosterSnapshot) -> Value {
+        serde_json::from_slice(&snapshot.to_bytes().expect("encode")).expect("json")
+    }
+
+    #[test]
+    fn tp_hover_03_each_card_carries_its_plan_as_the_fixture_swift_decodes() {
+        let cards = cards(true);
+        let sent = RosterSnapshot::with_cards(&view(), &cards, 4_000).with_plans(&cards);
+        assert_eq!(
+            json(&sent),
+            serde_json::from_str::<Value>(PLAN).expect("fixture")
+        );
+    }
+
+    #[test]
+    fn tp_hover_03_a_card_without_subtasks_has_no_plan_key() {
+        let none = cards(false);
+        let sent = json(&RosterSnapshot::with_cards(&view(), &none, 4_000).with_plans(&none));
+        assert!(sent["cards"][0].get("plan").is_none(), "{sent}");
+        let unplanned = json(&RosterSnapshot::with_cards(&view(), &cards(true), 4_000));
+        assert!(
+            unplanned["cards"][0].get("plan").is_none(),
+            "only with_plans adds it"
+        );
+    }
+
+    #[test]
+    fn tp_trace_02_the_roster_carries_the_trace_tree_as_the_fixture_swift_decodes() {
+        let cards = cards(true);
+        let tree = trace_tree(&cards, &[AgentId::from("claude")]);
+        let sent = RosterSnapshot::from(&view()).with_trace(&tree);
+        assert_eq!(
+            json(&sent),
+            serde_json::from_str::<Value>(TRACE).expect("fixture")
+        );
+    }
+
+    #[test]
+    fn tp_trace_06_with_nothing_running_the_roster_has_no_trace() {
+        let tree = trace_tree(&RunCards::default(), &[AgentId::from("claude")]);
+        let sent = json(&RosterSnapshot::from(&view()).with_trace(&tree));
+        assert!(sent.get("trace").is_none(), "{sent}");
+    }
+}
