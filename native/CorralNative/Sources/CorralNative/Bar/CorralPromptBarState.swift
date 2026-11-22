@@ -74,6 +74,13 @@ public struct CorralPromptBarState: Equatable, Sendable {
         return .edited
     }
 
+    /// The summon shortcut: opens the bar, or closes it if it's open (TP-BAR-09).
+    public mutating func summoned() -> Action {
+        guard isOpen else { return open(naming: nil) }
+        close()
+        return .close
+    }
+
     /// Closes the bar, keeping the text (Esc, the hotkey, a click elsewhere).
     public mutating func close() {
         isOpen = false

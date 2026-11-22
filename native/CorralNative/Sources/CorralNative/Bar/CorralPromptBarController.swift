@@ -41,6 +41,8 @@ public final class CorralPromptBarController {
     public var onIntent: (CorralIntent) -> Void
     /// The bar is opening: close a pinned card, so there's one place to type.
     public var onOpen: () -> Void
+    /// The bar was shown (true) or hidden (false): the corral comes up with it.
+    public var onShown: (Bool) -> Void = { _ in }
 
     private let corralPanel: CorralPanel
     private let answer: CorralPromptBar
@@ -69,6 +71,14 @@ public final class CorralPromptBarController {
         onOpen()
         act(model.state.open(naming: name))
         model.focusRequest += 1
+        render()
+    }
+
+    /// The summon shortcut: opens the bar, or closes it if it's open.
+    public func summon() {
+        if !model.state.isOpen { onOpen() }
+        act(model.state.summoned())
+        if model.state.isOpen { model.focusRequest += 1 }
         render()
     }
 
@@ -156,7 +166,10 @@ public final class CorralPromptBarController {
 
     private func render() {
         guard model.state.isOpen else {
-            panel.orderOut(nil)
+            if panel.isVisible {
+                panel.orderOut(nil)
+                onShown(false)
+            }
             return
         }
         let screen = corralPanel.screen ?? CorralPanel.defaultScreen()
@@ -165,6 +178,7 @@ public final class CorralPromptBarController {
         let size = CorralCardController.measure(AnyView(root))
         panel.setFrame(Self.frame(height: size.height, corral: corralPanel.frame, visible: visible), display: true)
         if !panel.isVisible {
+            onShown(true)
             panel.orderFrontRegardless()
         }
         if !panel.isKeyWindow {
