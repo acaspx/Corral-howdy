@@ -15,7 +15,7 @@ thiserror.workspace = true
 # The supervisor: one task per run, timers for the 2-second force-drop.
 tokio = { version = "1", features = ["rt", "sync", "time", "macros"] }
 # The monthly caps: which calendar month a moment falls in, in the user's time zone (TP-BUD-04).
-jiff = "0.2"
+jiff = "1.0"
 # TypeScript declarations for the main window (TP-IPC-06), only for the desktop app's build.
 ts-rs = { version = "12.0.1", optional = true }
 
