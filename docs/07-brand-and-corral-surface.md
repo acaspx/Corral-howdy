@@ -114,9 +114,9 @@ The prototype code is wired for plan A, and plan C's helper is kept in `CorralPa
 The general way to give agents a task: one or several, by name, by selection, or all of them. A drop's own card (§8.2) stays the way to give *that* agent a task. The bar is summoned many times a day, so it behaves like a command palette: instant, keyboard-first, gone once it has sent.
 
 **Opening and closing**
-- **Opens** with the summon hotkey (configurable; default ⌃⌥Space), a double-click on the corral's background, or dragging a drop upward. Dragging opens it with that agent already named (`@Grok `).
+- **Opens** with the summon hotkey (default ⌃⌥Space; ⌃⌥P, ⌃⇧Space or off from the corral's right-click menu, which says if another app holds it), a double-click on the corral's background, or dragging a drop upward. Dragging opens it with that agent already named (`@Grok `).
 - **Instant, no animation** (§7.4), including under Reduce Motion. The panel is made at launch and kept, so showing it is only ordering it front: hotkey → typing in under 150 ms at p95 (performance budgets).
-- Its own non-activating panel above the corral, centered on it with an 8 pt gap. It takes keyboard focus without bringing Corral's other windows forward (TP-PLACE-04). On the "On the desktop" level, the hotkey raises the corral with it (§5).
+- Its own non-activating panel above the corral, centered on it with an 8 pt gap. It takes keyboard focus without bringing Corral's other windows forward (TP-PLACE-04). While it's open the corral comes up above app windows, so on the "On the desktop" level it doesn't float over nothing; the corral goes back when it closes (§5).
 - Opening it closes a pinned hover card: there's one place to type at a time. While it's open, the trace columns sit above it (moved up by its height, no animation).
 - **Closes** after sending, with Esc, the hotkey again, or a click anywhere else. Closing without sending keeps the text: it's there the next time the bar opens, until it's sent or cleared (⌘⌫).
 

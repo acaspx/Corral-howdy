@@ -37,6 +37,10 @@ public enum CorralLevel: String, CaseIterable, Sendable {
     public func save(to defaults: UserDefaults = .standard) {
         defaults.set(rawValue, forKey: Self.defaultsKey)
     }
+
+    /// Where the corral sits while the prompt bar is open: above app windows, so the bar is never
+    /// over a corral that can't be seen (docs/07 §5, §6.1). It goes back when the bar closes.
+    public var whileBarOpen: CorralLevel { .floating }
 }
 
 @MainActor

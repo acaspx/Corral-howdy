@@ -47,6 +47,10 @@ final class CorralBridgeModel: ObservableObject {
     @Published var links = CorralLinks(muse: false, dot: nil)
     /// Where the corral sits; the user's choice, remembered across launches.
     @Published var level = CorralLevel.load()
+    /// The prompt bar's shortcut; the user's choice, remembered across launches.
+    @Published var summonKey = CorralSummonKey.load()
+    /// Another app holds it, so it does nothing: the menu says so.
+    @Published var summonKeyTaken = false
 }
 
 struct CorralBridgeRoot: View {
@@ -75,6 +79,9 @@ struct CorralBridgeRoot: View {
             CorralLevelMenu(current: model.level) { level in
                 MainActor.assumeIsolated { CorralBridge.setLevel(level) }
             }
+            CorralSummonMenu(current: model.summonKey, taken: model.summonKeyTaken) { key in
+                MainActor.assumeIsolated { CorralBridge.setSummonKey(key) }
+            }
             CorralLinkedMenu(model: CorralLinkedMenuModel(links: model.links)) { intent in
                 MainActor.assumeIsolated { CorralBridge.emit(intent) }
             }
@@ -92,6 +99,8 @@ enum CorralBridge {
     static var cards: CorralCardController?
     /// The prompt bar's window (docs/07 §6.1).
     static var bar: CorralPromptBarController?
+    /// The shortcut that opens it.
+    static var hotkey: CorralHotkey?
     static var callback: CorralIntentCallback?
     static let model = CorralBridgeModel()
     /// The prompt bar's state: Rust's latest answer (docs/07 §6.1).
@@ -114,6 +123,15 @@ enum CorralBridge {
         }, onOpen: {
             MainActor.assumeIsolated { CorralBridge.cards?.dismiss() }
         })
+        bar?.onShown = { shown in
+            MainActor.assumeIsolated {
+                CorralBridge.panel?.apply(level: shown ? CorralBridge.model.level.whileBarOpen : CorralBridge.model.level)
+            }
+        }
+        hotkey = CorralHotkey {
+            MainActor.assumeIsolated { CorralBridge.bar?.summon() }
+        }
+        model.summonKeyTaken = !(hotkey?.register(model.summonKey) ?? true)
         place()
         panel.orderFrontRegardless()
         // Displays plugged in, unplugged or rearranged: put the corral back at the bottom centre.
@@ -277,7 +295,15 @@ enum CorralBridge {
     static func setLevel(_ level: CorralLevel) {
         model.level = level
         level.save()
-        panel?.apply(level: level)
+        let open = bar?.isOpen ?? false
+        panel?.apply(level: open ? level.whileBarOpen : level)
+    }
+
+    /// The user picked the prompt bar's shortcut.
+    static func setSummonKey(_ key: CorralSummonKey) {
+        model.summonKey = key
+        key.save()
+        model.summonKeyTaken = !(hotkey?.register(key) ?? true)
     }
 
     static func stop() -> CorralBridgeStatus {
@@ -286,6 +312,8 @@ enum CorralBridge {
         cards = nil
         bar?.stop()
         bar = nil
+        hotkey?.stop()
+        hotkey = nil
         panel.orderOut(nil)
         self.panel = nil
         callback = nil
