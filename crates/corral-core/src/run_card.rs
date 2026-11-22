@@ -182,6 +182,7 @@ struct Record {
     agent: AgentId,
     life: Lifecycle,
     prompt: String,
+    queued_ms: u64,
     started_ms: Option<u64>,
     ended_ms: Option<u64>,
     spend_micro_usd: u64,
@@ -251,6 +252,7 @@ impl RunCards {
                     agent: queued.agent_id.clone(),
                     life,
                     prompt: queued.prompt.clone(),
+                    queued_ms: event.ts,
                     started_ms: None,
                     ended_ms: None,
                     spend_micro_usd: 0,
@@ -329,6 +331,12 @@ impl RunCards {
             | EventBody::SessionClosed(_) => {}
         }
         Ok(())
+    }
+
+    /// When the run `agent`'s card follows was queued, or `None` when it has no run.
+    pub fn queued_at(&self, agent: &AgentId) -> Option<u64> {
+        let run = self.latest.get(agent)?;
+        self.runs.get(run).map(|record| record.queued_ms)
     }
 
     /// The subtasks of the run `agent`'s card follows, or `None` when it has no run.

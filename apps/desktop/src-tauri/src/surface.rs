@@ -53,6 +53,7 @@ use corral_core::ids::{AgentId, CheckpointId};
 use corral_core::prompt_bar;
 use corral_core::run_card::{EditError, RunCard, RunCards};
 use corral_core::supervisor::{EventLog, RunDriver, Supervisor, SupervisorConfig, WatchedLog};
+use corral_core::trace_tree::trace_tree;
 use corral_core::usage_rank::{Deploy, WINDOW_MS};
 use corral_policy::{Approval, Scope};
 use corral_secrets::{Provider, SecretStore};
@@ -705,7 +706,10 @@ impl CorralFeed {
     }
 
     fn snapshot(&self, views: &Views) -> RosterSnapshot {
+        let agents: Vec<AgentId> = views.all_cards.iter().map(|card| card.id.clone()).collect();
         RosterSnapshot::with_cards(&views.corral.view(), &views.cards, self.clock.now_ms())
+            .with_plans(&views.cards)
+            .with_trace(&trace_tree(&views.cards, &agents))
             .with_logos(|id| views.logos.get(id).cloned())
             .with_linked(&views.linked)
     }
