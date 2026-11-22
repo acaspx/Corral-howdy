@@ -66,6 +66,9 @@ public final class CorralPromptBarController {
 
     public var isOpen: Bool { model.state.isOpen }
 
+    /// The bar's window while it's shown, for the trace tree to sit above.
+    public var shownFrame: CGRect? { panel.isVisible ? panel.frame : nil }
+
     /// Opens the bar; with `name`, that agent is named first (a drop dragged up).
     public func open(naming name: String? = nil) {
         onOpen()

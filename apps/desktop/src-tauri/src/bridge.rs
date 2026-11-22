@@ -70,6 +70,12 @@ pub struct TraceSnapshot {
 pub struct ColumnSnapshot {
     /// The agent whose run it is; the wire ends at its drop or the hidden bead.
     pub id: AgentId,
+    /// Its name, added by [`RosterSnapshot::with_column_names`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Its logo file, added by [`RosterSnapshot::with_logos`] (ADR-015).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub logo: Option<String>,
     /// Queued, working or needs-you.
     pub status: CardStatusWire,
     /// The task.
@@ -98,6 +104,8 @@ impl From<&TraceColumn> for ColumnSnapshot {
     fn from(column: &TraceColumn) -> Self {
         Self {
             id: column.agent.clone(),
+            name: None,
+            logo: None,
             status: column.status.into(),
             prompt: column.prompt.as_str().to_owned(),
             prompt_truncated: column.prompt.is_truncated(),
@@ -480,6 +488,19 @@ impl RosterSnapshot {
     pub fn with_logos(mut self, logo_for: impl Fn(&AgentId) -> Option<String>) -> Self {
         for agent in &mut self.agents {
             agent.logo = logo_for(&agent.id);
+        }
+        // The trace tree's task cards too: hidden agents have columns but no drop.
+        for column in self.trace.iter_mut().flat_map(|t| t.columns.iter_mut()) {
+            column.logo = logo_for(&column.id);
+        }
+        self
+    }
+
+    /// Adds each trace column's agent name, from `name_for`: a hidden agent has a column but no
+    /// drop, so the roster's agents don't name it (TP-TRACE-02).
+    pub fn with_column_names(mut self, name_for: impl Fn(&AgentId) -> Option<String>) -> Self {
+        for column in self.trace.iter_mut().flat_map(|t| t.columns.iter_mut()) {
+            column.name = name_for(&column.id);
         }
         self
     }
@@ -2778,5 +2799,64 @@ mod trace_wire_tests {
         let tree = trace_tree(&RunCards::default(), &[AgentId::from("claude")]);
         let sent = json(&RosterSnapshot::from(&view()).with_trace(&tree));
         assert!(sent.get("trace").is_none(), "{sent}");
+    }
+}
+
+#[cfg(test)]
+mod trace_names_tests {
+    use super::*;
+    use corral_core::trace_tree::{TraceColumn, TraceTree};
+
+    fn tree(ids: &[&str]) -> TraceTree {
+        TraceTree {
+            columns: ids
+                .iter()
+                .map(|id| TraceColumn {
+                    agent: AgentId::from(*id),
+                    status: CardStatus::Working,
+                    prompt: corral_core::agent_text::AgentText::new("Tidy my notes", 280),
+                    subtask: None,
+                    next: Vec::new(),
+                })
+                .collect(),
+            more: 0,
+        }
+    }
+
+    fn columns(snapshot: &RosterSnapshot) -> Vec<serde_json::Value> {
+        let sent: serde_json::Value =
+            serde_json::from_slice(&snapshot.to_bytes().expect("encode")).expect("json");
+        sent["trace"]["columns"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn tp_trace_02_each_column_carries_its_agents_name_and_logo_shown_or_hidden() {
+        let view = CorralView {
+            drops: Vec::new(),
+            hidden: 2,
+        };
+        let sent = RosterSnapshot::from(&view)
+            .with_trace(&tree(&["muse", "gpt"]))
+            .with_column_names(|id| (id.as_str() == "muse").then(|| "Muse Spark".to_owned()))
+            .with_logos(|id| (id.as_str() == "muse").then(|| "/x/logos/muse.png".to_owned()));
+        let columns = columns(&sent);
+        assert_eq!(columns[0]["name"], "Muse Spark");
+        assert_eq!(columns[0]["logo"], "/x/logos/muse.png");
+        assert!(columns[1].get("name").is_none() && columns[1].get("logo").is_none());
+    }
+
+    #[test]
+    fn tp_trace_02_names_and_logos_without_a_trace_change_nothing() {
+        let view = CorralView {
+            drops: Vec::new(),
+            hidden: 0,
+        };
+        let sent = RosterSnapshot::from(&view)
+            .with_column_names(|_| Some("X".to_owned()))
+            .with_logos(|_| Some("/x/logos/x.png".to_owned()));
+        assert!(columns(&sent).is_empty());
     }
 }

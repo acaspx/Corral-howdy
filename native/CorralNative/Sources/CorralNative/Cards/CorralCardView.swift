@@ -81,6 +81,9 @@ public struct CorralCardView: View {
             Text(model.status)
                 .font(.callout.monospacedDigit())
                 .foregroundStyle(Self.ink.opacity(0.6))
+            if let progress = model.progress {
+                progressView(progress)
+            }
 
             if let approval = model.approval {
                 if editing {
@@ -149,6 +152,39 @@ public struct CorralCardView: View {
             editing = false
             draft = [:]
             guardrail = CorralInputGuard(shownAt: ProcessInfo.processInfo.systemUptime)
+        }
+    }
+
+    /// A segment per subtask, then the "Now:" line (docs/07 §8.2 item 4, TP-HOVER-03).
+    private func progressView(_ progress: CorralCardModel.Progress) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: progress.segments.count > 24 ? 0 : 2) {
+                ForEach(Array(progress.segments.enumerated()), id: \.offset) { _, segment in
+                    Capsule()
+                        .fill(Self.segmentColor(segment))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 4)
+                }
+            }
+            if let now = progress.now {
+                Text(now)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(Self.ink.opacity(0.6))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(progress.accessibilityLabel)
+    }
+
+    static func segmentColor(_ segment: CorralRunCard.Plan.Segment) -> Color {
+        switch segment {
+        case .done: ink.opacity(0.7)
+        case .current: maroon
+        case .pending: ink.opacity(0.12)
+        case .skipped: ink.opacity(0.05)
+        case .failed: maroon.opacity(0.35)
         }
     }
 

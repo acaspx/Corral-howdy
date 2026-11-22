@@ -168,6 +168,29 @@ public struct CorralCardModel: Equatable, Sendable {
     public var buttons: [Button]
     /// The task field's placeholder, or nil when the card has no field.
     public var fieldPlaceholder: String?
+    /// The run's progress, once it has subtasks (TP-HOVER-03).
+    public var progress: Progress?
+
+    /// A segment per subtask, and the "Now:" line while one is current (docs/07 §8.2 item 4).
+    public struct Progress: Equatable, Sendable {
+        public var segments: [CorralRunCard.Plan.Segment]
+        /// "Now: Group · 1m 16s · $0.03".
+        public var now: String?
+        /// What VoiceOver reads for the segments: "Step 2 of 5. 1 done, 1 skipped."
+        public var accessibilityLabel: String
+
+        init(_ plan: CorralRunCard.Plan, time: String, spend: String) {
+            segments = plan.segments
+            now = plan.step == nil ? nil : plan.now.map { "Now: \($0) · \(time) · \(spend)" }
+            let place = plan.step.map { "Step \($0) of \(plan.total)." }
+                ?? (plan.total == 1 ? "1 step." : "\(plan.total) steps.")
+            let count = { (segment: CorralRunCard.Plan.Segment) in plan.segments.filter { $0 == segment }.count }
+            var parts = ["\(count(.done)) done"]
+            if count(.skipped) > 0 { parts.append("\(count(.skipped)) skipped") }
+            if count(.failed) > 0 { parts.append("\(count(.failed)) failed") }
+            accessibilityLabel = "\(place) \(parts.joined(separator: ", "))."
+        }
+    }
 
     /// `linkedApp`: for a linked app's drop, the app it opens in. Corral can't give it tasks, so
     /// its card says so and offers only Open (ADR-005, docs/07 §8.3).
@@ -182,6 +205,7 @@ public struct CorralCardModel: Equatable, Sendable {
             approval = nil
             buttons = [.open(linkedApp)]
             fieldPlaceholder = nil
+            progress = nil
             return
         }
         label = agentName.uppercased()
@@ -194,18 +218,22 @@ public struct CorralCardModel: Equatable, Sendable {
             approval = nil
             buttons = []
             fieldPlaceholder = "Give \(agentName) a task"
+            progress = nil
             return
         }
         headline = card.prompt
         let time = Self.duration(ms: card.elapsedMs)
+        // "2 of 5", while the plan has a current subtask.
+        let place = card.plan.flatMap { plan in plan.step.map { "\($0) of \(plan.total)" } }
         status = switch card.status {
         case .queued: "Waiting to start"
-        case .working: "Working · \(time) · \(card.spend)"
-        case .needsYou: "Needs your approval · \(time)"
+        case .working: place.map { "Step \($0) · \(time)" } ?? "Working · \(time) · \(card.spend)"
+        case .needsYou: place.map { "Needs your approval · step \($0)" } ?? "Needs your approval · \(time)"
         case .done: "Done in \(time) · \(card.spend)"
         case .error: "Didn't finish · \(time)"
         case .stopped: "Stopped after \(time)"
         }
+        progress = card.plan.map { Progress($0, time: time, spend: card.spend) }
         answer = card.answer
         answerTruncated = card.answerTruncated
         error = card.error

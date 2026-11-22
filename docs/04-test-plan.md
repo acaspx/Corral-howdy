@@ -320,8 +320,8 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-TV-16** (TS) "Copy as JSON" copies the run's events and says so; a copy that fails says why; agent text is shown as text, never markup
 - **TP-TRACE-01** (Rust) `plan_view` builds subtasks from `plan.updated` events (each update replaces the plan), falling back to the run's tool calls when no plan is published (done, failed, or skipped when denied by policy or at a checkpoint); titles are agent text and the list keeps at most 100 (`crates/corral-core/tests/plan_view.rs`)
 - **TP-TRACE-02** At most 3 columns; extra runs collapse into "+N more running"; needs-you columns sort first, then the newest. Each column has the prompt, the current subtask ("2 of 5") and up to 2 that peek out below it (the core's choice: `crates/corral-core/tests/trace_tree.rs`; the roster carries it: `src/bridge.rs`, `Fixtures/bridge/roster-trace-v1.json`)
-- **TP-TRACE-03** Each column's wire ends at its agent's drop (or the hidden bead) after a shape morph or a usage reorder
-- **TP-TRACE-04** Advancing a subtask moves the stack; finishing and Send back fold the column into the drop
+- **TP-TRACE-03** Each column's wire ends at its agent's drop (or, for a hidden agent, the corral's right end, where the hidden bead goes) after a shape morph or a usage reorder; it drops from its column, runs across halfway down and drops to the drop (`CorralTraceTreeTests.swift`)
+- **TP-TRACE-04** Advancing a subtask moves the stack; finishing and Send back fold the column into the drop; nothing running hides the tree, and the wires hide while the prompt bar is open (`CorralTraceTreeTests.swift`)
 - **TP-TRACE-05** Clicking a task card opens that run in the trace viewer; clicking the stack fans it out
 - **TP-TRACE-06** Nothing running → no trace tree (a finished run has no column; the roster then has no `trace`), and the corral idles at zero frames
 - **TP-MOTION-01** With Reduce Motion on, every moment in 07 §7 uses its Reduce Motion column: no springs, no scale or travel, fades only (snapshot per moment)
