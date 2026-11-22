@@ -2434,3 +2434,67 @@ mod prompt_bar_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod prompt_bar_logo_tests {
+    use super::*;
+    use corral_core::mention::Addressee;
+    use corral_core::prompt_bar::{BarAgent, BarStatus, view};
+    use serde_json::Value;
+
+    const LOGOS: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/prompt-bar-logos-v1.json");
+    const CLAUDE_LOGO: &str = "/Users/you/Library/Application Support/Corral/logos/anthropic.png";
+
+    fn agents() -> Vec<BarAgent> {
+        [
+            ("grok", "Grok", BarStatus::Working),
+            ("claude", "Claude", BarStatus::Ready),
+        ]
+        .into_iter()
+        .map(|(id, name, status)| BarAgent {
+            agent: Addressee {
+                id: AgentId::from(id),
+                name: name.to_owned(),
+                shown: true,
+            },
+            status,
+        })
+        .collect()
+    }
+
+    fn json(bytes: &[u8]) -> Value {
+        serde_json::from_slice(bytes).expect("json")
+    }
+
+    #[test]
+    fn tp_bar_10_each_suggestion_carries_its_agents_logo_as_the_fixture_swift_decodes() {
+        let answer = PromptBarSnapshot::new(
+            7,
+            view(
+                "@cl plan the trip",
+                "@cl",
+                &[AgentId::from("grok")],
+                &agents(),
+            ),
+            None,
+        )
+        .with_logos(|id| (id.as_str() == "claude").then(|| CLAUDE_LOGO.to_owned()));
+        assert_eq!(
+            json(&answer.to_bytes().expect("bytes")),
+            json(LOGOS.as_bytes())
+        );
+    }
+
+    #[test]
+    fn tp_bar_10_a_suggestion_without_a_logo_has_no_logo_key() {
+        let answer =
+            PromptBarSnapshot::new(7, view("@", "@", &[], &agents()), None).with_logos(|_| None);
+        let sent = json(&answer.to_bytes().expect("bytes"));
+        let rows = sent["view"]["suggestions"].as_array().expect("rows");
+        assert_eq!(rows.len(), 2);
+        for row in rows {
+            assert!(row.get("logo").is_none(), "{row}");
+        }
+    }
+}
