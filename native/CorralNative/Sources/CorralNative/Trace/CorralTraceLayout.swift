@@ -60,6 +60,16 @@ public enum CorralTraceLayout {
         return [start, CGPoint(x: start.x, y: mid), CGPoint(x: end.x, y: mid), end]
     }
 
+    /// A click on `id`'s subtask stack: fans it out, or folds it back (TP-TRACE-05).
+    public static func toggled(_ fanned: Set<String>, _ id: String) -> Set<String> {
+        fanned.contains(id) ? fanned.subtracting([id]) : fanned.union([id])
+    }
+
+    /// The fanned stacks that still have a column.
+    public static func kept(_ fanned: Set<String>, columns: [String]) -> Set<String> {
+        fanned.intersection(columns)
+    }
+
     /// Nothing running: no tree, so the corral stays calm (TP-TRACE-06).
     public static func shows(_ trace: CorralTrace) -> Bool { !trace.columns.isEmpty }
 

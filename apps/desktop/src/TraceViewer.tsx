@@ -70,6 +70,33 @@ export function TraceViewer({ api = tracesApi }: { api?: TracesApi }) {
     };
   }, [api]);
 
+  // A task card clicked in the corral's trace tree opens its run here (TP-TRACE-05): the core
+  // keeps the run until it's taken, when the viewer loads, comes forward or is nudged.
+  useEffect(() => {
+    const take = api.takeOpenRun;
+    if (!take) return;
+    let live = true;
+    const ask = () => {
+      take().then(
+        (runId) => {
+          if (live && runId) {
+            void load();
+            void open(runId);
+          }
+        },
+        (e: unknown) => live && setError(errorText(e)),
+      );
+    };
+    ask();
+    const stop = api.onOpenRequest?.(ask);
+    return () => {
+      live = false;
+      stop?.();
+    };
+    // `load` and `open` only use the api and state setters; the api is the dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api]);
+
   async function open(runId: string) {
     setOpenRun(runId);
     setTrace(null);

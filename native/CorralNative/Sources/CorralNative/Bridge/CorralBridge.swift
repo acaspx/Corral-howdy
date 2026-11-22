@@ -138,7 +138,9 @@ enum CorralBridge {
                 CorralBridge.showTrace()
             }
         }
-        trace = CorralTraceController(corralPanel: panel)
+        trace = CorralTraceController(corralPanel: panel) { intent in
+            MainActor.assumeIsolated { CorralBridge.emit(intent) }
+        }
         hotkey = CorralHotkey {
             MainActor.assumeIsolated { CorralBridge.bar?.summon() }
         }

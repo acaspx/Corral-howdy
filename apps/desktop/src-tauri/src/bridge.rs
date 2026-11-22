@@ -822,6 +822,8 @@ pub enum Intent {
         /// The gesture.
         how: Approval,
     },
+    /// A task card in the trace tree was clicked: open its run in the trace viewer (TP-TRACE-05).
+    OpenTrace(AgentId),
     /// The prompt bar's text or cursor changed: Rust answers with what it shows.
     PromptBarEdited(BarEdit),
     /// Return or Deploy all in the prompt bar: Rust decides who it goes to and sends it.
@@ -967,6 +969,9 @@ enum IntentWire {
         id: String,
         checkpoint: String,
     },
+    OpenTrace {
+        id: String,
+    },
     PromptBarEdited {
         seq: u32,
         text: String,
@@ -1091,6 +1096,7 @@ pub fn decode_intent(bytes: &[u8]) -> Result<Intent, BridgeError> {
         IntentWire::OpenLinked { id } => Ok(Intent::OpenLinked(linked_app(&id)?)),
         IntentWire::StopAll {} => Ok(Intent::StopAll),
         IntentWire::CorralIdle { idle } => Ok(Intent::CorralIdle(idle)),
+        IntentWire::OpenTrace { id } => Ok(Intent::OpenTrace(agent_id(id)?)),
         IntentWire::PromptBarEdited {
             seq,
             text,
@@ -2858,5 +2864,29 @@ mod trace_names_tests {
             .with_column_names(|_| Some("X".to_owned()))
             .with_logos(|_| Some("/x/logos/x.png".to_owned()));
         assert!(columns(&sent).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod open_trace_tests {
+    use super::*;
+
+    const OPEN: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/intent-open-trace-v1.json");
+
+    #[test]
+    fn tp_trace_05_a_task_card_click_arrives_as_the_fixture_shows() {
+        assert_eq!(
+            decode_intent(OPEN.as_bytes()).expect("open"),
+            Intent::OpenTrace(AgentId::from("claude"))
+        );
+        for bad in [
+            r#"{"v":1,"intent":{"kind":"openTrace","id":""}}"#,
+            r#"{"v":1,"intent":{"kind":"openTrace","id":"has space"}}"#,
+            r#"{"v":1,"intent":{"kind":"openTrace"}}"#,
+            r#"{"v":1,"intent":{"kind":"openTrace","id":"claude","run":"r1"}}"#,
+        ] {
+            assert!(decode_intent(bad.as_bytes()).is_err(), "{bad}");
+        }
     }
 }

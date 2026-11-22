@@ -157,3 +157,19 @@ fn tp_tv_12_a_run_that_isnt_in_the_log_is_an_error() {
     let err = traces.run_trace("nope").expect_err("missing");
     assert!(err.contains("No run"), "{err}");
 }
+
+// ---- TP-TRACE-05: a task card in the trace tree opens its run here ----------------------------
+
+#[test]
+fn tp_trace_05_a_run_asked_for_from_the_corral_is_taken_once() {
+    let traces = Traces::default();
+    assert_eq!(traces.take_open_run(), None, "nothing asked yet");
+    traces.open_run(corral_core::ids::RunId::from("r1"));
+    traces.open_run(corral_core::ids::RunId::from("r2"));
+    assert_eq!(
+        traces.take_open_run(),
+        Some("r2".to_owned()),
+        "the latest click wins"
+    );
+    assert_eq!(traces.take_open_run(), None, "taken once");
+}

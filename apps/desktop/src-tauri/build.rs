@@ -15,6 +15,7 @@ const COMMANDS: &[&str] = &[
     "corral_settings",
     "set_corral_shown",
     "set_keep_order_fixed",
+    "take_open_run",
 ];
 
 fn main() {

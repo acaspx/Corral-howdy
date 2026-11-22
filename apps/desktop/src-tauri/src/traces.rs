@@ -10,7 +10,7 @@ use corral_core::ids::RunId;
 use corral_core::trace_view::{TraceView, trace_view};
 use corral_store::{RunOutcome, Store};
 use serde::Serialize;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use tauri::State;
 
 /// How many runs the list shows.
@@ -78,9 +78,30 @@ fn outcome(outcome: RunOutcome) -> RunListOutcome {
 #[derive(Default)]
 pub struct Traces {
     store: OnceLock<Arc<Store>>,
+    /// The run a click in the corral asked to open, until the viewer takes it (TP-TRACE-05).
+    open: Mutex<Option<RunId>>,
 }
 
+/// Run in the main window after a click in the corral asks for a run: it tells the viewer to
+/// take it. A fixed script that carries no data; the run comes through `take_open_run`.
+pub const OPEN_RUN_SCRIPT: &str = "window.dispatchEvent(new Event('corral-open-run'))";
+
 impl Traces {
+    /// Asks the viewer to open `run` (a task card clicked in the trace tree). A later click
+    /// replaces an earlier one not yet taken.
+    pub fn open_run(&self, run: RunId) {
+        *self.open.lock().unwrap_or_else(PoisonError::into_inner) = Some(run);
+    }
+
+    /// The run asked for, once.
+    pub fn take_open_run(&self) -> Option<String> {
+        self.open
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take()
+            .map(|run| run.as_str().to_owned())
+    }
+
     /// Lets the viewer read `store`. The first store attached stays.
     pub fn attach(&self, store: Arc<Store>) {
         if self.store.set(store).is_err() {
@@ -155,4 +176,10 @@ pub fn recent_runs(traces: State<'_, Arc<Traces>>) -> Result<Vec<RunListItem>, S
 #[tauri::command(async)]
 pub fn run_trace(traces: State<'_, Arc<Traces>>, run_id: String) -> Result<RunTrace, String> {
     traces.run_trace(&run_id)
+}
+
+/// Command: the run a click in the corral asked to open, once (TP-TRACE-05).
+#[tauri::command(async)]
+pub fn take_open_run(traces: State<'_, Arc<Traces>>) -> Option<String> {
+    traces.take_open_run()
 }

@@ -235,6 +235,8 @@ public enum CorralIntentWire {
             body = Body(kind: "editCheckpoint", id: id, checkpoint: checkpoint, how: "click", changes: changes)
         case .approveWithTouchId(let id, let checkpoint):
             body = Body(kind: "approveWithTouchId", id: id, checkpoint: checkpoint)
+        case .openTrace(let id):
+            body = Body(kind: "openTrace", id: id)
         case .promptBarEdited(let seq, let text, let cursor, let selection):
             body = Body(kind: "promptBarEdited", seq: seq, text: text, cursor: cursor, selection: selection)
         case .promptBarSend(let seq, let text, let selection, let all):

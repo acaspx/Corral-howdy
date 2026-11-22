@@ -12,6 +12,12 @@ final class CorralTraceModel: ObservableObject {
     @Published var anchors: [String: CGFloat] = [:]
     @Published var width: CGFloat = 0
     @Published var wires = true
+    /// The columns whose subtask stack is fanned out.
+    @Published var fanned = Set<String>()
+    /// A task card was clicked.
+    var onOpen: (String) -> Void = { _ in }
+    /// A subtask stack was clicked.
+    var onFan: (String) -> Void = { _ in }
 }
 
 struct CorralTraceRoot: View {
@@ -25,7 +31,9 @@ struct CorralTraceRoot: View {
         VStack(spacing: 0) {
             HStack(alignment: .bottom, spacing: CorralTraceLayout.columnGap) {
                 ForEach(columns, id: \.id) { column in
-                    CorralTraceColumnView(column: column)
+                    CorralTraceColumnView(column: column, fanned: model.fanned.contains(column.id),
+                                          onOpen: { model.onOpen(column.id) },
+                                          onFan: { model.onFan(column.id) })
                 }
             }
             .overlay(alignment: .topTrailing) {
@@ -80,6 +88,10 @@ struct CorralTraceRoot: View {
 
 struct CorralTraceColumnView: View {
     let column: CorralTrace.Column
+    /// The subtask stack is fanned out: what's left shows in full.
+    var fanned = false
+    var onOpen: () -> Void = {}
+    var onFan: () -> Void = {}
 
     static let ink = CorralCardView.ink
     static let maroon = CorralCardView.maroon
@@ -87,16 +99,24 @@ struct CorralTraceColumnView: View {
     var body: some View {
         VStack(spacing: 0) {
             promptPill
+                .accessibilityHidden(true)
             stem
-            taskCard
+            Button(action: onOpen) { taskCard }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Self.label(column))
+                .accessibilityHint("Opens this run's trace")
+                .help("Open the trace")
             if let subtask = column.subtask {
                 stem
-                subtaskStack(subtask)
+                Button(action: onFan) { subtaskStack(subtask) }
+                    .buttonStyle(.plain)
+                    .disabled(column.next.isEmpty)
+                    .accessibilityLabel(Self.stackLabel(column, subtask: subtask))
+                    .accessibilityHint(column.next.isEmpty ? "" : fanned ? "Folds what's left" : "Shows what's left")
             }
         }
         .frame(width: CorralTraceLayout.columnWidth)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.label(column))
+        .accessibilityElement(children: .contain)
     }
 
     private var promptPill: some View {
@@ -150,8 +170,39 @@ struct CorralTraceColumnView: View {
         }
     }
 
-    /// The current subtask on top; up to 2 more peek out below it.
+    /// The current subtask on top; up to 2 more peek out below it, or show in full when fanned.
+    @ViewBuilder
     private func subtaskStack(_ subtask: CorralTrace.Subtask) -> some View {
+        if fanned {
+            VStack(spacing: 4) {
+                subtaskCard(header: "SUBTASK \(subtask.step) OF \(subtask.total)", title: subtask.title)
+                ForEach(Array(column.next.enumerated()), id: \.offset) { index, title in
+                    subtaskCard(header: "NEXT · \(subtask.step + index + 1) OF \(subtask.total)", title: title)
+                        .opacity(0.75)
+                }
+            }
+        } else {
+            peekingStack(subtask)
+        }
+    }
+
+    private func subtaskCard(header: String, title: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(header)
+                .font(.caption2.weight(.semibold))
+                .tracking(1.1)
+                .foregroundStyle(Self.maroon)
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Self.ink)
+                .lineLimit(1)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func peekingStack(_ subtask: CorralTrace.Subtask) -> some View {
         ZStack(alignment: .top) {
             ForEach(Array(column.next.enumerated().reversed()), id: \.offset) { index, _ in
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -160,19 +211,7 @@ struct CorralTraceColumnView: View {
                     .padding(.horizontal, CGFloat(index + 1) * 6)
                     .offset(y: CGFloat(index + 1) * 6)
             }
-            VStack(alignment: .leading, spacing: 3) {
-                Text("SUBTASK \(subtask.step) OF \(subtask.total)")
-                    .font(.caption2.weight(.semibold))
-                    .tracking(1.1)
-                    .foregroundStyle(Self.maroon)
-                Text(subtask.title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Self.ink)
-                    .lineLimit(1)
-            }
-            .padding(10)
-            .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            subtaskCard(header: "SUBTASK \(subtask.step) OF \(subtask.total)", title: subtask.title)
         }
         .padding(.bottom, CGFloat(column.next.count) * 6)
     }
@@ -183,6 +222,12 @@ struct CorralTraceColumnView: View {
         case .working: "Working"
         case .needsYou: "Needs you"
         }
+    }
+
+    /// What VoiceOver reads for a subtask stack.
+    nonisolated static func stackLabel(_ column: CorralTrace.Column, subtask: CorralTrace.Subtask) -> String {
+        let next = column.next.isEmpty ? "" : " Next: \(column.next.joined(separator: ", "))."
+        return "Subtask \(subtask.step) of \(subtask.total): \(subtask.title).\(next)"
     }
 
     /// What VoiceOver reads for a column.
