@@ -14,6 +14,7 @@ pub mod event;
 pub mod ids;
 pub mod lifecycle;
 pub mod mention;
+pub mod plan_view;
 pub mod prompt_bar;
 pub mod run_card;
 pub mod supervisor;
