@@ -814,8 +814,17 @@ impl CorralFeed {
         prompt_bar_feed::bar_agents(&settings, |id| views.cards.card(id, now).map(|c| c.status))
     }
 
-    /// Shows the prompt bar's answer, on the main thread.
+    /// Shows the prompt bar's answer, on the main thread, with each suggestion's logo.
     fn send_bar(&self, answer: PromptBarSnapshot) {
+        let answer = match self.views.lock() {
+            Ok(views) => answer.with_logos(|id| views.logos.get(id).cloned()),
+            Err(_) => {
+                eprintln!(
+                    "corral: the corral's state is poisoned, so the prompt bar shows no logos"
+                );
+                answer
+            }
+        };
         let posted = self.app.run_on_main_thread(move || {
             if let Err(e) = native::prompt_bar(&answer) {
                 eprintln!("corral: couldn't update the prompt bar: {e}");
