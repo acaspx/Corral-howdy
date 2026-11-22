@@ -95,3 +95,14 @@ func traceIsBounded() {
     #expect(roster(trace(column(id: "q", status: "done")))?.trace.columns.isEmpty == true,
             "only running columns")
 }
+
+@Test("TP-TRACE-02 a column carries its agent's name and logo when Rust sends them; a bad logo is dropped")
+func columnNameAndLogo() {
+    let named = #"{"id":"muse","name":"Muse ‮Spark","logo":"/x/logos/muse.png","status":"working","prompt":"p","promptTruncated":false,"next":[]}"#
+    let column = roster(trace(named))?.trace.columns.first
+    #expect(column?.name == "Muse Spark")
+    #expect(column?.logoPath == "/x/logos/muse.png")
+    let bad = #"{"id":"muse","logo":"/etc/passwd","status":"working","prompt":"p","promptTruncated":false,"next":[]}"#
+    let plain = roster(trace(bad))?.trace.columns.first
+    #expect(plain != nil && plain?.name == nil && plain?.logoPath == nil)
+}

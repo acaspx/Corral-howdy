@@ -2780,3 +2780,62 @@ mod trace_wire_tests {
         assert!(sent.get("trace").is_none(), "{sent}");
     }
 }
+
+#[cfg(test)]
+mod trace_names_tests {
+    use super::*;
+    use corral_core::trace_tree::{TraceColumn, TraceTree};
+
+    fn tree(ids: &[&str]) -> TraceTree {
+        TraceTree {
+            columns: ids
+                .iter()
+                .map(|id| TraceColumn {
+                    agent: AgentId::from(*id),
+                    status: CardStatus::Working,
+                    prompt: corral_core::agent_text::AgentText::new("Tidy my notes", 280),
+                    subtask: None,
+                    next: Vec::new(),
+                })
+                .collect(),
+            more: 0,
+        }
+    }
+
+    fn columns(snapshot: &RosterSnapshot) -> Vec<serde_json::Value> {
+        let sent: serde_json::Value =
+            serde_json::from_slice(&snapshot.to_bytes().expect("encode")).expect("json");
+        sent["trace"]["columns"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn tp_trace_02_each_column_carries_its_agents_name_and_logo_shown_or_hidden() {
+        let view = CorralView {
+            drops: Vec::new(),
+            hidden: 2,
+        };
+        let sent = RosterSnapshot::from(&view)
+            .with_trace(&tree(&["muse", "gpt"]))
+            .with_column_names(|id| (id.as_str() == "muse").then(|| "Muse Spark".to_owned()))
+            .with_logos(|id| (id.as_str() == "muse").then(|| "/x/logos/muse.png".to_owned()));
+        let columns = columns(&sent);
+        assert_eq!(columns[0]["name"], "Muse Spark");
+        assert_eq!(columns[0]["logo"], "/x/logos/muse.png");
+        assert!(columns[1].get("name").is_none() && columns[1].get("logo").is_none());
+    }
+
+    #[test]
+    fn tp_trace_02_names_and_logos_without_a_trace_change_nothing() {
+        let view = CorralView {
+            drops: Vec::new(),
+            hidden: 0,
+        };
+        let sent = RosterSnapshot::from(&view)
+            .with_column_names(|_| Some("X".to_owned()))
+            .with_logos(|_| Some("/x/logos/x.png".to_owned()));
+        assert!(columns(&sent).is_empty());
+    }
+}
