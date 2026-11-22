@@ -538,6 +538,14 @@ impl PromptBarSnapshot {
         self.outcome.as_ref()
     }
 
+    /// Adds each suggested agent's logo path, from `logo_for` (ADR-015, TP-BAR-10).
+    pub fn with_logos(mut self, logo_for: impl Fn(&AgentId) -> Option<String>) -> Self {
+        for row in &mut self.view.suggestions {
+            row.logo = logo_for(&AgentId::from(row.id.as_str()));
+        }
+        self
+    }
+
     /// The JSON bytes passed to `corral_native_prompt_bar`.
     pub fn to_bytes(&self) -> Result<Vec<u8>, BridgeError> {
         serde_json::to_vec(self).map_err(BridgeError::Encode)
