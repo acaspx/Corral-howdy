@@ -1,0 +1,77 @@
+{
+  "v": 1,
+  "agents": [
+    {
+      "id": "scout",
+      "name": "Scout",
+      "monogram": "Sc",
+      "status": "needsYou"
+    }
+  ],
+  "hidden": 0,
+  "cards": [
+    {
+      "id": "scout",
+      "status": "needsYou",
+      "prompt": "Tidy my inbox",
+      "promptTruncated": false,
+      "elapsedMs": 0,
+      "spend": "$0.00",
+      "answerTruncated": false,
+      "actions": [
+        "approve",
+        "deny"
+      ],
+      "checkpoint": {
+        "id": "cp-1",
+        "class": "comms.send",
+        "risk": "high",
+        "title": "Email a@example.test",
+        "detail": "a@example.test",
+        "detailTruncated": false,
+        "fields": [
+          {
+            "key": "to",
+            "label": "To",
+            "kind": "text",
+            "value": "a@example.test"
+          }
+        ]
+      },
+      "queue": [
+        {
+          "id": "cp-2",
+          "class": "comms.send",
+          "risk": "critical",
+          "title": "Email b@example.test",
+          "detail": "b@example.test",
+          "detailTruncated": false,
+          "fields": [
+            {
+              "key": "to",
+              "label": "To",
+              "kind": "text",
+              "value": "b@example.test"
+            }
+          ]
+        },
+        {
+          "id": "cp-3",
+          "class": "comms.send",
+          "risk": "normal",
+          "title": "Email c@example.test",
+          "detail": "c@example.test",
+          "detailTruncated": false,
+          "fields": [
+            {
+              "key": "to",
+              "label": "To",
+              "kind": "text",
+              "value": "c@example.test"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
