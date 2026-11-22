@@ -258,6 +258,7 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-BAR-07** The bar never approves, denies or edits a checkpoint; VoiceOver reads the bar, its chips, the send button's full label and each suggestion (with "hidden"), and the whole path works from the keyboard
 - **TP-BAR-08** (Rust + Swift) The bar's wire: edits and sends arrive typed and bounded (the text within the prompt limit, the cursor kept inside it on a character, at most 8 valid selected IDs, deduped); Rust answers with the bar's view for the agents in the corral's order with their status, echoing the edit's number, and a send's outcome (sent, a note with the text cleared, refused with the text kept); Swift decodes it bounded and drops a view older than its latest edit (`Fixtures/bridge/*prompt-bar*`, `src/bridge.rs`, `tests/prompt_bar_feed.rs`, `CorralPromptBarTests.swift`)
 - **TP-BAR-09** (Swift) The summon shortcut: ⌃⌥Space by default, changeable from the corral's right-click menu (⌃⌥P, ⌃⇧Space or off) and remembered; pressing it again closes the bar, keeping the draft; while the bar is open the corral comes up above app windows, and goes back when it closes; a shortcut another app holds is said so in the menu (`CorralSummonKeyTests.swift`)
+- **TP-BAR-10** (Rust + Swift) Each `@` suggestion carries its agent's logo when there's one, shown or hidden; Swift checks the path like a drop's (ADR-015) and drops a bad one, keeping the row (`Fixtures/bridge/prompt-bar-logos-v1.json`, `CorralPromptBarLogoTests.swift`)
 - **TP-GLASS-01** Render snapshots n = 0–8 match baselines (tolerance-based)
 - **TP-GLASS-02** Reduce Transparency → opaque fill; Reduce Motion → no springs, caustics frozen
 - **TP-GLASS-03** Logo plate, fallback monogram and status ring contrast ≥ 4.5:1 (3:1 for rings) over light, dark and busy test wallpapers
@@ -317,7 +318,7 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-TV-14** (TS) A run opens as its span tree in log order, each span under its parent, with its status, its duration and a bar on the run's timeline; the run's details show first, and a span's when it's picked
 - **TP-TV-15** (TS) Filtering by kind (model calls, tool calls, checkpoints, marks, everything) keeps the run and the kind picked
 - **TP-TV-16** (TS) "Copy as JSON" copies the run's events and says so; a copy that fails says why; agent text is shown as text, never markup
-- **TP-TRACE-01** (Rust) `plan_view` builds subtasks from `plan.updated` events, falling back to top-level spans when no plan is published
+- **TP-TRACE-01** (Rust) `plan_view` builds subtasks from `plan.updated` events (each update replaces the plan), falling back to the run's tool calls when no plan is published (done, failed, or skipped when denied by policy or at a checkpoint); titles are agent text and the list keeps at most 100 (`crates/corral-core/tests/plan_view.rs`)
 - **TP-TRACE-02** At most 3 columns; extra runs collapse into "+N more running"; needs-you columns sort first
 - **TP-TRACE-03** Each column's wire ends at its agent's drop (or the hidden bead) after a shape morph or a usage reorder
 - **TP-TRACE-04** Advancing a subtask moves the stack; finishing and Send back fold the column into the drop

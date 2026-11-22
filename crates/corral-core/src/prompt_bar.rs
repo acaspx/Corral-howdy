@@ -86,6 +86,9 @@ pub struct SuggestionRow {
     pub status: BarStatus,
     /// The text with the name completed.
     pub completion: String,
+    /// The agent's logo file, set by the app (ADR-015); the core never sets it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub logo: Option<String>,
 }
 
 /// What the prompt bar shows.
@@ -173,6 +176,7 @@ pub fn view(
                     shown: s.shown,
                     status: a.status,
                     completion: s.completion,
+                    logo: None,
                 })
             })
             .collect()
