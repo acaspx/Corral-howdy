@@ -138,6 +138,7 @@ struct CorralPromptBarRoot: View {
             ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                 Button { onTake(index) } label: {
                     HStack(spacing: 8) {
+                        logo(row)
                         Text(row.name)
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(CorralCardView.ink)
@@ -166,6 +167,24 @@ struct CorralPromptBarRoot: View {
         .padding(.leading, 14)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(rows.count == 1 ? "1 suggestion" : "\(rows.count) suggestions")
+    }
+
+    /// The agent's logo, 18 pt, or its initial when there's none.
+    @ViewBuilder
+    private func logo(_ row: CorralPromptBarView.Suggestion) -> some View {
+        if let path = row.logoPath, let image = CorralLogoCache.shared.image(at: path) {
+            Image(decorative: image, scale: 1)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: 18, height: 18)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+        } else {
+            Text(String(row.name.prefix(1)))
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Self.chipText)
+                .frame(width: 18, height: 18)
+                .background(RoundedRectangle(cornerRadius: 4).fill(Self.chipFill))
+        }
     }
 
     nonisolated static func statusText(_ status: CorralPromptBarView.Status) -> String? {
