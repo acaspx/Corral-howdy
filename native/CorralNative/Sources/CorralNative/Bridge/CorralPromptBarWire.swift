@@ -43,8 +43,13 @@ public struct CorralPromptBarView: Equatable, Sendable {
         public var status: Status
         /// The text with the name completed: taking the row sets the field to this.
         public var completion: String
-        public init(id: String, name: String, shown: Bool, status: Status, completion: String) {
+        /// The agent's logo, already checked by `CorralLogo.isValidPath` (ADR-015); nil shows the
+        /// name alone.
+        public var logoPath: String?
+        public init(id: String, name: String, shown: Bool, status: Status, completion: String,
+                    logoPath: String? = nil) {
             self.id = id; self.name = name; self.shown = shown; self.status = status; self.completion = completion
+            self.logoPath = logoPath
         }
     }
 
@@ -113,7 +118,9 @@ public struct CorralPromptBarSnapshot: Equatable, Sendable {
                 shown: row.shown,
                 status: row.status,
                 // The user's own text: bounded, not rewritten, so taking a row never changes it.
-                completion: String(row.completion.prefix(CorralPromptBarView.maxCompletionLength))))
+                completion: String(row.completion.prefix(CorralPromptBarView.maxCompletionLength)),
+                // A path that isn't a logo in a logos folder is dropped; the row still shows.
+                logoPath: row.logo.flatMap { CorralLogo.isValidPath($0) ? $0 : nil }))
         }
         let view = CorralPromptBarView(
             chips: wire.view.chips.prefix(CorralPromptBarView.maxChips)
@@ -189,9 +196,10 @@ public struct CorralPromptBarSnapshot: Equatable, Sendable {
             let shown: Bool
             let status: CorralPromptBarView.Status
             let completion: String
+            let logo: String?
 
             init(from decoder: Decoder) throws {
-                try rejectUnknownKeys(decoder, allowed: ["id", "name", "shown", "status", "completion"])
+                try rejectUnknownKeys(decoder, allowed: ["id", "name", "shown", "status", "completion", "logo"])
                 let c = try decoder.container(keyedBy: AnyKey.self)
                 id = try c.decode(String.self, forKey: AnyKey("id"))
                 name = try c.decode(String.self, forKey: AnyKey("name"))
@@ -203,6 +211,7 @@ public struct CorralPromptBarSnapshot: Equatable, Sendable {
                 }
                 self.status = status
                 completion = try c.decode(String.self, forKey: AnyKey("completion"))
+                logo = try c.decodeIfPresent(String.self, forKey: AnyKey("logo"))
             }
         }
 
