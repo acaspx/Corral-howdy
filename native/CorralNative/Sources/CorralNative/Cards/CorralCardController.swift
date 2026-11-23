@@ -28,6 +28,8 @@ public final class CorralCardPanel: NSPanel {
         hidesOnDeactivate = false
         isMovableByWindowBackground = false
         collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
+        // VoiceOver announces the card as a dialog (docs/07 §10, TP-A11Y-03).
+        setAccessibilitySubrole(.dialog)
     }
 
     /// The task field needs keyboard focus once the card is pinned.
@@ -46,6 +48,14 @@ public final class CorralCardController {
     public var onIntent: (CorralIntent) -> Void
     /// What happened, for the playground's log.
     public var onLog: (String) -> Void = { _ in }
+    /// Esc closed a card opened from the keyboard: focus goes back to its drop (TP-HOVER-07).
+    public var onKeyboardReturn: (String) -> Void = { _ in }
+    /// The drop whose card was opened from the keyboard, while it's open.
+    private var keyboardDrop: String?
+    /// Whether the card showing was opened from the keyboard.
+    public var openedFromKeyboard: Bool { keyboardDrop != nil }
+    /// The card closed.
+    public var onDismiss: () -> Void = {}
     /// Which hover detector drives the card.
     public var hoverSource: CorralHoverSource = .swiftUI {
         didSet { updatePolling() }
@@ -112,9 +122,12 @@ public final class CorralCardController {
     }
 
     /// A click on drop `id`: pin its card and put the cursor in its field.
-    public func dropClicked(_ id: String) {
+    /// A click on a drop, or Space on a focused one (`fromKeyboard`): the card is pinned. A card
+    /// opened from the keyboard puts focus back on its drop when Esc closes it (TP-HOVER-07).
+    public func dropClicked(_ id: String, fromKeyboard: Bool = false) {
         state.click(drop: id)
-        onLog("pinned \(name(of: id))")
+        keyboardDrop = fromKeyboard ? id : nil
+        onLog("pinned \(name(of: id))\(fromKeyboard ? " from the keyboard" : "")")
         changed()
     }
 
@@ -142,8 +155,10 @@ public final class CorralCardController {
     /// ×, Esc or a click elsewhere.
     public func dismiss() {
         guard state.shown != nil else { return }
+        keyboardDrop = nil
         state.dismiss()
         changed()
+        onDismiss()
     }
 
     // MARK: Drawing
@@ -338,6 +353,8 @@ public final class CorralCardController {
         if isKey {
             guard isEsc, state.shown != nil else { return false }
             onLog("Esc")
+            // Focus goes back to the drop first, so the corral stays up as the card closes.
+            if let back = keyboardDrop { onKeyboardReturn(back) }
             dismiss()
             return true
         }

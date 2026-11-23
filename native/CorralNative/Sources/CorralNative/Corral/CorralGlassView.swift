@@ -173,8 +173,15 @@ public struct CorralGlassView: View {
     /// How far up a drop must be dragged to open the prompt bar for it.
     static let dragUpDistance: CGFloat = 40
 
+    /// Bump to put keyboard focus on a drop (docs/07 §10, TP-A11Y-01).
+    public var focusRequest: CorralFocusRequest
+    /// Space or Return opened a drop's card, or ↑ or Esc went back to the bar.
+    public var onKeyboard: ((CorralKeyboard.Move) -> Void)?
+
     @StateObject private var morph = CorralMorph()
     @State private var selection: Set<String> = []
+    /// The drop with keyboard focus. Keyed by agent, so a reorder doesn't move it.
+    @FocusState private var focused: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
@@ -184,11 +191,15 @@ public struct CorralGlassView: View {
     public init(agents: [CorralAgentToken], hiddenCount: Int = 0, onIntent: @escaping (CorralIntent) -> Void,
                 onHoverDrop: ((String, Bool) -> Void)? = nil,
                 onSelectionChange: (([String]) -> Void)? = nil,
-                onDragUp: ((String) -> Void)? = nil) {
+                onDragUp: ((String) -> Void)? = nil,
+                focusRequest: CorralFocusRequest = CorralFocusRequest(),
+                onKeyboard: ((CorralKeyboard.Move) -> Void)? = nil) {
         self.agents = agents; self.hiddenCount = hiddenCount; self.onIntent = onIntent
         self.onHoverDrop = onHoverDrop
         self.onSelectionChange = onSelectionChange
         self.onDragUp = onDragUp
+        self.focusRequest = focusRequest
+        self.onKeyboard = onKeyboard
     }
 
     public var body: some View {
@@ -249,6 +260,10 @@ public struct CorralGlassView: View {
             selectionChanged()
         }
         .onChange(of: selection) { _, _ in selectionChanged() }
+        .onChange(of: focusRequest) { _, request in
+            let ranked = agents.map(\.id)
+            focused = CorralKeyboard.kept(request.id, ranked: ranked) ?? CorralKeyboard.entry(ranked: ranked)
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilitySummary)
     }
@@ -257,6 +272,9 @@ public struct CorralGlassView: View {
     private func token(_ agent: CorralAgentToken, blob: CorralBlob, pivot: CGPoint) -> some View {
         let selected = selection.contains(agent.id)
         Button {
+            // Space and Return are the corral's own keys (`keyboard(_:)`), so a key never also
+            // presses the drop as a click.
+            guard NSApp.currentEvent?.type != .keyDown else { return }
             if NSEvent.modifierFlags.contains(.command) {
                 if selected { selection.remove(agent.id) } else { selection.insert(agent.id) }
             } else {
@@ -290,9 +308,42 @@ public struct CorralGlassView: View {
                 if drag.translation.height <= -Self.dragUpDistance { onDragUp?(agent.id) }
             })
         .onHover { inside in onHoverDrop?(agent.id, inside) }
+        // The keyboard path (docs/07 §10): ← → between drops, Space opens the card, ↑ Esc back.
+        .focusable(interactions: .activate)
+        .focused($focused, equals: agent.id)
+        .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow, .space, .return, .escape],
+                    phases: .down) { press in
+            keyboard(press.key) ? .handled : .ignored
+        }
         .position(x: pivot.x + blob.offset.x, y: pivot.y + blob.offset.y)
         .accessibilityLabel("\(agent.name), \(statusText(agent.status)), number \(blob.rank) by use")
         .accessibilityHint("Opens the agent. Command-click to select it for the prompt bar.")
+        .accessibilitySortPriority(CorralKeyboard.voiceOverPriority(rank: blob.rank))
+    }
+
+    /// A key on a focused drop. Returns whether the corral used it.
+    private func keyboard(_ equivalent: KeyEquivalent) -> Bool {
+        let key: CorralKeyboard.Key
+        switch equivalent {
+        case .leftArrow: key = .left
+        case .rightArrow: key = .right
+        case .upArrow: key = .up
+        case .downArrow: key = .down
+        case .space: key = .space
+        case .return: key = .enter
+        case .escape: key = .escape
+        default: return false
+        }
+        let move = CorralKeyboard.move(key, from: focused, ranked: agents.map(\.id))
+        switch move {
+        case .focus(let id):
+            focused = id
+        case .open, .toBar:
+            onKeyboard?(move)
+        case .none:
+            return false
+        }
+        return true
     }
 
     /// Reports the selection in the corral's order, leaving out drops that have gone.

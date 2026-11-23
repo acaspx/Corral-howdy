@@ -49,6 +49,8 @@ final class CorralBridgeModel: ObservableObject {
     @Published var level = CorralLevel.load()
     /// The prompt bar's shortcut; the user's choice, remembered across launches.
     @Published var summonKey = CorralSummonKey.load()
+    /// Bumped to put keyboard focus on a drop (TP-A11Y-01).
+    @Published var focus = CorralFocusRequest()
     /// Another app holds it, so it does nothing: the menu says so.
     @Published var summonKeyTaken = false
 }
@@ -74,6 +76,8 @@ struct CorralBridgeRoot: View {
             MainActor.assumeIsolated {
                 CorralBridge.bar?.open(naming: CorralBridge.model.agents.first(where: { $0.id == id })?.name)
             }
+        }, focusRequest: model.focus, onKeyboard: { move in
+            MainActor.assumeIsolated { CorralBridge.keyboard(move) }
         })
         .contextMenu {
             CorralLevelMenu(current: model.level) { level in
@@ -115,6 +119,7 @@ enum CorralBridge {
     /// The prompt bar's state: Rust's latest answer (docs/07 §6.1).
     static let promptBar = CorralPromptBar()
     private static var screenObserver: NSObjectProtocol?
+    private static var keyObserver: NSObjectProtocol?
     private static let notificationDelegate = CorralNotificationDelegate()
     /// The Touch ID prompt that's up, if any. A second request is refused rather than queued.
     private static var authContext: LAContext?
@@ -132,9 +137,18 @@ enum CorralBridge {
         }, onOpen: {
             MainActor.assumeIsolated { CorralBridge.cards?.dismiss() }
         })
-        bar?.onShown = { shown in
+        bar?.onToCorral = {
+            MainActor.assumeIsolated { CorralBridge.focusCorral() }
+        }
+        cards?.onKeyboardReturn = { id in
+            MainActor.assumeIsolated { CorralBridge.focusCorral(on: id) }
+        }
+        cards?.onDismiss = {
+            MainActor.assumeIsolated { CorralBridge.applyLevel() }
+        }
+        bar?.onShown = { _ in
             MainActor.assumeIsolated {
-                CorralBridge.panel?.apply(level: shown ? CorralBridge.model.level.whileBarOpen : CorralBridge.model.level)
+                CorralBridge.applyLevel()
                 CorralBridge.showTrace()
             }
         }
@@ -151,6 +165,11 @@ enum CorralBridge {
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { CorralBridge.place() }
+        }
+        // The corral stays up while the keyboard is in it, then goes back (TP-A11Y-02).
+        keyObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResignKeyNotification, object: panel, queue: .main) { _ in
+            MainActor.assumeIsolated { CorralBridge.applyLevel() }
         }
         // The delegate is set at launch so a click on a notification that launched the app is seen.
         // UNUserNotificationCenter traps in a bare executable, so it's only touched inside a .app.
@@ -310,9 +329,16 @@ enum CorralBridge {
     static func setLevel(_ level: CorralLevel) {
         model.level = level
         level.save()
-        let open = bar?.isOpen ?? false
-        panel?.apply(level: open ? level.whileBarOpen : level)
+        applyLevel()
         showTrace()
+    }
+
+    /// The user's level, or above app windows while the prompt bar is open or the keyboard is in
+    /// the corral or a card it opened (docs/07 §5, §10).
+    static func applyLevel() {
+        let raised = (bar?.isOpen ?? false) || (panel?.isKeyWindow ?? false)
+            || (cards?.openedFromKeyboard ?? false)
+        panel?.apply(level: raised ? model.level.whileBarOpen : model.level)
     }
 
     /// The user picked the prompt bar's shortcut.
@@ -337,7 +363,29 @@ enum CorralBridge {
         callback = nil
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         screenObserver = nil
+        if let keyObserver { NotificationCenter.default.removeObserver(keyObserver) }
+        keyObserver = nil
         return .ok
+    }
+
+    /// The corral takes keyboard focus, on drop `id` or the most used (docs/07 §10, TP-A11Y-02).
+    static func focusCorral(on id: String? = nil) {
+        guard let panel else { return }
+        panel.apply(level: model.level.whileBarOpen)
+        panel.makeKey()
+        model.focus = CorralFocusRequest(id: id, count: model.focus.count &+ 1)
+    }
+
+    /// Space or Return on a focused drop pins its card; ↑ or Esc goes back to the prompt bar.
+    static func keyboard(_ move: CorralKeyboard.Move) {
+        switch move {
+        case .open(let id):
+            // The card opens where the bar is, so the bar closes, keeping its text.
+            bar?.close()
+            cards?.dropClicked(id, fromKeyboard: true)
+        case .toBar: bar?.open()
+        case .focus, .none: break
+        }
     }
 
     static func emit(_ intent: CorralIntent) {
