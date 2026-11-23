@@ -6,6 +6,7 @@
 
 pub mod agent_text;
 pub mod budget;
+pub mod checkpoint_note;
 pub mod clock;
 pub mod controls;
 pub mod corral_view;

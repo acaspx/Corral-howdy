@@ -25,8 +25,10 @@
 //! corral's right-click menu. They never take tasks: their card's Open button opens the app's
 //! own site. The choice is kept in `linked-apps.json` ([`crate::linked`]).
 
-use crate::agent_tools::{agent_folder, allowing_provider_tools, file_tools};
-use crate::bridge::{AuthOutcome, BridgeError, Intent, PromptBarSnapshot, RosterSnapshot};
+use crate::agent_tools::{agent_folder, allowing_provider_tools, file_tools, random_id};
+use crate::bridge::{
+    AuthOutcome, BridgeError, Intent, NotificationRequest, PromptBarSnapshot, RosterSnapshot,
+};
 use crate::corral_order::{CorralOrder, CorralSettingsView};
 use crate::corral_settings::{CorralControl, CorralSettings};
 use crate::keys::Keys;
@@ -45,6 +47,7 @@ use corral_adapters::messages::{MessagesConfig, MessagesDriver};
 use corral_adapters::responses::{ResponsesConfig, ResponsesDriver};
 use corral_adapters::transport::{ReqwestTransport, Transport};
 use corral_core::budget::{BudgetConfig, SpendLedger};
+use corral_core::checkpoint_note::{NoteAnswer, NoteClick, NoteDesk, NoteTrouble, Notice};
 use corral_core::clock::{Clock, SystemClock};
 use corral_core::controls::{ControlError, CorralControls};
 use corral_core::corral_view::{AgentCard, CorralTracker, DropState};
@@ -192,6 +195,33 @@ impl Corral {
         }
         if let Err(e) = self.desk.answer(checkpoint, answer) {
             eprintln!("corral: the answer on {agent}'s card wasn't taken: {e}");
+        }
+    }
+
+    /// A click on a checkpoint notification. The core checks its nonce and the risk; an approve or
+    /// deny is then answered from that agent's card like any other (TP-CHK-23). Open is drawn by
+    /// Swift, which opens the card the core already sent.
+    fn note_click(&self, checkpoint: &CheckpointId, nonce: &str, click: NoteClick) {
+        match self.feed.note_click(checkpoint, nonce, click) {
+            NoteAnswer::Approve { agent, checkpoint } => self.answer(
+                &agent,
+                &checkpoint,
+                Answer::Approve {
+                    how: Approval::Click,
+                    scope: Scope::Once,
+                },
+            ),
+            NoteAnswer::Deny { agent, checkpoint } => {
+                self.answer(&agent, &checkpoint, Answer::Deny { note: None });
+            }
+            NoteAnswer::Open { agent, .. } => {
+                eprintln!("corral: {agent}'s card opened from a notification");
+            }
+            NoteAnswer::Refused { agent, .. } => eprintln!(
+                "corral: a notification can't approve {agent}'s checkpoint; it waits on the card"
+            ),
+            NoteAnswer::Dismissed => {}
+            NoteAnswer::Stale => eprintln!("corral: a click on an old notification was ignored"),
         }
     }
 
@@ -360,6 +390,7 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
             cards: RunCards::default(),
             logos: HashMap::new(),
             linked,
+            notes: NoteDesk::default(),
         }),
         app: app.clone(),
         clock: Arc::clone(&clock),
@@ -573,6 +604,8 @@ struct Views {
     logos: HashMap<AgentId, String>,
     /// Which linked apps show, for the right-click menu.
     linked: LinkedSettings,
+    /// The checkpoint notifications that are out (TP-CHK-22).
+    notes: NoteDesk,
 }
 
 /// Keeps the corral in step with the event log.
@@ -785,6 +818,48 @@ impl CorralFeed {
         if drop_changed || card_changed || order_changed {
             self.send(self.snapshot(&views));
         }
+        if card_changed {
+            let posts = notices(&mut views);
+            drop(views);
+            for notice in posts {
+                self.notify(&notice);
+            }
+        }
+    }
+
+    /// Posts a checkpoint notification (TP-CHK-22). If it can't be posted, its card still shows
+    /// the checkpoint.
+    fn notify(&self, notice: &Notice) {
+        let request = NotificationRequest::from(notice);
+        let checkpoint = notice.checkpoint.clone();
+        let posted = self.app.run_on_main_thread(move || {
+            if let Err(e) = native::notify(&request) {
+                eprintln!(
+                    "corral: couldn't post the notification for checkpoint {checkpoint}: {e}"
+                );
+            }
+        });
+        if let Err(e) = posted {
+            eprintln!("corral: couldn't reach the main thread for a notification: {e}");
+        }
+    }
+
+    /// What a click on a checkpoint notification means, from the core (TP-CHK-23).
+    fn note_click(&self, checkpoint: &CheckpointId, nonce: &str, click: NoteClick) -> NoteAnswer {
+        let Ok(mut views) = self.views.lock() else {
+            eprintln!("corral: the corral view is poisoned, so the notification click was dropped");
+            return NoteAnswer::Stale;
+        };
+        views.notes.click(checkpoint, nonce, click)
+    }
+
+    /// Swift couldn't show a checkpoint notification.
+    fn note_failed(&self, checkpoint: &CheckpointId, trouble: NoteTrouble) {
+        let Ok(mut views) = self.views.lock() else {
+            eprintln!("corral: the corral view is poisoned, so a notification failure was dropped");
+            return;
+        };
+        views.notes.failed(checkpoint, trouble);
     }
 
     /// Once a second, while some card's clock is moving, sends the roster so elapsed time ticks
@@ -1037,14 +1112,40 @@ fn on_intent(slot: &OnceLock<Corral>, result: Result<Intent, BridgeError>) {
             corral.ask_touch_id(&agent, &checkpoint);
         }
         Intent::AuthResult { request, outcome } => corral.touch_id_result(&request, outcome),
-        Intent::OpenAgent(_)
-        | Intent::Deploy(_)
-        | Intent::SummonPromptBar
-        | Intent::NotificationAction { .. }
-        | Intent::NotificationFailed { .. } => {
+        Intent::NotificationAction {
+            checkpoint,
+            nonce,
+            action,
+        } => corral.note_click(&checkpoint, &nonce, action.into()),
+        Intent::NotificationFailed { checkpoint, reason } => {
+            eprintln!(
+                "corral: checkpoint {checkpoint}'s notification wasn't shown ({reason:?}); its card shows it"
+            );
+            corral.feed.note_failed(&checkpoint, reason.into());
+        }
+        Intent::OpenAgent(_) | Intent::Deploy(_) | Intent::SummonPromptBar => {
             eprintln!("corral: intent {intent:?} (handled in a later milestone)");
         }
     }
+}
+
+/// The notifications to post for checkpoints that started waiting, each with a random nonce, and
+/// the names the drops show.
+fn notices(views: &mut Views) -> Vec<Notice> {
+    let names: HashMap<AgentId, String> = views
+        .corral
+        .view()
+        .drops
+        .into_iter()
+        .map(|drop| (drop.agent.id, drop.agent.name))
+        .collect();
+    let name = |agent: &AgentId| {
+        names
+            .get(agent)
+            .cloned()
+            .unwrap_or_else(|| agent.to_string())
+    };
+    views.notes.observe(&views.cards, &name, &mut random_id)
 }
 
 /// Publishes a waiting usage order if the corral is idle and no drop waits on the user

@@ -5,6 +5,7 @@
 //! on one side fails the other's tests. The FFI itself lives in `native.rs`.
 
 use corral_adapters::linked::{DotLook, LinkedApp, LinkedSettings};
+use corral_core::checkpoint_note::{NoteClick, NoteOffer, NoteTrouble, Notice};
 use corral_core::controls::MAX_PROMPT_BYTES;
 use corral_core::corral_view::{CorralView, DropState};
 use corral_core::domain::{ActionClass, Risk};
@@ -621,6 +622,50 @@ impl NotificationRequest {
     /// The JSON bytes passed to `corral_native_notify`.
     pub fn to_bytes(&self) -> Result<Vec<u8>, BridgeError> {
         serde_json::to_vec(self).map_err(BridgeError::Encode)
+    }
+}
+
+impl From<&Notice> for NotificationRequest {
+    /// The core's notice as Swift posts it (TP-CHK-24).
+    fn from(notice: &Notice) -> Self {
+        Self::new(
+            notice.checkpoint.clone(),
+            notice.nonce.clone(),
+            notice.agent.clone(),
+            notice.title.clone(),
+            notice.body.clone(),
+            notice.offers.iter().copied().map(Offer::from).collect(),
+        )
+    }
+}
+
+impl From<NoteOffer> for Offer {
+    fn from(offer: NoteOffer) -> Self {
+        match offer {
+            NoteOffer::Approve => Self::Approve,
+            NoteOffer::Deny => Self::Deny,
+            NoteOffer::Open => Self::Open,
+        }
+    }
+}
+
+impl From<NoteAction> for NoteClick {
+    fn from(action: NoteAction) -> Self {
+        match action {
+            NoteAction::Approve => Self::Approve,
+            NoteAction::Deny => Self::Deny,
+            NoteAction::Open => Self::Open,
+            NoteAction::Dismiss => Self::Dismiss,
+        }
+    }
+}
+
+impl From<NoteFailure> for NoteTrouble {
+    fn from(failure: NoteFailure) -> Self {
+        match failure {
+            NoteFailure::NotAuthorized => Self::NotAuthorized,
+            NoteFailure::Failed => Self::Failed,
+        }
     }
 }
 

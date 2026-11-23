@@ -435,6 +435,8 @@ final class CorralNotificationDelegate: NSObject, UNUserNotificationCenterDelega
               let nonce = info["nonce"] as? String, CorralRoster.isValidID(nonce),
               let action = CorralNotificationResponse.action(for: response.actionIdentifier) else { return }
         await MainActor.run {
+            // Open shows the card the core already sent for that checkpoint; Rust decides the rest.
+            if action == .open { CorralBridge.cards?.openCard(forCheckpoint: checkpoint) }
             CorralBridge.emitNotificationAction(checkpoint: checkpoint, nonce: nonce, action: action)
         }
     }

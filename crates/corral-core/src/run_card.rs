@@ -434,6 +434,13 @@ impl RunCards {
         Ok(args)
     }
 
+    /// Every agent with a card, by ID.
+    pub fn agents(&self) -> Vec<AgentId> {
+        let mut agents: Vec<AgentId> = self.latest.keys().cloned().collect();
+        agents.sort();
+        agents
+    }
+
     /// Every checkpoint waiting on `agent`'s card, oldest first, each with its fields when the
     /// call can be edited. The card shows the first and steps through the rest (TP-CHK-19). A
     /// run that has ended waits on nothing.
