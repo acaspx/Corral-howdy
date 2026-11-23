@@ -65,7 +65,7 @@ func suggestionKeys() {
     _ = bar.edit(text: "@c", cursor: 2)
     #expect(bar.key(.escape, suggestions: rows) == .none)
     #expect(bar.isOpen && !bar.listShown(rows.count), "Esc closes the list, not the bar")
-    #expect(bar.key(.down, suggestions: rows) == .pass, "no list: the field handles the key")
+    #expect(bar.key(.down, suggestions: rows) == .toCorral, "no list: ↓ goes down into the corral (TP-A11Y-02)")
     _ = bar.edit(text: "@cl", cursor: 3)
     #expect(bar.listShown(rows.count), "typing shows it again")
     #expect(bar.key(.tab, suggestions: []) == .pass, "no rows: Tab moves focus")

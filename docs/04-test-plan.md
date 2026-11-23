@@ -151,6 +151,9 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-CHK-23** (Rust) A click counts only with the nonce it carried, once, while its checkpoint waits: Approve answers a normal-risk one with a click and is refused for high and critical whatever Swift sends; Deny, Open and Dismiss spend the nonce too; a wrong nonce, an unknown checkpoint, one answered elsewhere or one whose run ended is stale. "Not allowed" stops notifications for the session; the card still shows the checkpoint (`checkpoint_note.rs`)
 - **TP-CHK-24** The core's notice goes out as `notify-v1` with its buttons in order, and a click or failure comes back in the core's words (`src/bridge.rs`)
 - **TP-CHK-25** Open on a notification opens the card the checkpoint waits on (shown or queued), stepped to it; a checkpoint on no card opens nothing (`CorralNotificationOpenTests.swift`)
+- **TP-A11Y-01** The corral from the keyboard: → and ↓ go to the next drop by rank, ← to the one before, wrapping; with nothing focused (or a drop that's gone) an arrow starts at the most used; Space or Return opens the focused drop's card pinned; ↑ and Esc go back to the prompt bar; a usage reorder keeps focus on the same drop (`CorralKeyboardTests.swift`)
+- **TP-A11Y-02** ↓ in the prompt bar with no suggestion list moves focus into the corral; the bar stays open behind it, and with a list ↓ still moves the highlight (`CorralKeyboardTests.swift`)
+- **TP-A11Y-03** VoiceOver reads the drops in rank order, most used first; the card is announced as a dialog named "<Agent>'s card" (`CorralKeyboardTests.swift`)
 
 ### Loop detector (protected)
 - **TP-LOOP-01** From the profile's `loop_limit`-th identical call in a run (5 by default), each one asks before it runs, even when the policy allows it; the reason and the card say it's the same call N times
@@ -304,7 +307,7 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-HOVER-04** Hover alone never sends an approve intent; Approve needs a click or Return on the focused button
 - **TP-HOVER-05** Buttons ignore input for 300 ms after the card appears
 - **TP-HOVER-06** Approve sends the nonce of the checkpoint shown; if a newer checkpoint replaced it, the core rejects the stale nonce and the card refreshes
-- **TP-HOVER-07** Keyboard and VoiceOver: Space on a focused drop opens the card pinned, focus moves to the first button, Esc closes
+- **TP-HOVER-07** Keyboard and VoiceOver: Space on a focused drop opens the card pinned, focus moves to the first button, Esc closes. The first button is Approve when it can be pressed (otherwise the next one, never a disabled Approve); with nothing waiting, the task field; a hover card takes no focus. Esc on a card opened from the keyboard puts focus back on its drop (`CorralKeyboardTests.swift`)
 - **TP-HOVER-08** The approval box renders only core checkpoint fields; agent text can't appear inside it; bidi and control characters are stripped; internationalized domains show as punycode
 - **TP-HOVER-09** High-risk Approve is disabled until the card is pinned and any truncated detail is expanded
 - **TP-HOVER-10** The done card shows the run's result: the agent's summary in its own labelled, length-capped box (agent text, T20), and outputs, pages read and approvals from core projections only. A follow-up stays in the same session; Send back closes it and offers Undo
