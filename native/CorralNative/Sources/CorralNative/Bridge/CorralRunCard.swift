@@ -176,6 +176,11 @@ public struct CorralRunCard: Equatable, Sendable {
     public var checkpoint: Checkpoint?
     /// The run's progress, once it has subtasks (TP-HOVER-03).
     public var plan: Plan?
+    /// The other checkpoints waiting on the card, oldest first, behind `checkpoint`: the card
+    /// steps through them (TP-CHK-20). Empty when one waits, or none.
+    public var queue: [Checkpoint] = []
+    /// The most queued checkpoints kept, so the stepper reads at most "1 of 10".
+    public static let maxQueue = 9
 
     /// A card's progress: a segment per subtask, and the current one for the "Now:" line. The
     /// core decided it; one that doesn't add up is dropped and the card shows without it.
@@ -231,7 +236,7 @@ public struct CorralRunCard: Equatable, Sendable {
     /// A card as the core would send it, for previews and the playground.
     public init(status: Status, prompt: String, elapsedMs: Int, spend: String,
                 answer: String? = nil, error: String? = nil, actions: [Action],
-                checkpoint: Checkpoint? = nil, plan: Plan? = nil) {
+                checkpoint: Checkpoint? = nil, plan: Plan? = nil, queue: [Checkpoint] = []) {
         self.status = status
         self.prompt = prompt
         promptTruncated = false
@@ -243,6 +248,7 @@ public struct CorralRunCard: Equatable, Sendable {
         self.actions = actions
         self.checkpoint = checkpoint
         self.plan = plan
+        self.queue = checkpoint == nil ? [] : queue
     }
 
     /// A card from the wire, or nil for a status this build doesn't know.
@@ -269,6 +275,11 @@ public struct CorralRunCard: Equatable, Sendable {
         }
         self.actions = actions
         plan = wire.plan.flatMap { Plan($0) }
+        // Behind the shown checkpoint only: valid IDs once, never the shown one, bounded.
+        var seen: Set<String> = checkpoint.map { [$0.id] } ?? []
+        queue = checkpoint == nil ? [] : Array((wire.queue ?? []).compactMap { Checkpoint($0) }
+            .filter { seen.insert($0.id).inserted }
+            .prefix(Self.maxQueue))
     }
 
     /// Removes control and format characters except line breaks and the zero-width joiner, and
@@ -297,11 +308,12 @@ public struct CorralRunCard: Equatable, Sendable {
         let actions: [String]
         let checkpoint: Checkpoint.Wire?
         let plan: Plan.Wire?
+        let queue: [Checkpoint.Wire]?
 
         init(from decoder: Decoder) throws {
             try rejectUnknownKeys(decoder, allowed: [
                 "id", "status", "prompt", "promptTruncated", "elapsedMs", "spend", "answer",
-                "answerTruncated", "error", "actions", "checkpoint", "plan",
+                "answerTruncated", "error", "actions", "checkpoint", "plan", "queue",
             ])
             let c = try decoder.container(keyedBy: AnyKey.self)
             id = try c.decode(String.self, forKey: AnyKey("id"))
@@ -316,6 +328,7 @@ public struct CorralRunCard: Equatable, Sendable {
             actions = try c.decode([String].self, forKey: AnyKey("actions"))
             checkpoint = try c.decodeIfPresent(Checkpoint.Wire.self, forKey: AnyKey("checkpoint"))
             plan = try c.decodeIfPresent(Plan.Wire.self, forKey: AnyKey("plan"))
+            queue = try c.decodeIfPresent([Checkpoint.Wire].self, forKey: AnyKey("queue"))
         }
     }
 }

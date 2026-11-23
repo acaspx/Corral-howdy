@@ -219,6 +219,10 @@ pub struct CardSnapshot {
     /// The approval box, while a checkpoint waits (M2).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint: Option<CheckpointSnapshot>,
+    /// The other checkpoints waiting on the card, oldest first, behind the one it shows; added by
+    /// [`RosterSnapshot::with_queue`] when there's more than one (TP-CHK-20).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub queue: Option<Vec<CheckpointSnapshot>>,
     /// The run's progress, once it has subtasks; added by [`RosterSnapshot::with_plans`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub plan: Option<PlanSnapshot>,
@@ -386,6 +390,7 @@ impl From<&RunCard> for CardSnapshot {
                         .map(|fields| fields.iter().map(FieldSnapshot::from).collect()),
                     ..CheckpointSnapshot::from(checkpoint)
                 }),
+            queue: None,
             plan: None,
         }
     }
@@ -464,6 +469,27 @@ impl RosterSnapshot {
             muse: settings.muse,
             dot: settings.dot.map(DotLook::id),
         });
+        self
+    }
+
+    /// Adds the other checkpoints waiting on each card, behind the one it shows, with their
+    /// fields; the card steps through them (TP-CHK-20).
+    pub fn with_queue(mut self, cards: &RunCards) -> Self {
+        for card in &mut self.cards {
+            let waiting = cards.waiting(&card.id);
+            card.queue = (waiting.len() > 1).then(|| {
+                waiting
+                    .iter()
+                    .skip(1)
+                    .map(|(checkpoint, fields)| CheckpointSnapshot {
+                        fields: fields
+                            .as_ref()
+                            .map(|fields| fields.iter().map(FieldSnapshot::from).collect()),
+                        ..CheckpointSnapshot::from(checkpoint)
+                    })
+                    .collect()
+            });
+        }
         self
     }
 
@@ -2888,5 +2914,104 @@ mod open_trace_tests {
         ] {
             assert!(decode_intent(bad.as_bytes()).is_err(), "{bad}");
         }
+    }
+}
+
+#[cfg(test)]
+mod queue_tests {
+    use super::*;
+    use corral_core::corral_view::{AgentCard, DropView};
+    use corral_core::event::{
+        CheckpointOpened, Event, EventBody, RunQueued, RunStarted, ToolRequested,
+    };
+    use corral_core::ids::{RunId, SessionId, SpanId, ToolCallId};
+    use serde_json::{Value, json};
+
+    const QUEUE: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/roster-queue-v1.json");
+
+    fn ev(body: EventBody) -> Event {
+        Event {
+            run_id: RunId::from("r1"),
+            seq: 1,
+            ts: 1_000,
+            span_id: SpanId::from("span"),
+            parent_span_id: None,
+            body,
+        }
+    }
+
+    /// Scout waiting on `waiting` emails, the first high, the second critical, the third normal.
+    fn cards(waiting: usize) -> RunCards {
+        let mut cards = RunCards::default();
+        let mut events = vec![
+            ev(EventBody::RunQueued(RunQueued {
+                agent_id: AgentId::from("scout"),
+                session_id: SessionId::from("s1"),
+                prompt: "Tidy my inbox".into(),
+            })),
+            ev(EventBody::RunStarted(RunStarted {
+                adapter: "fake".into(),
+            })),
+        ];
+        let risks = [Risk::High, Risk::Critical, Risk::Normal];
+        for (i, to) in ["a", "b", "c"].iter().take(waiting).enumerate() {
+            let to = format!("{to}@example.test");
+            let call = format!("call-{}", i + 1);
+            events.push(ev(EventBody::ToolRequested(ToolRequested {
+                tool_call_id: ToolCallId::from(call.as_str()),
+                tool: "email.send".into(),
+                action_class: ActionClass::CommsSend,
+                args: json!({ "to": to }),
+            })));
+            events.push(ev(EventBody::CheckpointOpened(CheckpointOpened {
+                checkpoint_id: CheckpointId::from(format!("cp-{}", i + 1).as_str()),
+                tool_call_id: ToolCallId::from(call.as_str()),
+                action_class: ActionClass::CommsSend,
+                risk: risks[i],
+                title: format!("Email {to}"),
+                detail: to.clone(),
+            })));
+        }
+        for e in &events {
+            cards.observe(e).expect("legal");
+        }
+        cards
+    }
+
+    fn view() -> CorralView {
+        CorralView {
+            drops: vec![DropView {
+                agent: AgentCard {
+                    id: AgentId::from("scout"),
+                    name: "Scout".into(),
+                    monogram: "Sc".into(),
+                },
+                state: DropState::NeedsYou,
+            }],
+            hidden: 0,
+        }
+    }
+
+    fn json_of(snapshot: &RosterSnapshot) -> Value {
+        serde_json::from_slice(&snapshot.to_bytes().expect("encode")).expect("json")
+    }
+
+    #[test]
+    fn tp_chk_20_the_others_ride_behind_the_shown_checkpoint_as_the_fixture_shows() {
+        let cards = cards(3);
+        let sent = RosterSnapshot::with_cards(&view(), &cards, 1_000).with_queue(&cards);
+        assert_eq!(
+            json_of(&sent),
+            serde_json::from_str::<Value>(QUEUE).expect("fixture")
+        );
+    }
+
+    #[test]
+    fn tp_chk_20_one_waiting_has_no_queue() {
+        let cards = cards(1);
+        let sent = json_of(&RosterSnapshot::with_cards(&view(), &cards, 1_000).with_queue(&cards));
+        assert!(sent["cards"][0].get("queue").is_none(), "{sent}");
+        assert_eq!(sent["cards"][0]["checkpoint"]["id"], "cp-1");
     }
 }

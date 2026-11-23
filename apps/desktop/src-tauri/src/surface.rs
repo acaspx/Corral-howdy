@@ -121,8 +121,10 @@ impl Corral {
     /// Swift's prompt asks macOS (Touch ID, or the login password when Touch ID can't be used).
     /// The prompt is shown after Swift's callback returns, never inside it.
     fn ask_touch_id(&self, agent: &AgentId, checkpoint: &CheckpointId) {
-        let Some((card, name)) = self.feed.card_and_name(agent) else {
-            eprintln!("corral: {agent} has no card, so Touch ID wasn't asked");
+        let Some((card, name)) = self.feed.card_and_name(agent, checkpoint) else {
+            eprintln!(
+                "corral: that checkpoint doesn't wait on {agent}'s card, so Touch ID wasn't asked"
+            );
             return;
         };
         let request = {
@@ -177,13 +179,14 @@ impl Corral {
         }
     }
 
-    /// Answers the checkpoint on `agent`'s card. Only the checkpoint that card shows now can be
-    /// answered from it (TP-HOVER-06); the desk takes each one once, and the policy checks the
-    /// gesture. A refusal is logged; the card follows the log either way.
+    /// Answers a checkpoint on `agent`'s card. Only one waiting on that card can be answered
+    /// from it, the one the user stepped to (TP-HOVER-06, TP-CHK-19); the desk takes each one
+    /// once, and the policy checks the gesture. A refusal is logged; the card follows the log
+    /// either way.
     fn answer(&self, agent: &AgentId, checkpoint: &CheckpointId, answer: Answer) {
-        if !self.feed.shows_checkpoint(agent, checkpoint) {
+        if !self.feed.waits_on(agent, checkpoint) {
             eprintln!(
-                "corral: {agent}'s card doesn't show that checkpoint now, so the answer was dropped"
+                "corral: that checkpoint doesn't wait on {agent}'s card, so the answer was dropped"
             );
             return;
         }
@@ -581,21 +584,28 @@ pub struct CorralFeed {
 
 impl CorralFeed {
     /// Whether `agent`'s card shows `checkpoint` now (the core decides, from the log).
-    fn shows_checkpoint(&self, agent: &AgentId, checkpoint: &CheckpointId) -> bool {
+    fn waits_on(&self, agent: &AgentId, checkpoint: &CheckpointId) -> bool {
         let Ok(views) = self.views.lock() else {
             eprintln!("corral: the corral view is poisoned, so no checkpoint can be answered");
             return false;
         };
-        views.cards.shows_checkpoint(agent, checkpoint)
+        views.cards.waits_on(agent, checkpoint)
     }
 
-    /// `agent`'s card and the name its drop shows, for a Touch ID prompt.
-    fn card_and_name(&self, agent: &AgentId) -> Option<(RunCard, String)> {
+    /// `agent`'s card showing `checkpoint` (one waiting on it, as the user stepped to it) and
+    /// the name its drop shows, for a Touch ID prompt.
+    fn card_and_name(
+        &self,
+        agent: &AgentId,
+        checkpoint: &CheckpointId,
+    ) -> Option<(RunCard, String)> {
         let Ok(views) = self.views.lock() else {
             eprintln!("corral: the corral view is poisoned, so no card can be read");
             return None;
         };
-        let card = views.cards.card(agent, self.clock.now_ms())?;
+        let card = views
+            .cards
+            .card_showing(agent, checkpoint, self.clock.now_ms())?;
         let name = views
             .corral
             .view()
@@ -709,6 +719,7 @@ impl CorralFeed {
         let agents: Vec<AgentId> = views.all_cards.iter().map(|card| card.id.clone()).collect();
         RosterSnapshot::with_cards(&views.corral.view(), &views.cards, self.clock.now_ms())
             .with_plans(&views.cards)
+            .with_queue(&views.cards)
             .with_trace(&trace_tree(&views.cards, &agents))
             .with_column_names(|id| {
                 views
