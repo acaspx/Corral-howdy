@@ -3015,3 +3015,67 @@ mod queue_tests {
         assert_eq!(sent["cards"][0]["checkpoint"]["id"], "cp-1");
     }
 }
+
+#[cfg(test)]
+mod note_tests {
+    //! TP-CHK-24: the core's checkpoint notification on the wire Swift decodes, and the user's
+    //! click back as the core's own words for it.
+    use super::*;
+    use corral_core::checkpoint_note::{NoteClick, NoteOffer, NoteTrouble, Notice};
+    use serde_json::{Value, json};
+
+    fn notice(offers: Vec<NoteOffer>) -> Notice {
+        Notice {
+            checkpoint: CheckpointId::from("cp-1"),
+            nonce: "n-1".into(),
+            agent: AgentId::from("scout"),
+            title: "Scout needs your approval".into(),
+            body: "Sending a message or email: to a@example.test".into(),
+            offers,
+        }
+    }
+
+    fn sent(notice: &Notice) -> Value {
+        serde_json::from_slice(&NotificationRequest::from(notice).to_bytes().unwrap()).unwrap()
+    }
+
+    #[test]
+    fn tp_chk_24_the_core_notice_goes_out_with_its_buttons_in_order() {
+        let normal = sent(&notice(vec![
+            NoteOffer::Approve,
+            NoteOffer::Deny,
+            NoteOffer::Open,
+        ]));
+        assert_eq!(
+            normal,
+            json!({
+                "v": 1,
+                "checkpoint": "cp-1",
+                "nonce": "n-1",
+                "agent": "scout",
+                "title": "Scout needs your approval",
+                "body": "Sending a message or email: to a@example.test",
+                "actions": ["approve", "deny", "open"],
+            })
+        );
+        let high = sent(&notice(vec![NoteOffer::Deny, NoteOffer::Open]));
+        assert_eq!(
+            high["actions"],
+            json!(["deny", "open"]),
+            "no inline Approve"
+        );
+    }
+
+    #[test]
+    fn tp_chk_24_clicks_and_failures_arrive_in_the_core_words() {
+        assert_eq!(NoteClick::from(NoteAction::Approve), NoteClick::Approve);
+        assert_eq!(NoteClick::from(NoteAction::Deny), NoteClick::Deny);
+        assert_eq!(NoteClick::from(NoteAction::Open), NoteClick::Open);
+        assert_eq!(NoteClick::from(NoteAction::Dismiss), NoteClick::Dismiss);
+        assert_eq!(
+            NoteTrouble::from(NoteFailure::NotAuthorized),
+            NoteTrouble::NotAuthorized
+        );
+        assert_eq!(NoteTrouble::from(NoteFailure::Failed), NoteTrouble::Failed);
+    }
+}
