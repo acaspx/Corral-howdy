@@ -164,7 +164,7 @@ Progress: the nightly live smoke is wired (2026-11-19: `.github/workflows/live-s
 3. ✅ **Hover cards + trace tree** (per S6; spec in [07 §8](07-brand-and-corral-surface.md)): paper hover card with plan progress, elapsed, spend and state-based buttons; trace tree of translucent prompt/task/subtask cards wired to drops; `plan_view` projection + `plan.updated` events in the core; logo import
     Progress: `plan_view` is in the core (2026-11-22, TP-TRACE-01, #115). The core picks the trace tree's columns (`corral_core::trace_tree`) and the roster carries them and each card's plan (2026-11-22, TP-TRACE-02, 06, TP-HOVER-03). Swift draws the card's progress, and the columns with their wires above the corral (2026-11-22, TP-HOVER-03, TP-TRACE-02..04). A task card opens its run in the trace viewer and a click fans out the stack (2026-11-22, TP-TRACE-05). Item 3 is done.
 4. Checkpoint UI: approval box in the hover card (stepper for several pending, Touch ID for critical) + actionable notification; edit-args flow; nonce-bound approve; 300 ms input guard
-    Progress: the approval box, Touch ID, the edit sheet, the single-use nonce and the 300 ms guard shipped in M2. The stepper steps through several waiting checkpoints, and an answer may be for any of them on that card (2026-11-22, TP-CHK-19..21). Next: the checkpoint notification, posted and answered.
+    Progress: the approval box, Touch ID, the edit sheet, the single-use nonce and the 300 ms guard shipped in M2. The stepper steps through several waiting checkpoints, and an answer may be for any of them on that card (2026-11-22, TP-CHK-19..21). Each waiting checkpoint now raises a macOS notification with a single-use nonce: Approve inline for normal risk only; Deny; Open, which pins the card stepped to it (2026-11-22, TP-CHK-22..25). Posting needs the bundled app; `just dev` runs a bare binary, where macOS refuses notifications.
 5. Main window: trace viewer (tree + waterfall), JSON copy. In two PRs:
    1. ✅ The core: `corral_core::trace_view` derives the span tree from a run's events, and `Store::recent_runs` lists runs in one query (2026-11-20, TP-TV-01..10)
    2. ✅ The viewer in the main window: the run list, the tree with its waterfall, filter by kind, the picked span's details, copy as JSON (2026-11-20, TP-TV-11..16)
@@ -197,8 +197,8 @@ Progress: the nightly live smoke is wired (2026-11-19: `.github/workflows/live-s
 (The corral panel, hover cards and trace tree moved into M4.)
 1. Multi-display behavior (the level setting shipped early: desktop by default, chosen from the corral's right-click menu)
 2. Polish pass on glass motion against the brand spec
-3. Actionable notifications (Approve / Deny / Open) wired to the nonce-bound IPC
-4. Touch ID for critical checkpoints (on the card ✅ 2026-11-18, in M2; still to do: from a notification)
+3. Actionable notifications (Approve / Deny / Open) wired to the nonce-bound IPC (✅ 2026-11-22, in M4: TP-CHK-22..25)
+4. Touch ID for critical checkpoints (on the card ✅ 2026-11-18, in M2; from a notification, Open pins the card, where Touch ID approves ✅ 2026-11-22)
 5. App Intents (Shortcuts: "Deploy Scout with …")
 6. WidgetKit widget: a read-only corral status glance (ship only if S1 says it's clean)
 

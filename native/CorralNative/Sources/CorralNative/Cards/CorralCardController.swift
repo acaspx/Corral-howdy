@@ -118,6 +118,27 @@ public final class CorralCardController {
         changed()
     }
 
+    /// Open on a checkpoint notification: pin the card that checkpoint waits on, stepped to it
+    /// (TP-CHK-25). A checkpoint on no card (answered since) opens nothing. The core decides
+    /// everything about the answer; this only shows the card it sent.
+    public func openCard(forCheckpoint checkpoint: String) {
+        guard let id = Self.agent(waitingOn: checkpoint, in: cards) else {
+            onLog("notification: that checkpoint waits on no card")
+            return
+        }
+        steps[id] = checkpoint
+        dropClicked(id)
+    }
+
+    /// The agent whose card has `checkpoint` waiting, shown or queued.
+    nonisolated static func agent(waitingOn checkpoint: String, in cards: [String: CorralRunCard]) -> String? {
+        guard !checkpoint.isEmpty else { return nil }
+        return cards.keys.sorted().first { id in
+            guard let card = cards[id] else { return false }
+            return card.checkpoint?.id == checkpoint || card.queue.contains { $0.id == checkpoint }
+        }
+    }
+
     /// ×, Esc or a click elsewhere.
     public func dismiss() {
         guard state.shown != nil else { return }

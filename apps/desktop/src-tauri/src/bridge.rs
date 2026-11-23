@@ -5,6 +5,7 @@
 //! on one side fails the other's tests. The FFI itself lives in `native.rs`.
 
 use corral_adapters::linked::{DotLook, LinkedApp, LinkedSettings};
+use corral_core::checkpoint_note::{NoteClick, NoteOffer, NoteTrouble, Notice};
 use corral_core::controls::MAX_PROMPT_BYTES;
 use corral_core::corral_view::{CorralView, DropState};
 use corral_core::domain::{ActionClass, Risk};
@@ -621,6 +622,50 @@ impl NotificationRequest {
     /// The JSON bytes passed to `corral_native_notify`.
     pub fn to_bytes(&self) -> Result<Vec<u8>, BridgeError> {
         serde_json::to_vec(self).map_err(BridgeError::Encode)
+    }
+}
+
+impl From<&Notice> for NotificationRequest {
+    /// The core's notice as Swift posts it (TP-CHK-24).
+    fn from(notice: &Notice) -> Self {
+        Self::new(
+            notice.checkpoint.clone(),
+            notice.nonce.clone(),
+            notice.agent.clone(),
+            notice.title.clone(),
+            notice.body.clone(),
+            notice.offers.iter().copied().map(Offer::from).collect(),
+        )
+    }
+}
+
+impl From<NoteOffer> for Offer {
+    fn from(offer: NoteOffer) -> Self {
+        match offer {
+            NoteOffer::Approve => Self::Approve,
+            NoteOffer::Deny => Self::Deny,
+            NoteOffer::Open => Self::Open,
+        }
+    }
+}
+
+impl From<NoteAction> for NoteClick {
+    fn from(action: NoteAction) -> Self {
+        match action {
+            NoteAction::Approve => Self::Approve,
+            NoteAction::Deny => Self::Deny,
+            NoteAction::Open => Self::Open,
+            NoteAction::Dismiss => Self::Dismiss,
+        }
+    }
+}
+
+impl From<NoteFailure> for NoteTrouble {
+    fn from(failure: NoteFailure) -> Self {
+        match failure {
+            NoteFailure::NotAuthorized => Self::NotAuthorized,
+            NoteFailure::Failed => Self::Failed,
+        }
     }
 }
 
@@ -3013,5 +3058,69 @@ mod queue_tests {
         let sent = json_of(&RosterSnapshot::with_cards(&view(), &cards, 1_000).with_queue(&cards));
         assert!(sent["cards"][0].get("queue").is_none(), "{sent}");
         assert_eq!(sent["cards"][0]["checkpoint"]["id"], "cp-1");
+    }
+}
+
+#[cfg(test)]
+mod note_tests {
+    //! TP-CHK-24: the core's checkpoint notification on the wire Swift decodes, and the user's
+    //! click back as the core's own words for it.
+    use super::*;
+    use corral_core::checkpoint_note::{NoteClick, NoteOffer, NoteTrouble, Notice};
+    use serde_json::{Value, json};
+
+    fn notice(offers: Vec<NoteOffer>) -> Notice {
+        Notice {
+            checkpoint: CheckpointId::from("cp-1"),
+            nonce: "n-1".into(),
+            agent: AgentId::from("scout"),
+            title: "Scout needs your approval".into(),
+            body: "Sending a message or email: to a@example.test".into(),
+            offers,
+        }
+    }
+
+    fn sent(notice: &Notice) -> Value {
+        serde_json::from_slice(&NotificationRequest::from(notice).to_bytes().unwrap()).unwrap()
+    }
+
+    #[test]
+    fn tp_chk_24_the_core_notice_goes_out_with_its_buttons_in_order() {
+        let normal = sent(&notice(vec![
+            NoteOffer::Approve,
+            NoteOffer::Deny,
+            NoteOffer::Open,
+        ]));
+        assert_eq!(
+            normal,
+            json!({
+                "v": 1,
+                "checkpoint": "cp-1",
+                "nonce": "n-1",
+                "agent": "scout",
+                "title": "Scout needs your approval",
+                "body": "Sending a message or email: to a@example.test",
+                "actions": ["approve", "deny", "open"],
+            })
+        );
+        let high = sent(&notice(vec![NoteOffer::Deny, NoteOffer::Open]));
+        assert_eq!(
+            high["actions"],
+            json!(["deny", "open"]),
+            "no inline Approve"
+        );
+    }
+
+    #[test]
+    fn tp_chk_24_clicks_and_failures_arrive_in_the_core_words() {
+        assert_eq!(NoteClick::from(NoteAction::Approve), NoteClick::Approve);
+        assert_eq!(NoteClick::from(NoteAction::Deny), NoteClick::Deny);
+        assert_eq!(NoteClick::from(NoteAction::Open), NoteClick::Open);
+        assert_eq!(NoteClick::from(NoteAction::Dismiss), NoteClick::Dismiss);
+        assert_eq!(
+            NoteTrouble::from(NoteFailure::NotAuthorized),
+            NoteTrouble::NotAuthorized
+        );
+        assert_eq!(NoteTrouble::from(NoteFailure::Failed), NoteTrouble::Failed);
     }
 }
