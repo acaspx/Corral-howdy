@@ -4,7 +4,8 @@
 // - Opening asks Rust for the view. Dragging a drop up opens it with that agent named, before any
 //   draft. Closing without sending keeps the text until it's sent or cleared (⌘⌫).
 // - ↑ and ↓ move through the @ suggestions; Return or Tab takes the highlighted one; Esc closes
-//   the list, then the bar. With no list, Return sends and ⌘Return is Deploy all.
+//   the list, then the bar. With no list, Return sends, ⌘Return is Deploy all, and ↓ moves
+//   focus down into the corral (docs/07 §10, TP-A11Y-02).
 // - A send waits for Rust's answer: the field doesn't change meanwhile (so the answer is never
 //   dropped as stale). Sent closes the bar; a note keeps it open with the text cleared; a refusal
 //   keeps the text.
@@ -33,6 +34,8 @@ public struct CorralPromptBarState: Equatable, Sendable {
         case send(all: Bool)
         /// Close the bar, keeping the text.
         case close
+        /// ↓ with no list: keyboard focus goes down into the corral; the bar stays open.
+        case toCorral
     }
 
     /// A send's answer, shown in the error line until the next edit.
@@ -105,7 +108,7 @@ public struct CorralPromptBarState: Equatable, Sendable {
         let list = listShown(suggestions.count)
         switch key {
         case .up, .down:
-            guard list else { return .pass }
+            guard list else { return key == .down ? .toCorral : .pass }
             let at = min(highlighted, suggestions.count - 1)
             highlighted = key == .up ? max(0, at - 1) : min(suggestions.count - 1, at + 1)
             return .none

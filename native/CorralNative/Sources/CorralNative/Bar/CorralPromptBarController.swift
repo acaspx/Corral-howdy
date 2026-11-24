@@ -41,6 +41,8 @@ public final class CorralPromptBarController {
     public var onIntent: (CorralIntent) -> Void
     /// The bar is opening: close a pinned card, so there's one place to type.
     public var onOpen: () -> Void
+    /// ↓ with no suggestion list: the corral takes keyboard focus (TP-A11Y-02).
+    public var onToCorral: () -> Void = {}
     /// The bar was shown (true) or hidden (false): the corral comes up with it.
     public var onShown: (Bool) -> Void = { _ in }
 
@@ -162,6 +164,8 @@ public final class CorralPromptBarController {
             onIntent(answer.send(text: model.state.text, selection: selection, all: all))
         case .close:
             render()
+        case .toCorral:
+            onToCorral()
         }
     }
 

@@ -310,7 +310,7 @@ These live in `CorralMetrics` and the shader parameters. Spike S5 turns them int
 - The corral is one accessibility group ("Corral, 4 agents, most used first, 1 needs you"). Each drop is a button named "<Agent>, <status>, number <rank> by use". VoiceOver order follows rank, so it matches the visual clockwise order.
 - Hover is never the only way in: focusing a drop and pressing Space opens the same card, pinned. The card is announced as a dialog, and focus moves to its first button (Approve, when something is waiting).
 - The trace tree is a list of runs; each column reads "<Agent>: <task>, subtask n of m, <status>".
-- Full keyboard path: summon hotkey → arrow keys move between drops → Space opens the card → Tab through its buttons → Esc closes.
+- Full keyboard path: summon hotkey → ↓ (with no suggestion list) moves into the corral, on the most used drop → ← and → move between drops in rank order → Space or Return opens the card pinned (the bar closes, keeping its text) → Tab through its buttons → Esc closes the card, back on its drop → ↑ or Esc goes back to the bar. While the keyboard is in the corral or a card it opened, the corral stays above app windows, as it does while the bar is open.
 - The usage reorder never moves focus: a focused drop keeps VoiceOver focus as it travels.
 - Status is never color-only: needs-you adds a glyph and a pulse, and errors add a glyph.
 - Contrast of logos, fallback monograms and status rings on glass is checked over a light, a dark and a busy test wallpaper (TP-GLASS-03, TP-LOGO-03).

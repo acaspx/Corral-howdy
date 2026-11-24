@@ -40,7 +40,8 @@ public struct CorralCardView: View {
     @State private var editing = false
     @State private var draft: [String: String] = [:]
     @State private var guardrail = CorralInputGuard(shownAt: ProcessInfo.processInfo.systemUptime)
-    @FocusState private var fieldFocused: Bool
+    /// Keyboard focus: the task field or a button (TP-HOVER-07).
+    @FocusState private var focus: CorralCardModel.Focus?
 
     public init(model: CorralCardModel, pinned: Bool, focusRequest: Int = 0,
                 onButton: @escaping (CorralCardModel.Button) -> Void,
@@ -145,13 +146,15 @@ public struct CorralCardView: View {
         .padding(7)
         .background(RoundedRectangle(cornerRadius: 30, style: .continuous).fill(.ultraThinMaterial))
         .environment(\.colorScheme, .light)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(model.dialogLabel)
         .onHover(perform: onPointerInside)
         .onAppear {
             guardrail = CorralInputGuard(shownAt: ProcessInfo.processInfo.systemUptime)
-            if pinned { fieldFocused = true }
+            focus = model.firstFocus(pinned: pinned, expanded: expanded)
         }
         .onChange(of: focusRequest) { _, _ in
-            if pinned { fieldFocused = true }
+            focus = model.firstFocus(pinned: pinned, expanded: expanded)
         }
         .onChange(of: model.approval?.checkpointID) { _, _ in
             // A new checkpoint under the pointer: start collapsed and re-arm the 300 ms guard,
@@ -494,6 +497,8 @@ public struct CorralCardView: View {
         .buttonStyle(.plain)
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.45)
+        .focusable(interactions: .activate)
+        .focused($focus, equals: .button(button))
     }
 
     private func taskField(_ placeholder: String) -> some View {
@@ -502,7 +507,7 @@ public struct CorralCardView: View {
                 .textFieldStyle(.plain)
                 .font(.body)
                 .foregroundStyle(Self.ink)
-                .focused($fieldFocused)
+                .focused($focus, equals: .task)
                 .onSubmit(send)
             Button(action: send) {
                 Image(systemName: "arrow.up.circle.fill")
@@ -517,7 +522,7 @@ public struct CorralCardView: View {
         .padding(.vertical, 9)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .stroke(fieldFocused ? Self.coral.opacity(0.6) : Self.ink.opacity(0.1)))
+            .stroke(focus == .task ? Self.coral.opacity(0.6) : Self.ink.opacity(0.1)))
     }
 
     private func send() {

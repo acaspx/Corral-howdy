@@ -151,6 +151,8 @@ public struct CorralCardModel: Equatable, Sendable {
         }
     }
 
+    /// What VoiceOver calls the card, a dialog (docs/07 §10, TP-A11Y-03).
+    public var dialogLabel: String
     /// Small caps above the headline: the agent's name.
     public var label: String
     /// The task, or "Ready for a task".
@@ -196,9 +198,32 @@ public struct CorralCardModel: Equatable, Sendable {
         }
     }
 
+    /// Where keyboard focus goes on a pinned card (docs/07 §10, TP-HOVER-07).
+    public enum Focus: Hashable, Sendable {
+        case task
+        case button(Button)
+    }
+
+    /// Where focus goes when the card is pinned: with a checkpoint waiting, the first button that
+    /// can be pressed (Approve, when it can; never a disabled one); otherwise the task field, or
+    /// the first button. A hover card takes no focus.
+    public func firstFocus(pinned: Bool, expanded: Bool) -> Focus? {
+        guard pinned else { return nil }
+        if let approval {
+            let pressable = buttons.first { button in
+                guard case .approve = button else { return true }
+                return approval.canApprove(pinned: pinned, expanded: expanded)
+            }
+            if let pressable { return .button(pressable) }
+        }
+        if fieldPlaceholder != nil { return .task }
+        return buttons.first.map(Focus.button)
+    }
+
     /// `linkedApp`: for a linked app's drop, the app it opens in. Corral can't give it tasks, so
     /// its card says so and offers only Open (ADR-005, docs/07 §8.3).
     public init(agentName: String, card: CorralRunCard?, linkedApp: String? = nil) {
+        dialogLabel = "\(agentName)'s card"
         if let linkedApp {
             label = "\(agentName.uppercased()) · LINKED APP"
             headline = "Works in \(linkedApp)"

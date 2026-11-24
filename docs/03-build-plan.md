@@ -171,6 +171,7 @@ Progress: the nightly live smoke is wired (2026-11-19: `.github/workflows/live-s
 6. Agent editor + policy editor (shows effective decision per class)
 7. Storybook with fixture event streams for every component state
 8. Accessibility pass (keyboard-only deploy/approve/deny; VoiceOver labels)
+    Progress: the keyboard path through the corral: ↓ from the prompt bar, ← → between drops in rank order, Space opens the card pinned with focus on its first button (Approve when it can be pressed), Esc back to the drop, then to the bar; VoiceOver reads drops in rank order and the card as a dialog (2026-11-23, TP-A11Y-01..03, TP-HOVER-07). Still to check by hand: VoiceOver end to end, and contrast over test wallpapers (TP-GLASS-03, TP-LOGO-03).
 
 **Exit:** E2E journeys J1–J6 and J9–J11 (test plan §6) green; TP-SHAPE-*, TP-RANK-*, TP-USAGE-*, TP-GLASS-*, TP-PLACE-*, TP-HOVER-*, TP-TRACE-*, TP-LOGO-* green; axe zero serious violations; performance budgets met (corral summon p95 < 150 ms, event→UI p95 < 100 ms, idle corral 0 frames, morph < 2 ms GPU).
 
