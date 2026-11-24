@@ -1086,4 +1086,97 @@ mod tests {
             ["r9 reported usage before it was queued"]
         );
     }
+
+    // ---- TP-EVAL-18: the pause comparison, on hand-built logs -------------------------------
+
+    fn said(run: &str, text: &str) -> Event {
+        ev(
+            run,
+            EventBody::ModelDelta(corral_core::event::ModelDelta { text: text.into() }),
+        )
+    }
+
+    fn pause_events(run: &str) -> [Event; 2] {
+        [
+            ev(
+                run,
+                EventBody::RunPaused(corral_core::event::RunPaused {
+                    reason: corral_core::event::PauseReason::User,
+                }),
+            ),
+            ev(
+                run,
+                EventBody::RunResumed(corral_core::event::RunResumed {}),
+            ),
+        ]
+    }
+
+    fn done(run: &str) -> Event {
+        ev(
+            run,
+            EventBody::RunCompleted(corral_core::event::RunCompleted { summary: None }),
+        )
+    }
+
+    fn compared(paused: &[Event], unpaused: &[Event]) -> Vec<String> {
+        let mut problems = Vec::new();
+        pause_check(1, paused, unpaused, &mut problems);
+        problems
+    }
+
+    #[test]
+    fn tp_eval_18_a_difference_names_the_first_event_that_differs() {
+        let [p, r] = pause_events("eval-run-1");
+        let paused = [
+            queued("eval-run-1", "a"),
+            said("eval-run-1", "one"),
+            p,
+            r,
+            said("eval-run-1", "two"),
+            done("eval-run-1"),
+        ];
+        let unpaused = [
+            queued("eval-run-1", "a"),
+            said("eval-run-1", "one"),
+            done("eval-run-1"),
+        ];
+        assert_eq!(
+            compared(&paused, &unpaused),
+            [
+                "eval-run-1 logged something different from the same run unpaused: event 3 was \
+              model.delta paused and run.completed unpaused"
+            ]
+        );
+    }
+
+    #[test]
+    fn tp_eval_18_only_the_pause_and_resume_are_left_out() {
+        let [p, r] = pause_events("eval-run-1");
+        let paused = [
+            queued("eval-run-1", "a"),
+            p,
+            r,
+            said("eval-run-1", "one"),
+            queued("eval-run-2", "b"),
+            done("eval-run-1"),
+        ];
+        let unpaused = [
+            queued("eval-run-1", "a"),
+            said("eval-run-1", "one"),
+            done("eval-run-1"),
+        ];
+        assert!(
+            compared(&paused, &unpaused).is_empty(),
+            "other runs don't count"
+        );
+        let [p, _] = pause_events("eval-run-1");
+        let never_resumed = [queued("eval-run-1", "a"), p, done("eval-run-1")];
+        assert_eq!(
+            compared(
+                &never_resumed,
+                &[queued("eval-run-1", "a"), done("eval-run-1")]
+            ),
+            ["eval-run-1 paused 1 times but resumed 0"]
+        );
+    }
 }

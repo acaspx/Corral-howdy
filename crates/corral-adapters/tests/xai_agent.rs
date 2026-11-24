@@ -608,3 +608,40 @@ async fn tp_tool_12_denying_the_soft_limit_ends_the_run_and_sends_nothing_more()
         w.log.kinds()
     );
 }
+
+// ---- TP-SUP-06: the agent loop pauses between turns ------------------------------------------
+
+#[tokio::test(start_paused = true)]
+async fn tp_sup_06_a_pause_asked_for_at_a_checkpoint_takes_hold_before_the_next_turn() {
+    let w = world(
+        vec![
+            calls("call_1", "fs_write", r#"{"path":"todo.md"}"#, TURN_TICKS),
+            says("Saved."),
+        ],
+        PLAIN,
+    );
+    let checkpoint = waiting(&w).await;
+    w.sup.pause(&RunId::from("r1")).expect("pause while asking");
+    approve(&w, &checkpoint);
+    settle().await;
+    assert_eq!(
+        w.writes.lock().expect("writes").len(),
+        1,
+        "the approved call ran"
+    );
+    assert_eq!(
+        w.log.kinds().last(),
+        Some(&"run.paused"),
+        "{:?}",
+        w.log.kinds()
+    );
+    assert_eq!(w.transport.seen().len(), 1, "the next turn waits");
+    tokio::time::sleep(Duration::from_secs(600)).await;
+    assert_eq!(w.transport.seen().len(), 1, "still waiting");
+    w.sup.resume(&RunId::from("r1")).expect("resume");
+    idle(&w).await;
+    assert_eq!(w.transport.seen().len(), 2);
+    assert_eq!(w.log.count("run.paused"), 1);
+    assert_eq!(w.log.count("run.resumed"), 1);
+    assert!(matches!(w.log.terminal(), EventBody::RunCompleted(_)));
+}

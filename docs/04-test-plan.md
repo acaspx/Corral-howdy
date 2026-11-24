@@ -72,6 +72,9 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-SUP-01** Concurrency limit queues extra runs in FIFO order
 - **TP-SUP-02** Recall-all cancels every run; misbehaving adapter force-dropped at 2 s; **Stop all agents** in the corral's right-click menu (offered only while an agent is working or waiting on you) stops every working agent through the core, and each can take a new task afterwards
 - **TP-SUP-03** App restart marks orphaned runs `Failed{app_restarted}`
+- **TP-SUP-04** Pause asks the driver to stop at its next safe point, between steps and never mid-request: there it logs `run.paused` (user) and logs nothing else until Resume, which logs `run.resumed` and carries on. Resume before the safe point means it never pauses; pausing twice pauses once; resuming a running run does nothing; a queued or ended run can't pause or resume (`NotRunning`), an unknown one is `UnknownRun` (`crates/corral-core/tests/pause.rs`)
+- **TP-SUP-05** Stop or Stop all while paused ends the run at once, with nothing force-dropped (`pause.rs`)
+- **TP-SUP-06** The drivers' safe points: the fake pauses between script steps, and the agent loop before each model turn and each tool call, so a pause asked for at a checkpoint takes hold before the next turn is sent (`crates/corral-adapters/tests/pause.rs`, `xai_agent.rs`)
 
 ### Fake agent (M1)
 - **TP-FAKE-01** A scripted answer streams its text, sums its usage and completes; scripts can be chosen by prompt, and the driver records every run it was given
@@ -412,6 +415,8 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-EVAL-15** The schema for them: `runs` from 1 to 32, `agents` from 1 to `runs`; `checkpoint` and `if_denied` only with one run; each step does one thing, `new_turn` only `true`; unknown keys in `budget` and unknown caps in `never_over` are errors; `spend` needs `never_over` or `refused_at_least`
 - **TP-EVAL-16** Control scenarios: `recall_all_after_ms` presses Stop all that long after the runs start, on the runner's clock, and `expect.recall` grades it. Every run must have been stopped by it (one that had already ended means the scenario tested nothing), runs past the concurrency limit are stopped in the queue, nothing starts after the press, the runs end within `p95_within_ms` and `all_within_ms`, and `forced_at_least` / `forced_at_most` count the drivers that ignored Stop and were dropped at 2 s. A failure says how long the runs took (`crates/corral-evals/tests/recall.rs`)
 - **TP-EVAL-17** The schema for them: `expect.recall` and `recall_all_after_ms` come together; `recall` needs at least one limit and rejects unknown keys; `stubborn_ms` is a step of its own (`recall.rs`)
+- **TP-EVAL-18** Pause scenarios: `pause_after_ms` pauses every run that long in and `resume_after_ms` resumes them that long later; `expect.pause.same_as_unpaused` runs the scenario again without pausing and requires each run to have paused and resumed, and to have logged exactly the same events otherwise, and been billed the same (`crates/corral-evals/tests/pause.rs`)
+- **TP-EVAL-19** The schema for them: `pause_after_ms`, `resume_after_ms` and `expect.pause` come together, not with `recall_all_after_ms`; `same_as_unpaused` can only be true (`pause.rs`)
 - **TP-CI-14** A PR that changes files outside its linked issue's Allowed paths fails, listing them
 - **TP-CI-15** Tests and fixtures under an allowed path, and additions to this test plan, pass the fence
 - **TP-CI-16** No linked issue, or no Allowed paths section, fails closed; the fence is read from the issue, never the PR body
