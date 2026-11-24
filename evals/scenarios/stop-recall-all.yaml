@@ -1,0 +1,20 @@
+id: EV-STOP-01
+title: Stop all agents halts eight runs at once, and nothing runs after
+# Eight runs over four agents, each waiting on a slow model before it would send an email.
+# Stop all is pressed half a second in: every run must be stopped by it, at once, without
+# dropping a driver, and the email must never start. Only the fake adapter runs here today;
+# other adapter types join this scenario as their adapters arrive (M5).
+agent: { adapter: fake, policy_profile: default }
+prompt: "Draft the weekly update and email it to the team."
+runs: 8
+agents: 4
+recall_all_after_ms: 500
+steps:
+  - model_says: "Drafting the update."
+  - wait_ms: 60000
+  - tool: email.send
+    args: { to: "team@example.test", subject: "Weekly update", body: "The update." }
+expect:
+  recall:
+    p95_within_ms: 2000
+    forced_at_most: 0

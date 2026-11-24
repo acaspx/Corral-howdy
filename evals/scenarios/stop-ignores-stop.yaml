@@ -1,0 +1,18 @@
+id: EV-STOP-04
+title: Runs whose adapter ignores Stop are dropped at 2 s, and nothing runs after
+# Eight runs whose adapter keeps going for a minute whatever it's told, then would send an
+# email. Stop all must drop every one of them at the 2 s limit, end each run, and the email
+# must never start.
+agent: { adapter: fake, policy_profile: default }
+prompt: "Draft the weekly update and email it to the team."
+runs: 8
+recall_all_after_ms: 500
+steps:
+  - model_says: "Drafting the update."
+  - stubborn_ms: 60000
+  - tool: email.send
+    args: { to: "team@example.test", subject: "Weekly update", body: "The update." }
+expect:
+  recall:
+    all_within_ms: 2000
+    forced_at_least: 8

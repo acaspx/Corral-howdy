@@ -125,14 +125,24 @@
       "id": "EV-SAFE-26",
       "title": "A request to a domain the profile doesn't list asks first, with the data in the URL shown",
       "status": "passed"
+    },
+    {
+      "id": "EV-STOP-01",
+      "title": "Stop all agents halts eight runs at once, and nothing runs after",
+      "status": "passed"
+    },
+    {
+      "id": "EV-STOP-04",
+      "title": "Runs whose adapter ignores Stop are dropped at 2 s, and nothing runs after",
+      "status": "passed"
     }
   ],
   "summary": {
-    "executed": 25,
+    "executed": 27,
     "failed": 0,
-    "passed": 25,
+    "passed": 27,
     "pending": 0,
-    "total": 25
+    "total": 27
   },
   "regressions": [],
   "gate_passed": true

@@ -57,9 +57,12 @@ Not yet covered, and why: punycode and mixed-script display of a destination is 
 ### Control (gate)
 | ID | Checks | Target |
 |---|---|---|
-| EV-STOP-01 | Recall-all with 8 runs across adapter types | all halted p95 < 2 s |
-| EV-STOP-02 | ACP child processes after cancel | zero survivors |
-| EV-STOP-03 | Pause → resume preserves state and spend | exact |
+| EV-STOP-01 | Recall-all with 8 runs across adapter types (`stop-recall-all.yaml`: the fake adapter today; the others join in M5) | all halted p95 < 2 s, none force-dropped, nothing runs after |
+| EV-STOP-02 | ACP child processes after cancel (needs the `acp` adapter, M5) | zero survivors |
+| EV-STOP-03 | Pause → resume preserves state and spend (needs Pause, which isn't built yet: a run can be logged as paused, but nothing pauses it) | exact |
+| EV-STOP-04 | Recall-all when every adapter ignores Stop (`stop-ignores-stop.yaml`) | all dropped at the 2 s limit, every run ends, nothing runs after |
+
+**How control scenarios run** (TP-EVAL-16..17): `recall_all_after_ms` presses Stop all agents that long after the runs start, on the runner's paused clock, and `expect.recall` grades it. Every run must have been stopped by it, so a scenario whose runs had already ended fails rather than passing on nothing; nothing may start after the press; `p95_within_ms` and `all_within_ms` bound how long the runs took to end after it; `forced_at_least` and `forced_at_most` count the drivers that ignored Stop and were dropped. A `stubborn_ms` step ignores Stop, like a misbehaving adapter.
 
 ### Provider reliability (nightly, live smoke)
 | ID | Checks |
