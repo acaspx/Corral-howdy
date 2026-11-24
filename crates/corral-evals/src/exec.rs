@@ -28,8 +28,8 @@
 //! Time is tokio's paused clock, so a checkpoint timeout of 30 minutes passes instantly.
 
 use crate::{
-    CapScope, CheckpointExpect, Expect, NeverRule, RecallExpect, Risk, Scenario, ScenarioResult,
-    SpendExpect, Status,
+    CapScope, CheckpointExpect, Expect, NeverRule, PauseExpect, RecallExpect, Risk, Scenario,
+    ScenarioResult, SpendExpect, Status,
 };
 use corral_adapters::fake::{FakeDriver, FakeScript, ToolSetup};
 use corral_core::budget::{BudgetConfig, LedgerConfig, LocalMonths, Price, SpendLedger, usd};
@@ -172,10 +172,19 @@ async fn execute(scenario: &Scenario, profiles: &Profiles) -> Outcome {
         Err(reason) => outcome(scenario, Status::Failed, Some(reason), Vec::new()),
         Ok(plan) => {
             let caps = plan.caps;
-            let (events, recall, mut problems) = play(scenario, plan).await;
+            let unpaused = plan.clone();
+            let (events, recall, mut problems) = play(scenario, plan, Press::of(scenario)).await;
             problems.extend(check(&scenario.expect, &caps, &events));
             if let (Some(want), Some(seen)) = (&scenario.expect.recall, &recall) {
                 recall_check(want, seen, scenario.runs, &events, &mut problems);
+            }
+            if let Some(PauseExpect {
+                same_as_unpaused: true,
+            }) = scenario.expect.pause
+            {
+                let (baseline, _, more) = play(scenario, unpaused, Press::Nothing).await;
+                problems.extend(more.into_iter().map(|p| format!("unpaused, {p}")));
+                pause_check(scenario.runs, &events, &baseline, &mut problems);
             }
             if problems.is_empty() {
                 outcome(scenario, Status::Passed, None, events)
@@ -187,6 +196,7 @@ async fn execute(scenario: &Scenario, profiles: &Profiles) -> Outcome {
 }
 
 /// What a scenario runs with, checked before anything runs.
+#[derive(Clone)]
 struct Plan {
     profile: Profile,
     script: FakeScript,
@@ -362,6 +372,42 @@ fn read_fixture(dir: &Path, name: &str) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| format!("fixture `{name}` can't be read: {e}"))
 }
 
+/// What the runner presses while the runs go.
+#[derive(Clone, Copy)]
+enum Press {
+    Nothing,
+    /// Stop all, this long in.
+    RecallAll(Duration),
+    /// Pause every run this long in, and resume them this long later.
+    Pause {
+        after: Duration,
+        resume: Duration,
+    },
+}
+
+impl Press {
+    fn of(scenario: &Scenario) -> Self {
+        let ms = Duration::from_millis;
+        match (
+            scenario.recall_all_after_ms,
+            scenario.pause_after_ms,
+            scenario.resume_after_ms,
+        ) {
+            (Some(after), _, _) => Self::RecallAll(ms(after)),
+            (None, Some(after), Some(resume)) => Self::Pause {
+                after: ms(after),
+                resume: ms(resume),
+            },
+            // parse_scenario lets neither half a pause through.
+            (None, _, _) => Self::Nothing,
+        }
+    }
+}
+
+fn eval_run(i: u32) -> RunId {
+    RunId::from(format!("eval-run-{i}").as_str())
+}
+
 /// Stop all, as the runner pressed it: when, how much was logged by then, and what it reported.
 struct Recall {
     pressed: Instant,
@@ -373,7 +419,11 @@ struct Recall {
 
 /// Runs the plan and returns what was logged, how Stop all went if the scenario pressed it, and
 /// anything that went wrong on the way.
-async fn play(scenario: &Scenario, plan: Plan) -> (Vec<Event>, Option<Recall>, Vec<String>) {
+async fn play(
+    scenario: &Scenario,
+    plan: Plan,
+    press: Press,
+) -> (Vec<Event>, Option<Recall>, Vec<String>) {
     let desk = Arc::new(CheckpointDesk::default());
     let outputs = Arc::new(Mutex::new(plan.outputs));
     let mut gateway = ToolGateway::new();
@@ -431,7 +481,7 @@ async fn play(scenario: &Scenario, plan: Plan) -> (Vec<Event>, Option<Recall>, V
     for i in 1..=scenario.runs {
         let agent = (i - 1) % scenario.agents + 1;
         let deployed = supervisor.deploy(RunRequest {
-            run_id: RunId::from(format!("eval-run-{i}").as_str()),
+            run_id: eval_run(i),
             agent_id: AgentId::from(format!("eval-agent-{agent}").as_str()),
             session_id: SessionId::from(format!("eval-session-{i}").as_str()),
             prompt: scenario.prompt.clone(),
@@ -440,15 +490,30 @@ async fn play(scenario: &Scenario, plan: Plan) -> (Vec<Event>, Option<Recall>, V
             problems.push(format!("run {i} couldn't start: {e}"));
         }
     }
-    let pressed = match scenario.recall_all_after_ms {
-        Some(ms) => {
-            tokio::time::sleep(Duration::from_millis(ms)).await;
+    let pressed = match press {
+        Press::RecallAll(after) => {
+            tokio::time::sleep(after).await;
             let at = Instant::now();
             let logged = lock(&log.events).len();
             let report = supervisor.recall_all().await;
             Some((at, logged, report))
         }
-        None => None,
+        Press::Pause { after, resume } => {
+            tokio::time::sleep(after).await;
+            for i in 1..=scenario.runs {
+                if let Err(e) = supervisor.pause(&eval_run(i)) {
+                    problems.push(format!("eval-run-{i} couldn't pause: {e}"));
+                }
+            }
+            tokio::time::sleep(resume).await;
+            for i in 1..=scenario.runs {
+                if let Err(e) = supervisor.resume(&eval_run(i)) {
+                    problems.push(format!("eval-run-{i} couldn't resume: {e}"));
+                }
+            }
+            None
+        }
+        Press::Nothing => None,
     };
     // With no run started this returns at once, and the problems above say why.
     if tokio::time::timeout(RUN_LIMIT, supervisor.wait_idle())
@@ -660,7 +725,7 @@ fn recall_check(
 ) {
     let mut halts: Vec<u64> = Vec::new();
     for i in 1..=runs {
-        let run = RunId::from(format!("eval-run-{i}").as_str());
+        let run = eval_run(i);
         let stopped = events.iter().any(|e| {
             e.run_id == run
                 && matches!(&e.body, EventBody::RunCancelled(c) if c.by == CancelledBy::RecallAll)
@@ -713,6 +778,57 @@ fn recall_check(
         problems.push(format!(
             "{forced} runs ignored Stop and were dropped; at most {most} may"
         ));
+    }
+}
+
+/// Pausing changed nothing but the pause (EV-STOP-03): each run paused and resumed, and its
+/// events otherwise match the same run unpaused, `usage.reported` (its bill) included.
+fn pause_check(runs: u32, paused: &[Event], unpaused: &[Event], problems: &mut Vec<String>) {
+    for i in 1..=runs {
+        let run = eval_run(i);
+        let of = |events: &[Event]| -> Vec<EventBody> {
+            events
+                .iter()
+                .filter(|e| e.run_id == run)
+                .map(|e| e.body.clone())
+                .collect()
+        };
+        let with = of(paused);
+        let pauses = with
+            .iter()
+            .filter(|b| matches!(b, EventBody::RunPaused(_)))
+            .count();
+        let resumes = with
+            .iter()
+            .filter(|b| matches!(b, EventBody::RunResumed(_)))
+            .count();
+        if pauses == 0 {
+            problems.push(format!("{run} never paused, so it tested nothing"));
+            continue;
+        }
+        if resumes != pauses {
+            problems.push(format!("{run} paused {pauses} times but resumed {resumes}"));
+        }
+        let rest: Vec<EventBody> = with
+            .into_iter()
+            .filter(|b| !matches!(b, EventBody::RunPaused(_) | EventBody::RunResumed(_)))
+            .collect();
+        let without = of(unpaused);
+        if rest != without {
+            let at = rest
+                .iter()
+                .zip(&without)
+                .position(|(a, b)| a != b)
+                .unwrap_or(rest.len().min(without.len()));
+            let kind = |b: Option<&EventBody>| b.map_or("nothing", |b| b.kind().as_str());
+            problems.push(format!(
+                "{run} logged something different from the same run unpaused: event {} was {} \
+                 paused and {} unpaused",
+                at + 1,
+                kind(rest.get(at)),
+                kind(without.get(at))
+            ));
+        }
     }
 }
 

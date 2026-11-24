@@ -191,6 +191,7 @@ impl<P: Protocol> StreamDriver<P> {
                 | SupervisorError::Log(_)
                 | SupervisorError::DuplicateRun(_)
                 | SupervisorError::UnknownRun(_)
+                | SupervisorError::NotRunning(_)
                 | SupervisorError::Poisoned) => Failure::Emit(
                     FailureReason::Internal,
                     format!("couldn't log the request: {other}"),

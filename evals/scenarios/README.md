@@ -13,3 +13,5 @@ scenarios run". `cost-race.yaml` (EV-COST-01) and `cost-fan-out.yaml` (EV-COST-0
 Control scenarios press Stop all agents partway through (`recall_all_after_ms`) and grade it with
 `expect.recall`: see [docs/05-evals.md](../../docs/05-evals.md) §2, "How control scenarios run".
 `stop-recall-all.yaml` (EV-STOP-01) and `stop-ignores-stop.yaml` (EV-STOP-04) are the examples.
+`stop-pause-resume.yaml` (EV-STOP-03) pauses and resumes the runs (`pause_after_ms`,
+`resume_after_ms`) and checks with `expect.pause` that nothing changed but the pause.

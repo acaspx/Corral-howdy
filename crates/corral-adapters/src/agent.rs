@@ -232,6 +232,10 @@ impl<P: ToolProtocol> Agent<P> {
         let config = self.stream.config();
         let mut conversation = config.conversation(prompt);
         for _ in 0..self.max_turns {
+            // Safe points: a pause takes hold before a turn is sent and before each tool call.
+            if !sink.pause_point(cancel).await {
+                return;
+            }
             let mut decoder = config.tool_decoder();
             if let Sent::Over = self.send(&conversation, &mut decoder, sink, cancel).await {
                 return;
@@ -247,6 +251,9 @@ impl<P: ToolProtocol> Agent<P> {
             }
             let mut results = Vec::with_capacity(calls.len());
             for call in calls {
+                if !sink.pause_point(cancel).await {
+                    return;
+                }
                 let Ok(Value::Object(args)) = serde_json::from_str::<Value>(&call.arguments) else {
                     results.push((call, BAD_ARGUMENTS.to_owned()));
                     continue;
