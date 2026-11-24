@@ -28,17 +28,21 @@
 //! Time is tokio's paused clock, so a checkpoint timeout of 30 minutes passes instantly.
 
 use crate::{
-    CapScope, CheckpointExpect, Expect, NeverRule, Risk, Scenario, ScenarioResult, SpendExpect,
-    Status,
+    CapScope, CheckpointExpect, Expect, NeverRule, RecallExpect, Risk, Scenario, ScenarioResult,
+    SpendExpect, Status,
 };
 use corral_adapters::fake::{FakeDriver, FakeScript, ToolSetup};
 use corral_core::budget::{BudgetConfig, LedgerConfig, LocalMonths, Price, SpendLedger, usd};
 use corral_core::clock::ManualClock;
 use corral_core::domain::{self, ActionClass};
-use corral_core::event::{CheckpointOpened, Event, EventBody, FailureReason, Resolution};
+use corral_core::event::{
+    CancelledBy, CheckpointOpened, Event, EventBody, FailureReason, Resolution,
+};
 use corral_core::ids::{AgentId, RunId, SessionId, ToolCallId};
 use corral_core::lifecycle::{Lifecycle, next};
-use corral_core::supervisor::{EventLog, LogError, RunRequest, Supervisor, SupervisorConfig};
+use corral_core::supervisor::{
+    EventLog, LogError, RecallReport, RunRequest, Supervisor, SupervisorConfig,
+};
 use corral_policy::{Approval, Policy, Profile, Scope};
 use corral_tools::{Answer, BoxFuture, CheckpointDesk, Tool, ToolError, ToolGateway};
 use serde_json::{Value, json};
@@ -47,6 +51,7 @@ use std::path::{Component, Path};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
+use tokio::time::Instant;
 
 /// The largest fixture the runner reads.
 pub const MAX_FIXTURE_BYTES: u64 = 1_048_576;
@@ -167,8 +172,11 @@ async fn execute(scenario: &Scenario, profiles: &Profiles) -> Outcome {
         Err(reason) => outcome(scenario, Status::Failed, Some(reason), Vec::new()),
         Ok(plan) => {
             let caps = plan.caps;
-            let (events, mut problems) = play(scenario, plan).await;
+            let (events, recall, mut problems) = play(scenario, plan).await;
             problems.extend(check(&scenario.expect, &caps, &events));
+            if let (Some(want), Some(seen)) = (&scenario.expect.recall, &recall) {
+                recall_check(want, seen, scenario.runs, &events, &mut problems);
+            }
             if problems.is_empty() {
                 outcome(scenario, Status::Passed, None, events)
             } else {
@@ -264,6 +272,10 @@ fn prepare(scenario: &Scenario, profiles: &Profiles) -> Result<Plan, String> {
             script = script.wait(Duration::from_millis(ms));
             continue;
         }
+        if let Some(ms) = step.stubborn_ms {
+            script = script.stubborn(Duration::from_millis(ms));
+            continue;
+        }
         match (&step.tool, &step.model_says) {
             (Some(tool), _) => {
                 let args = match &step.args {
@@ -350,8 +362,18 @@ fn read_fixture(dir: &Path, name: &str) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| format!("fixture `{name}` can't be read: {e}"))
 }
 
-/// Runs the plan and returns what was logged, with anything that went wrong on the way.
-async fn play(scenario: &Scenario, plan: Plan) -> (Vec<Event>, Vec<String>) {
+/// Stop all, as the runner pressed it: when, how much was logged by then, and what it reported.
+struct Recall {
+    pressed: Instant,
+    logged: usize,
+    report: RecallReport,
+    /// When each run ended, on the runner's clock.
+    ended: HashMap<RunId, Instant>,
+}
+
+/// Runs the plan and returns what was logged, how Stop all went if the scenario pressed it, and
+/// anything that went wrong on the way.
+async fn play(scenario: &Scenario, plan: Plan) -> (Vec<Event>, Option<Recall>, Vec<String>) {
     let desk = Arc::new(CheckpointDesk::default());
     let outputs = Arc::new(Mutex::new(plan.outputs));
     let mut gateway = ToolGateway::new();
@@ -380,13 +402,14 @@ async fn play(scenario: &Scenario, plan: Plan) -> (Vec<Event>, Vec<String>) {
         });
     let log = Arc::new(UserLog {
         events: Mutex::default(),
+        ended: Mutex::default(),
         problems: Mutex::default(),
         desk,
         deny: plan.deny,
     });
     let Some(months) = LocalMonths::fixed(0) else {
         problems.push("the runner couldn't count months in UTC".into());
-        return (Vec::new(), problems);
+        return (Vec::new(), None, problems);
     };
     let ledger = SpendLedger::new(
         LedgerConfig {
@@ -417,6 +440,16 @@ async fn play(scenario: &Scenario, plan: Plan) -> (Vec<Event>, Vec<String>) {
             problems.push(format!("run {i} couldn't start: {e}"));
         }
     }
+    let pressed = match scenario.recall_all_after_ms {
+        Some(ms) => {
+            tokio::time::sleep(Duration::from_millis(ms)).await;
+            let at = Instant::now();
+            let logged = lock(&log.events).len();
+            let report = supervisor.recall_all().await;
+            Some((at, logged, report))
+        }
+        None => None,
+    };
     // With no run started this returns at once, and the problems above say why.
     if tokio::time::timeout(RUN_LIMIT, supervisor.wait_idle())
         .await
@@ -426,7 +459,13 @@ async fn play(scenario: &Scenario, plan: Plan) -> (Vec<Event>, Vec<String>) {
     }
     problems.extend(lock(&log.problems).drain(..));
     let events = lock(&log.events).clone();
-    (events, problems)
+    let recall = pressed.map(|(pressed, logged, report)| Recall {
+        pressed,
+        logged,
+        report,
+        ended: lock(&log.ended).clone(),
+    });
+    (events, recall, problems)
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -475,6 +514,8 @@ impl Tool for CatalogTool {
 /// The event log, and the user: it answers each checkpoint as it opens.
 struct UserLog {
     events: Mutex<Vec<Event>>,
+    /// When each run ended, on the runner's clock (the log's own times are a fixed clock).
+    ended: Mutex<HashMap<RunId, Instant>>,
     problems: Mutex<Vec<String>>,
     desk: Arc<CheckpointDesk>,
     deny: Option<ActionClass>,
@@ -483,6 +524,12 @@ struct UserLog {
 impl EventLog for UserLog {
     fn append(&self, event: &Event) -> Result<(), LogError> {
         lock(&self.events).push(event.clone());
+        if matches!(
+            event.body,
+            EventBody::RunCompleted(_) | EventBody::RunFailed(_) | EventBody::RunCancelled(_)
+        ) {
+            lock(&self.ended).insert(event.run_id.clone(), Instant::now());
+        }
         if let EventBody::CheckpointOpened(opened) = &event.body {
             let answer = if Some(opened.action_class) == self.deny {
                 Answer::Deny {
@@ -600,6 +647,83 @@ fn check(expect: &Expect, caps: &Caps, events: &[Event]) -> Vec<String> {
         spend(want, caps, events, &mut problems);
     }
     problems
+}
+
+/// How Stop all went (EV-STOP-*): every run stopped by it, nothing started after the press, the
+/// runs ended within the limits, and the drivers dropped for ignoring Stop counted.
+fn recall_check(
+    want: &RecallExpect,
+    seen: &Recall,
+    runs: u32,
+    events: &[Event],
+    problems: &mut Vec<String>,
+) {
+    let mut halts: Vec<u64> = Vec::new();
+    for i in 1..=runs {
+        let run = RunId::from(format!("eval-run-{i}").as_str());
+        let stopped = events.iter().any(|e| {
+            e.run_id == run
+                && matches!(&e.body, EventBody::RunCancelled(c) if c.by == CancelledBy::RecallAll)
+        });
+        if !stopped {
+            problems.push(format!(
+                "{run} had already ended when Stop all was pressed, so it tested nothing"
+            ));
+            continue;
+        }
+        match seen.ended.get(&run) {
+            Some(at) => halts.push(ms(at.saturating_duration_since(seen.pressed))),
+            None => problems.push(format!("{run} never logged its end")),
+        }
+    }
+    for e in events.iter().skip(seen.logged) {
+        if let EventBody::ToolStarted(t) = &e.body {
+            problems.push(format!(
+                "{} started a tool ({}) after Stop all",
+                e.run_id, t.tool_call_id
+            ));
+        }
+    }
+    halts.sort_unstable();
+    if let (Some(limit), Some(p95)) = (want.p95_within_ms, percentile_95(&halts))
+        && p95 > limit
+    {
+        problems.push(format!(
+            "95% of the runs took up to {p95} ms to end after Stop all; the limit is {limit} ms"
+        ));
+    }
+    if let (Some(limit), Some(&slowest)) = (want.all_within_ms, halts.last())
+        && slowest > limit
+    {
+        problems.push(format!(
+            "the slowest run took {slowest} ms to end after Stop all; the limit is {limit} ms"
+        ));
+    }
+    let forced = seen.report.forced;
+    if let Some(least) = want.forced_at_least
+        && forced < least as usize
+    {
+        problems.push(format!(
+            "{forced} runs ignored Stop and were dropped; at least {least} should have"
+        ));
+    }
+    if let Some(most) = want.forced_at_most
+        && forced > most as usize
+    {
+        problems.push(format!(
+            "{forced} runs ignored Stop and were dropped; at most {most} may"
+        ));
+    }
+}
+
+/// The value 95% of `sorted` are at or under (nearest rank).
+fn percentile_95(sorted: &[u64]) -> Option<u64> {
+    let rank = (sorted.len() * 95).div_ceil(100);
+    sorted.get(rank.checked_sub(1)?).copied()
+}
+
+fn ms(duration: Duration) -> u64 {
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
 
 /// The bill, graded from the log against the caps `want` names, and the runs a cap refused.

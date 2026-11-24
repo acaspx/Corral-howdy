@@ -85,8 +85,8 @@ pub struct UsageStep {
     pub cost_micro_usd: Option<u64>,
 }
 
-/// One scripted agent step. Exactly one of `tool`, `model_says`, `usage`, `new_turn` or
-/// `wait_ms` is set.
+/// One scripted agent step. Exactly one of `tool`, `model_says`, `usage`, `new_turn`,
+/// `wait_ms` or `stubborn_ms` is set.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Step {
@@ -108,9 +108,12 @@ pub struct Step {
     /// Ends the model turn and asks the model again, through the budget meter. Only `true`.
     #[serde(default)]
     pub new_turn: Option<bool>,
-    /// Waits this long on the runner's clock: other runs move meanwhile.
+    /// Waits this long on the runner's clock: other runs move meanwhile. Stop ends the wait.
     #[serde(default)]
     pub wait_ms: Option<u64>,
+    /// Takes this long and ignores Stop, like a misbehaving adapter (EV-STOP-04).
+    #[serde(default)]
+    pub stubborn_ms: Option<u64>,
 }
 
 /// A model's price per million tokens, in micro-USD.
@@ -165,6 +168,34 @@ pub struct SpendExpect {
     /// because the caps never bound.
     #[serde(default)]
     pub refused_at_least: Option<u32>,
+}
+
+/// How Stop all must go (EV-STOP-*), graded from the log and the runner's clock. Every run must
+/// have been stopped by it, and nothing may start after the press.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RecallExpect {
+    /// 95% of the runs end within this long of the press.
+    #[serde(default)]
+    pub p95_within_ms: Option<u64>,
+    /// Every run ends within this long of the press.
+    #[serde(default)]
+    pub all_within_ms: Option<u64>,
+    /// At least this many drivers ignored Stop and were dropped.
+    #[serde(default)]
+    pub forced_at_least: Option<u32>,
+    /// At most this many drivers ignored Stop and were dropped.
+    #[serde(default)]
+    pub forced_at_most: Option<u32>,
+}
+
+impl RecallExpect {
+    fn is_empty(&self) -> bool {
+        self.p95_within_ms.is_none()
+            && self.all_within_ms.is_none()
+            && self.forced_at_least.is_none()
+            && self.forced_at_most.is_none()
+    }
 }
 
 /// Risk tier a checkpoint must carry (`docs/01-system-design.md` §5).
@@ -235,6 +266,9 @@ pub struct Expect {
     /// What the runs were billed.
     #[serde(default)]
     pub spend: Option<SpendExpect>,
+    /// How Stop all went; needs `recall_all_after_ms`.
+    #[serde(default)]
+    pub recall: Option<RecallExpect>,
 }
 
 impl Expect {
@@ -243,6 +277,7 @@ impl Expect {
             && self.if_denied.is_none()
             && self.never.is_empty()
             && self.spend.is_none()
+            && self.recall.is_none()
     }
 }
 
@@ -275,6 +310,10 @@ pub struct Scenario {
     /// How many agents the runs are spread over, round robin (1 to `runs`).
     #[serde(default = "one")]
     pub agents: u32,
+    /// Presses Stop all agents this long after the runs start, on the runner's clock; graded by
+    /// `expect.recall`.
+    #[serde(default)]
+    pub recall_all_after_ms: Option<u64>,
     /// Scripted agent steps (interpreted by the FakeAdapter from M1).
     pub steps: Vec<Step>,
     /// Expectations checked against the event log.
@@ -381,10 +420,11 @@ pub fn parse_scenario(path: &Path, text: &str) -> Result<Scenario, EvalError> {
             step.usage.is_some(),
             step.new_turn.is_some(),
             step.wait_ms.is_some(),
+            step.stubborn_ms.is_some(),
         ];
         if kinds.iter().filter(|set| **set).count() != 1 {
             return Err(invalid(format!(
-                "step {n}: set exactly one of `tool`, `model_says`, `usage`, `new_turn` or `wait_ms`"
+                "step {n}: set exactly one of `tool`, `model_says`, `usage`, `new_turn` or `wait_ms`, or make it a `stubborn_ms` step"
             )));
         }
         if step.tool.is_none() && (step.args.is_some() || step.returns_fixture.is_some()) {
@@ -407,7 +447,8 @@ pub fn parse_scenario(path: &Path, text: &str) -> Result<Scenario, EvalError> {
     }
     if scenario.expect.is_empty() {
         return Err(invalid(
-            "`expect` needs at least one of `checkpoint`, `if_denied`, `never` or `spend`".into(),
+            "`expect` needs at least one of `checkpoint`, `if_denied`, `never`, `spend` or `recall`"
+                .into(),
         ));
     }
     if scenario.runs > 1
@@ -425,6 +466,26 @@ pub fn parse_scenario(path: &Path, text: &str) -> Result<Scenario, EvalError> {
         return Err(invalid(
             "`spend` needs `never_over` or `refused_at_least`".into(),
         ));
+    }
+    match (&scenario.expect.recall, scenario.recall_all_after_ms) {
+        (Some(recall), Some(_)) if recall.is_empty() => {
+            return Err(invalid(
+                "`recall` needs `p95_within_ms`, `all_within_ms`, `forced_at_least` or `forced_at_most`"
+                    .into(),
+            ));
+        }
+        (Some(_), None) => {
+            return Err(invalid(
+                "`expect.recall` grades Stop all; say when to press it with `recall_all_after_ms`"
+                    .into(),
+            ));
+        }
+        (None, Some(_)) => {
+            return Err(invalid(
+                "`recall_all_after_ms` presses Stop all; grade it with `expect.recall`".into(),
+            ));
+        }
+        (Some(_), Some(_)) | (None, None) => {}
     }
     Ok(scenario)
 }
