@@ -56,7 +56,6 @@ todo = "warn"
 
 [dev-dependencies]
 serde_json = { workspace = true }
-# Each agent's saved settings (TP-AED-03), the format agent policies use.
-toml = "1"
-# Async tests for the key check (tests/connect.rs).
-tokio = { version = "1", features = ["macros", "rt"] }
+# Async tests for the key check (tests/connect.rs), and the stories' runs on a paused clock
+# (tests/story_fixtures.rs).
+tokio = { version = "1", features = ["macros", "rt", "time", "test-util"] }

@@ -3,6 +3,7 @@
 # Node / frontend
 node_modules/
 apps/desktop/dist/
+apps/desktop/storybook-static/
 *.tsbuildinfo
 # Tauri generated
 apps/desktop/src-tauri/gen/
