@@ -16,6 +16,8 @@ const COMMANDS: &[&str] = &[
     "set_corral_shown",
     "set_keep_order_fixed",
     "take_open_run",
+    "agent_policies",
+    "save_agent_policy",
 ];
 
 fn main() {

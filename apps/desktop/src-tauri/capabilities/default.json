@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main-window",
-  "description": "Least privilege for the main window (security model T10). It may read, identify, connect (check with the provider, then save) and remove provider keys, see and switch the provider-side tools the core offers, read runs' traces and take the run a click in the corral asked to open, and nothing else. Add single permissions per feature, never bundles; keep tests/capabilities.rs in step.",
+  "description": "Least privilege for the main window (security model T10). It may read, identify, connect (check with the provider, then save) and remove provider keys, see and switch the provider-side tools the core offers, read runs' traces and take the run a click in the corral asked to open, see each agent's policy and save one the core checked, and nothing else. Add single permissions per feature, never bundles; keep tests/capabilities.rs in step.",
   "windows": [
     "main"
   ],
@@ -17,6 +17,8 @@
     "allow-corral-settings",
     "allow-set-corral-shown",
     "allow-set-keep-order-fixed",
-    "allow-take-open-run"
+    "allow-take-open-run",
+    "allow-agent-policies",
+    "allow-save-agent-policy"
   ]
 }
