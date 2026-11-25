@@ -645,3 +645,10 @@ async fn tp_sup_06_a_pause_asked_for_at_a_checkpoint_takes_hold_before_the_next_
     assert_eq!(w.log.count("run.resumed"), 1);
     assert!(matches!(w.log.terminal(), EventBody::RunCompleted(_)));
 }
+
+#[tokio::test(start_paused = true)]
+async fn tp_pause_03_the_agent_loop_says_it_pauses() {
+    let w = world(vec![says("Hi.")], PLAIN);
+    assert!(w.sup.can_pause(&AgentId::from("grok")));
+    idle(&w).await;
+}

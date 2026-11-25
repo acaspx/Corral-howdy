@@ -80,3 +80,44 @@ async fn tp_sup_06_the_fake_pauses_between_steps_and_resumes_the_rest() {
         state = next(&state, &e).unwrap_or_else(|err| panic!("illegal: {err}"));
     }
 }
+
+// ---- TP-PAUSE-03: which drivers say they pause -------------------------------------------
+
+/// A driver with no safe points: the default says it can't pause.
+struct NoSafePoints;
+
+impl corral_core::supervisor::RunDriver for NoSafePoints {
+    fn run(
+        &self,
+        _request: RunRequest,
+        _sink: corral_core::supervisor::EventSink,
+        _cancel: corral_core::supervisor::CancelToken,
+    ) -> corral_core::supervisor::RunFuture {
+        Box::pin(async {})
+    }
+}
+
+#[test]
+fn tp_pause_03_the_router_and_the_switch_pause_only_when_their_drivers_do() {
+    use corral_adapters::catalog::{AgentRouter, Switched};
+    use corral_core::supervisor::RunDriver;
+    use std::collections::HashMap;
+    let grok = AgentId::from("grok");
+    let fake: Arc<dyn RunDriver> = Arc::new(FakeDriver::new(FakeScript::default()));
+    let none: Arc<dyn RunDriver> = Arc::new(NoSafePoints);
+    assert!(fake.pauses(&grok), "the fake pauses between steps");
+    assert!(!none.pauses(&grok), "the default is no");
+    let router = AgentRouter::new(HashMap::from([
+        (grok.clone(), Arc::clone(&fake)),
+        (AgentId::from("muse"), Arc::clone(&none)),
+    ]));
+    assert!(router.pauses(&grok));
+    assert!(!router.pauses(&AgentId::from("muse")));
+    assert!(!router.pauses(&AgentId::from("nobody")), "no driver yet");
+    let both = Switched::new(Arc::clone(&fake), Arc::clone(&fake), Arc::new(|| true));
+    assert!(both.pauses(&grok));
+    let one = Switched::new(Arc::clone(&fake), Arc::clone(&none), Arc::new(|| true));
+    assert!(!one.pauses(&grok), "either build may take the next run");
+    let other = Switched::new(Arc::clone(&none), Arc::clone(&fake), Arc::new(|| true));
+    assert!(!other.pauses(&grok));
+}

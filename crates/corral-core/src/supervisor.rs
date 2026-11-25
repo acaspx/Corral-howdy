@@ -88,6 +88,13 @@ pub trait RunDriver: Send + Sync + 'static {
     /// Starts the run. Emit events through `sink`, finish with `run.completed` or `run.failed`,
     /// and return promptly once `cancel` fires.
     fn run(&self, request: RunRequest, sink: EventSink, cancel: CancelToken) -> RunFuture;
+
+    /// Whether `agent`'s runs stop at safe points ([`EventSink::pause_point`]), so a card can
+    /// offer Pause (TP-PAUSE-01). A driver that doesn't call it says no, the default: a pause
+    /// would never take hold.
+    fn pauses(&self, _agent: &AgentId) -> bool {
+        false
+    }
 }
 
 /// What to deploy.
@@ -639,6 +646,11 @@ impl Supervisor {
             |_| Vec::new(),
             |s| s.queue.iter().map(|q| q.request.run_id.clone()).collect(),
         )
+    }
+
+    /// Whether `agent`'s runs can pause: its driver stops at safe points (TP-PAUSE-03).
+    pub fn can_pause(&self, agent: &AgentId) -> bool {
+        self.0.driver.pauses(agent)
     }
 
     /// A deployed run's lifecycle phase.

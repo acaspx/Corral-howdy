@@ -66,7 +66,11 @@ pub fn trace_tree(cards: &RunCards, agents: &[AgentId]) -> TraceTree {
             continue;
         };
         match card.status {
-            CardStatus::Queued | CardStatus::Working | CardStatus::NeedsYou => {}
+            CardStatus::Queued
+            | CardStatus::Working
+            | CardStatus::Pausing
+            | CardStatus::Paused
+            | CardStatus::NeedsYou => {}
             CardStatus::Done | CardStatus::Error | CardStatus::Stopped => continue,
         }
         let (subtask, next) = cards.plan(agent).map_or((None, Vec::new()), |plan| {

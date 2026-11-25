@@ -9,6 +9,8 @@ public enum CorralStatusMark: Equatable, Sendable {
     case none
     /// Working: a coral arc turning slowly (still under Reduce Motion).
     case turningArc
+    /// Paused: the arc held still, with a badge (TP-PAUSE-05).
+    case stillArc(badge: String)
     /// Needs you: a maroon ring that pulses, with a badge.
     case pulse(badge: String)
     /// Done or error: a badge (an SF Symbol name).
@@ -18,6 +20,7 @@ public enum CorralStatusMark: Equatable, Sendable {
         switch status {
         case .available: .none
         case .working: .turningArc
+        case .paused: .stillArc(badge: "pause.fill")
         case .needsYou: .pulse(badge: "exclamationmark")
         case .done: .badge("checkmark")
         case .error: .badge("exclamationmark.triangle.fill")

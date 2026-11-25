@@ -36,15 +36,19 @@ use crate::ids::{AgentId, CheckpointId, RunId, ToolCallId};
 use crate::lifecycle::{Lifecycle, Phase, next};
 use crate::plan_view::PlanView;
 use serde_json::{Map, Number, Value};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// Where a card's run stands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CardStatus {
     /// Waiting for a free slot.
     Queued,
-    /// Working (or paused).
+    /// Working.
     Working,
+    /// Working, and asked to pause: it stops at its next safe point (TP-PAUSE-01).
+    Pausing,
+    /// Paused: it waits for Resume.
+    Paused,
     /// A checkpoint is waiting on the user.
     NeedsYou,
     /// Finished with an answer.
@@ -60,6 +64,10 @@ pub enum CardStatus {
 pub enum CardAction {
     /// Stop the run.
     Stop,
+    /// Pause the run at its next safe point.
+    Pause,
+    /// Resume a paused run, or take back a pause it hasn't reached yet.
+    Resume,
     /// Close the session; the drop is ready for a task again.
     SendBack,
     /// Ask for another task (a follow-up in the same session, or a fresh one after Stop).
@@ -198,6 +206,8 @@ struct Record {
     editable: HashMap<CheckpointId, (Value, Vec<CardField>)>,
     /// The run's subtasks (TP-HOVER-03).
     plan: PlanView,
+    /// The user pressed Pause and the run hasn't reached its safe point yet.
+    pause_asked: bool,
 }
 
 /// Keeps every agent's card up to date from the event stream.
@@ -205,6 +215,8 @@ struct Record {
 pub struct RunCards {
     runs: HashMap<RunId, Record>,
     latest: HashMap<AgentId, RunId>,
+    /// Agents whose driver stops at safe points, so their cards offer Pause.
+    pausable: HashSet<AgentId>,
 }
 
 impl RunCards {
@@ -263,6 +275,7 @@ impl RunCards {
                     requested: None,
                     editable: HashMap::new(),
                     plan: PlanView::default(),
+                    pause_asked: false,
                 },
             );
             self.latest
@@ -293,6 +306,8 @@ impl RunCards {
                 record.error = Some(failed.message.clone());
             }
             EventBody::RunCancelled(_) => record.ended_ms = Some(event.ts),
+            // The ask is used up: the next Pause asks again.
+            EventBody::RunPaused(_) => record.pause_asked = false,
             EventBody::ToolRequested(requested) => {
                 record.requested = Some((requested.tool_call_id.clone(), requested.args.clone()));
             }
@@ -327,11 +342,34 @@ impl RunCards {
             | EventBody::ToolStarted(_)
             | EventBody::ToolResult(_)
             | EventBody::BudgetWarned(_)
-            | EventBody::RunPaused(_)
             | EventBody::RunResumed(_)
             | EventBody::SessionClosed(_) => {}
         }
         Ok(())
+    }
+
+    /// The agents whose driver stops at safe points (`RunDriver::pauses`): only their working
+    /// cards offer Pause (TP-PAUSE-01).
+    pub fn set_pausable(&mut self, agents: impl IntoIterator<Item = AgentId>) {
+        self.pausable = agents.into_iter().collect();
+    }
+
+    /// Pause was pressed on `agent`'s card (`asked`), or Resume before the run reached its safe
+    /// point (`!asked`). Only a working run of an agent that can pause can be asked; the ask is
+    /// used up once the run pauses. Returns whether the card changed.
+    pub fn ask_pause(&mut self, agent: &AgentId, asked: bool) -> bool {
+        let can = self.pausable.contains(agent);
+        let Some(record) = self
+            .latest
+            .get(agent)
+            .and_then(|run| self.runs.get_mut(run))
+        else {
+            return false;
+        };
+        let wanted = asked && can && record.life.phase() == Phase::Running;
+        let changed = record.pause_asked != wanted;
+        record.pause_asked = wanted;
+        changed
     }
 
     /// The run `agent`'s card follows: the one its trace tree column and "Trace ›" open
@@ -356,7 +394,10 @@ impl RunCards {
     pub fn card(&self, agent: &AgentId, now_ms: u64) -> Option<RunCard> {
         let run = self.latest.get(agent)?;
         let record = self.runs.get(run)?;
-        let status = status(record.life.phase())?;
+        let mut status = status(record.life.phase())?;
+        if status == CardStatus::Working && record.pause_asked {
+            status = CardStatus::Pausing;
+        }
         let elapsed_ms = record.started_ms.map_or(0, |start| {
             record.ended_ms.unwrap_or(now_ms).saturating_sub(start)
         });
@@ -384,7 +425,7 @@ impl RunCards {
                 .error
                 .as_deref()
                 .map(|e| AgentText::new(e, PROMPT_MAX_CHARS)),
-            actions: actions(status),
+            actions: actions(status, self.pausable.contains(agent)),
             checkpoint,
             edit,
         })
@@ -591,7 +632,8 @@ fn status(phase: Phase) -> Option<CardStatus> {
     match phase {
         Phase::Idle => None,
         Phase::Queued => Some(CardStatus::Queued),
-        Phase::Running | Phase::Paused => Some(CardStatus::Working),
+        Phase::Running => Some(CardStatus::Working),
+        Phase::Paused => Some(CardStatus::Paused),
         Phase::AwaitingCheckpoint => Some(CardStatus::NeedsYou),
         Phase::Completed => Some(CardStatus::Done),
         Phase::Failed => Some(CardStatus::Error),
@@ -599,10 +641,12 @@ fn status(phase: Phase) -> Option<CardStatus> {
     }
 }
 
-/// The buttons for each state (07 §8.2). Approve, Deny and Pause arrive with M2.
-fn actions(status: CardStatus) -> Vec<CardAction> {
+/// The buttons for each state (07 §8.2). Pause only for an agent that can pause.
+fn actions(status: CardStatus, pausable: bool) -> Vec<CardAction> {
     match status {
+        CardStatus::Working if pausable => vec![CardAction::Pause, CardAction::Stop],
         CardStatus::Queued | CardStatus::Working => vec![CardAction::Stop],
+        CardStatus::Pausing | CardStatus::Paused => vec![CardAction::Resume, CardAction::Stop],
         CardStatus::NeedsYou => vec![CardAction::Approve, CardAction::Deny],
         CardStatus::Done | CardStatus::Stopped => vec![CardAction::SendBack, CardAction::NewTask],
         CardStatus::Error => vec![CardAction::Retry, CardAction::SendBack],

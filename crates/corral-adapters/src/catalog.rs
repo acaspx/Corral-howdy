@@ -94,6 +94,13 @@ impl AgentRouter {
 }
 
 impl RunDriver for AgentRouter {
+    /// Whether the agent's own driver pauses; an agent with no driver yet can't.
+    fn pauses(&self, agent: &AgentId) -> bool {
+        self.drivers
+            .get(agent)
+            .is_some_and(|driver| driver.pauses(agent))
+    }
+
     fn run(&self, request: RunRequest, sink: EventSink, cancel: CancelToken) -> RunFuture {
         if let Some(driver) = self.drivers.get(&request.agent_id) {
             return driver.run(request, sink, cancel);
@@ -133,6 +140,11 @@ impl Switched {
 }
 
 impl RunDriver for Switched {
+    /// Either build may take the next run, so both must pause.
+    fn pauses(&self, agent: &AgentId) -> bool {
+        self.on.pauses(agent) && self.off.pauses(agent)
+    }
+
     fn run(&self, request: RunRequest, sink: EventSink, cancel: CancelToken) -> RunFuture {
         if (self.state)() {
             self.on.run(request, sink, cancel)

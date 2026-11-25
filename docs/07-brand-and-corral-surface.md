@@ -9,7 +9,7 @@ Prototype code: `native/CorralNative/Sources/CorralNative/Corral/` · Interactiv
 
 The corral is a physical-feeling object on your desktop: a pool of liquid glass sitting at the bottom center of the screen, just above the Dock. Each agent is a drop of glass carrying **that agent's logo**. Drops are linked by thin liquid bridges, and the pool's **shape is the headcount**: one drop is a circle, two make a dumbbell, three a triangle, four a square, and so on up to an octagon.
 
-**Agents stay in the corral while they work.** A working drop wears a slowly turning ring, and a drop that needs you pulses and shows a badge. Above the corral, a **trace tree** rises: one column per active task. Each column is the prompt you gave, the task card, and a stack of subtask cards, wired down into the agent's drop. **Hover any drop** and a paper card opens above it, showing what the agent is doing, how far along it is, and the buttons for anything waiting on you: Approve, Deny, Edit.
+**Agents stay in the corral while they work.** A working drop wears a slowly turning ring, a paused one holds that ring still with a pause badge, and a drop that needs you pulses and shows a badge. Above the corral, a **trace tree** rises: one column per active task. Each column is the prompt you gave, the task card, and a stack of subtask cards, wired down into the agent's drop. **Hover any drop** and a paper card opens above it, showing what the agent is doing, how far along it is, and the buttons for anything waiting on you: Approve, Deny, Edit.
 
 You can tell how many agents you have, which one you use most, which are busy and which need you, without reading a word.
 
@@ -224,7 +224,9 @@ Contents, top to bottom:
 | State | Buttons |
 |---|---|
 | Idle | **New task** · Settings |
-| Working | Pause · Stop · Trace › |
+| Working | Pause · Stop · Trace › (Pause only for agents that stop at safe points; otherwise Stop · Trace ›) |
+| Pausing | **Resume** · Stop · Trace ›, reading "Pausing after this step" until the run reaches its safe point; Resume takes the pause back |
+| Paused | **Resume** · Stop · Trace ›, reading "Paused · step 2 of 5" |
 | Needs you | **Approve** · Deny · Edit… · Trace › |
 | Done | **Send back** · New task · Trace › |
 | Error | **Retry** · Send back · Trace › |

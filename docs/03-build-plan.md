@@ -118,7 +118,7 @@ Issues (examples):
 7. Recall-all with forced-drop after 2 s
 8. Crash recovery: orphaned runs → `Failed{app_restarted}`
 
-**Exit:** TP-LIFE-*, TP-STORE-*, TP-SUP-* green; EV-STOP-01 passing (Recall-all p95 < 2 s with 8 fake runs; a gate scenario since 2026-11-23, with EV-STOP-04 for adapters that ignore Stop). Pause and resume in the core, with EV-STOP-03, came 2026-11-23 (TP-SUP-04..06); the card's Pause and Resume buttons are next.
+**Exit:** TP-LIFE-*, TP-STORE-*, TP-SUP-* green; EV-STOP-01 passing (Recall-all p95 < 2 s with 8 fake runs; a gate scenario since 2026-11-23, with EV-STOP-04 for adapters that ignore Stop). Pause and resume in the core, with EV-STOP-03, came 2026-11-23 (TP-SUP-04..06); the card's Pause and Resume buttons, with Pausing and Paused states on the card and the drop, followed (TP-PAUSE-01..05).
 
 ## M2: Policy engine and checkpoints (~2 weeks)
 Goal: the safety core, proven before any real agent can touch it.

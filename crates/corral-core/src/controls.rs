@@ -45,6 +45,12 @@ pub enum ControlError {
     /// Nothing is running to stop.
     #[error("{0} isn't working on anything.")]
     NothingToStop(AgentId),
+    /// Nothing is working that could pause or resume.
+    #[error("{0} isn't working on anything to pause.")]
+    NothingToPause(AgentId),
+    /// The agent's runs don't stop at safe points, so a pause would never take hold.
+    #[error("{0} can't pause; stop it instead.")]
+    CantPause(AgentId),
     /// The agent is already in the corral.
     #[error("{0} is already in the corral.")]
     NothingToSendBack(AgentId),
@@ -150,6 +156,35 @@ impl CorralControls {
         };
         self.supervisor.cancel(&run).await?;
         Ok(())
+    }
+
+    /// Pause on a card: the agent's working run stops at its next safe point (TP-PAUSE-03).
+    /// Returns the run.
+    pub fn pause(&self, agent: &AgentId) -> Result<RunId, ControlError> {
+        let run = self.working_run(agent)?;
+        if !self.supervisor.can_pause(agent) {
+            return Err(ControlError::CantPause(agent.clone()));
+        }
+        self.supervisor.pause(&run)?;
+        Ok(run)
+    }
+
+    /// Resume on a card: a paused run carries on, and one asked to pause no longer will.
+    /// Returns the run.
+    pub fn resume(&self, agent: &AgentId) -> Result<RunId, ControlError> {
+        let run = self.working_run(agent)?;
+        self.supervisor.resume(&run)?;
+        Ok(run)
+    }
+
+    /// The agent's latest run, while it's working (queued, running, paused or waiting on you).
+    fn working_run(&self, agent: &AgentId) -> Result<RunId, ControlError> {
+        self.known(agent)?;
+        let latest = self.lock()?;
+        match latest.get(agent) {
+            Some(last) if self.phase(&last.run).is_some_and(is_working) => Ok(last.run.clone()),
+            Some(_) | None => Err(ControlError::NothingToPause(agent.clone())),
+        }
     }
 
     /// Stop all agents (Recall-all, from the corral's right-click menu): stops every queued and

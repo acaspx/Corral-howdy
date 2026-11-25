@@ -19,11 +19,11 @@ import Foundation
 
 public struct CorralRunCard: Equatable, Sendable {
     public enum Status: String, Equatable, Sendable {
-        case queued, working, needsYou, done, error, stopped
+        case queued, working, pausing, paused, needsYou, done, error, stopped
     }
 
     public enum Action: String, Equatable, Sendable {
-        case stop, sendBack, newTask, retry, approve, deny
+        case stop, pause, resume, sendBack, newTask, retry, approve, deny
     }
 
     /// One argument of a waiting call, for the edit sheet. The core decides which can change.

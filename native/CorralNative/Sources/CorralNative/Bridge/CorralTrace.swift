@@ -15,7 +15,7 @@ public struct CorralTrace: Equatable, Sendable {
     public static let maxSubtasks = 100
 
     public enum Status: String, Equatable, Sendable {
-        case queued, working, needsYou
+        case queued, working, pausing, paused, needsYou
     }
 
     /// "Subtask 2 of 5", and its title.

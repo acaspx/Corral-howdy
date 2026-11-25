@@ -14,7 +14,9 @@ use corral_core::run_card::CardStatus;
 pub fn bar_status(card: Option<CardStatus>) -> BarStatus {
     match card {
         None | Some(CardStatus::Done | CardStatus::Error | CardStatus::Stopped) => BarStatus::Ready,
-        Some(CardStatus::Queued | CardStatus::Working) => BarStatus::Working,
+        Some(
+            CardStatus::Queued | CardStatus::Working | CardStatus::Pausing | CardStatus::Paused,
+        ) => BarStatus::Working,
         Some(CardStatus::NeedsYou) => BarStatus::NeedsYou,
     }
 }
@@ -246,5 +248,12 @@ mod tests {
             Some(&BarOutcome::Refused(TASKS_OFF.to_owned()))
         );
         assert_eq!(answer.view().chips, ["Grok"]);
+    }
+
+    #[test]
+    fn tp_pause_04_a_paused_or_pausing_agent_is_busy_in_the_prompt_bar() {
+        for card in [CardStatus::Paused, CardStatus::Pausing] {
+            assert_eq!(bar_status(Some(card)), BarStatus::Working, "{card:?}");
+        }
     }
 }

@@ -20,6 +20,7 @@ use corral_core::event::{
     EventBody, FailureReason, ModelDelta, ModelRequest, ModelResponse, RunCompleted, RunFailed,
     UsageReported,
 };
+use corral_core::ids::AgentId;
 use corral_core::supervisor::{
     CancelToken, EventSink, RunDriver, RunFuture, RunRequest, SupervisorError,
 };
@@ -205,6 +206,11 @@ impl FakeDriver {
 }
 
 impl RunDriver for FakeDriver {
+    /// The script stops at a safe point before each step.
+    fn pauses(&self, _agent: &AgentId) -> bool {
+        true
+    }
+
     fn run(&self, request: RunRequest, sink: EventSink, cancel: CancelToken) -> RunFuture {
         let script = self
             .by_prompt
