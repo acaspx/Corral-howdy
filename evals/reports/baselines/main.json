@@ -132,17 +132,22 @@
       "status": "passed"
     },
     {
+      "id": "EV-STOP-03",
+      "title": "Pausing and resuming four runs mid-task changes nothing but the pause",
+      "status": "passed"
+    },
+    {
       "id": "EV-STOP-04",
       "title": "Runs whose adapter ignores Stop are dropped at 2 s, and nothing runs after",
       "status": "passed"
     }
   ],
   "summary": {
-    "executed": 27,
+    "executed": 28,
     "failed": 0,
-    "passed": 27,
+    "passed": 28,
     "pending": 0,
-    "total": 27
+    "total": 28
   },
   "regressions": [],
   "gate_passed": true

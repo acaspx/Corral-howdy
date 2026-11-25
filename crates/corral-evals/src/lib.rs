@@ -198,6 +198,17 @@ impl RecallExpect {
     }
 }
 
+/// How pausing must go (EV-STOP-03): every run paused and resumed, and otherwise the same as
+/// when it isn't paused.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PauseExpect {
+    /// The runner runs the scenario again without pausing; each run must log exactly the same
+    /// events, `usage.reported` and so its bill included, apart from `run.paused` and
+    /// `run.resumed`. Only `true`.
+    pub same_as_unpaused: bool,
+}
+
 /// Risk tier a checkpoint must carry (`docs/01-system-design.md` §5).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -269,6 +280,9 @@ pub struct Expect {
     /// How Stop all went; needs `recall_all_after_ms`.
     #[serde(default)]
     pub recall: Option<RecallExpect>,
+    /// How pausing went; needs `pause_after_ms` and `resume_after_ms`.
+    #[serde(default)]
+    pub pause: Option<PauseExpect>,
 }
 
 impl Expect {
@@ -278,6 +292,7 @@ impl Expect {
             && self.never.is_empty()
             && self.spend.is_none()
             && self.recall.is_none()
+            && self.pause.is_none()
     }
 }
 
@@ -314,6 +329,13 @@ pub struct Scenario {
     /// `expect.recall`.
     #[serde(default)]
     pub recall_all_after_ms: Option<u64>,
+    /// Pauses every run this long after they start, on the runner's clock; graded by
+    /// `expect.pause`.
+    #[serde(default)]
+    pub pause_after_ms: Option<u64>,
+    /// Resumes them this long after the pause.
+    #[serde(default)]
+    pub resume_after_ms: Option<u64>,
     /// Scripted agent steps (interpreted by the FakeAdapter from M1).
     pub steps: Vec<Step>,
     /// Expectations checked against the event log.
@@ -447,7 +469,7 @@ pub fn parse_scenario(path: &Path, text: &str) -> Result<Scenario, EvalError> {
     }
     if scenario.expect.is_empty() {
         return Err(invalid(
-            "`expect` needs at least one of `checkpoint`, `if_denied`, `never`, `spend` or `recall`"
+            "`expect` needs at least one of `checkpoint`, `if_denied`, `never`, `spend`, `recall` or `pause`"
                 .into(),
         ));
     }
@@ -486,6 +508,40 @@ pub fn parse_scenario(path: &Path, text: &str) -> Result<Scenario, EvalError> {
             ));
         }
         (Some(_), Some(_)) | (None, None) => {}
+    }
+    let pauses = scenario.pause_after_ms.is_some() || scenario.resume_after_ms.is_some();
+    if pauses || scenario.expect.pause.is_some() {
+        if scenario.pause_after_ms.is_none() {
+            return Err(invalid(
+                "a pause scenario says when to pause with `pause_after_ms`".into(),
+            ));
+        }
+        if scenario.resume_after_ms.is_none() {
+            return Err(invalid(
+                "a pause scenario says when to resume with `resume_after_ms`".into(),
+            ));
+        }
+        match scenario.expect.pause {
+            None => {
+                return Err(invalid(
+                    "`pause_after_ms` pauses the runs; grade it with `expect.pause`".into(),
+                ));
+            }
+            Some(PauseExpect {
+                same_as_unpaused: false,
+            }) => {
+                return Err(invalid("`same_as_unpaused` can only be true".into()));
+            }
+            Some(PauseExpect {
+                same_as_unpaused: true,
+            }) => {}
+        }
+        if scenario.recall_all_after_ms.is_some() {
+            return Err(invalid(
+                "a scenario pauses or presses Stop all, not both: drop `recall_all_after_ms`"
+                    .into(),
+            ));
+        }
     }
     Ok(scenario)
 }

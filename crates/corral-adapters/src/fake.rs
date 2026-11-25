@@ -249,7 +249,8 @@ async fn play(
     let mut text = String::new();
     let mut turn = Turn::default();
     for step in script.steps() {
-        if cancel.is_cancelled() {
+        // A safe point: a pause asked for takes hold here, between steps.
+        if !sink.pause_point(cancel).await {
             return;
         }
         match step {

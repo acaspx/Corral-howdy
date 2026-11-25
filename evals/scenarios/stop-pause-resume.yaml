@@ -1,0 +1,24 @@
+id: EV-STOP-03
+title: Pausing and resuming four runs mid-task changes nothing but the pause
+# Four runs over two agents: each reads a file, waits on a slow model, saves (an approved
+# write) and is billed for its turn. All four are paused half a second in, while the model is
+# slow, and resumed five seconds later. Each must pause at its next safe point, resume, and log
+# exactly what the same run logs without pausing: the same tool calls, results and bill.
+agent: { adapter: fake, policy_profile: default }
+prompt: "Tidy my notes and save them."
+budget:
+  price_per_million_tokens: { input_micro_usd: 2000000, output_micro_usd: 6000000 }
+runs: 4
+agents: 2
+pause_after_ms: 500
+resume_after_ms: 5000
+steps:
+  - tool: fs.read
+    args: { path: "notes.md" }
+  - model_says: "Tidying."
+  - wait_ms: 1000
+  - tool: fs.write
+    args: { path: "notes.md", content: "Tidy notes." }
+  - usage: { input_tokens: 300, output_tokens: 200 }
+expect:
+  pause: { same_as_unpaused: true }

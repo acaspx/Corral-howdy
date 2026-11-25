@@ -31,7 +31,8 @@ use crate::budget::{
 use crate::clock::Clock;
 use crate::event::{
     BudgetScope, BudgetWarned, CancelledBy, Event, EventBody, FailureReason, ModelRequest,
-    RunCancelled, RunFailed, RunQueued, RunStarted, SessionClosed,
+    PauseReason, RunCancelled, RunFailed, RunPaused, RunQueued, RunResumed, RunStarted,
+    SessionClosed,
 };
 use crate::ids::{AgentId, RunId, SessionId, SpanId};
 use crate::lifecycle::{Lifecycle, LifecycleError, Phase, next};
@@ -135,6 +136,9 @@ pub enum SupervisorError {
     /// No active or queued run has this ID.
     #[error("no active or queued run {0}")]
     UnknownRun(RunId),
+    /// Only a run that's running can pause or resume: this one is queued or has ended.
+    #[error("run {0} isn't running, so it can't pause or resume")]
+    NotRunning(RunId),
     /// The budget meter refused a model request (the run has failed), or a `model.request` was
     /// emitted without going through it.
     #[error(transparent)]
@@ -184,6 +188,9 @@ struct RunLog {
     budget: RunBudget,
     /// `budget.warned` was logged for the soft limit (once per threshold).
     warned_soft: bool,
+    /// True while the user wants the run paused; its driver pauses at its next safe point
+    /// ([`EventSink::pause_point`]).
+    pause: watch::Sender<bool>,
 }
 
 /// Emits a run's events: assigns `seq` and `ts`, enforces the lifecycle, appends to the log.
@@ -302,6 +309,57 @@ impl EventSink {
             let settled = run.budget.reconcile(usage);
             self.ledger.settle(&run.agent_id, event.ts, settled);
         }
+        Ok(())
+    }
+
+    /// A safe point to pause at: drivers call it between steps, never mid-request or mid-tool.
+    /// If the user asked to pause, it logs `run.paused` and waits, logging nothing else, until
+    /// Resume (it logs `run.resumed`) or Stop. Returns whether to carry on: false once Stop has
+    /// fired, and the driver returns; the supervisor logs `run.cancelled`.
+    pub async fn pause_point(&self, cancel: &CancelToken) -> bool {
+        if cancel.is_cancelled() {
+            return false;
+        }
+        let Ok(mut wanted) = self.run.lock().map(|run| run.pause.subscribe()) else {
+            return true;
+        };
+        if !*wanted.borrow_and_update() {
+            return true;
+        }
+        // Refused while a checkpoint is open or the run is ending: carry on, and the pause
+        // takes hold at the next safe point.
+        if self
+            .emit(EventBody::RunPaused(RunPaused {
+                reason: PauseReason::User,
+            }))
+            .is_err()
+        {
+            return !cancel.is_cancelled();
+        }
+        loop {
+            tokio::select! {
+                changed = wanted.changed() => {
+                    // The sender lives in this run's log, which outlives its driver.
+                    if changed.is_err() {
+                        return false;
+                    }
+                    if !*wanted.borrow_and_update() {
+                        break;
+                    }
+                }
+                () = cancel.cancelled() => return false,
+            }
+        }
+        self.emit(EventBody::RunResumed(RunResumed {})).is_ok()
+    }
+
+    /// Asks the run to pause (`true`) or carry on (`false`).
+    fn want_paused(&self, paused: bool) -> Result<(), SupervisorError> {
+        self.run
+            .lock()
+            .map_err(|_| SupervisorError::Poisoned)?
+            .pause
+            .send_replace(paused);
         Ok(())
     }
 
@@ -451,6 +509,7 @@ impl Supervisor {
                 next_seq: 1,
                 budget,
                 warned_soft: false,
+                pause: watch::Sender::new(false),
             })),
             log: self.0.log.clone(),
             clock: self.0.clock.clone(),
@@ -486,6 +545,33 @@ impl Supervisor {
             vec![run_id.clone()]
         };
         self.reap(pending).await.map(|_| ())
+    }
+
+    /// Pause (the hover card's Pause): the run stops at its driver's next safe point, between
+    /// steps, and logs `run.paused` there. Only a running run can pause; pausing one that's
+    /// paused, or about to be, does nothing.
+    pub fn pause(&self, run_id: &RunId) -> Result<(), SupervisorError> {
+        self.running_sink(run_id)?.want_paused(true)
+    }
+
+    /// Resume: a paused run logs `run.resumed` and carries on; one that hadn't reached its safe
+    /// point yet never pauses. Resuming a running run does nothing.
+    pub fn resume(&self, run_id: &RunId) -> Result<(), SupervisorError> {
+        self.running_sink(run_id)?.want_paused(false)
+    }
+
+    /// The sink of a run that's running (or paused): not queued, not ended.
+    fn running_sink(&self, run_id: &RunId) -> Result<EventSink, SupervisorError> {
+        let state = self.lock()?;
+        match state.active.get(run_id) {
+            // A run that has just ended may still be here for a moment; asking it to pause is
+            // harmless, since its driver has no safe point left.
+            Some(active) => Ok(active.sink.clone()),
+            None if state.known.contains_key(run_id) => {
+                Err(SupervisorError::NotRunning(run_id.clone()))
+            }
+            None => Err(SupervisorError::UnknownRun(run_id.clone())),
+        }
     }
 
     /// Send back: logs `session.closed` for a run that has ended, returning its agent to the
