@@ -186,6 +186,9 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-A11Y-01** The corral from the keyboard: → and ↓ go to the next drop by rank, ← to the one before, wrapping; with nothing focused (or a drop that's gone) an arrow starts at the most used; Space or Return opens the focused drop's card pinned; ↑ and Esc go back to the prompt bar; a usage reorder keeps focus on the same drop (`CorralKeyboardTests.swift`)
 - **TP-A11Y-02** ↓ in the prompt bar with no suggestion list moves focus into the corral; the bar stays open behind it, and with a list ↓ still moves the highlight (`CorralKeyboardTests.swift`)
 - **TP-A11Y-03** VoiceOver reads the drops in rank order, most used first; the card is announced as a dialog named "<Agent>'s card" (`CorralKeyboardTests.swift`)
+- **TP-A11Y-04** axe finds nothing in the main window: in every story (every state of every component; a component on its own skips only the page-landmark rule) and in the whole window, landmarks included. Colour contrast needs a real renderer and is checked by eye over the stories (`apps/desktop/src/a11y.test.tsx`)
+- **TP-A11Y-05** Tab reaches every enabled control in the main window, in order, a radio group being one stop, and nothing is taken out of the tab order (`apps/desktop/src/a11y.test.tsx`)
+- **TP-A11Y-06** A focused control shows a 2px ring (`:focus-visible`), no rule removes it, and nothing else draws an outline, so focus is never confused with a selection (`apps/desktop/src/a11y.test.tsx`)
 
 ### Loop detector (protected)
 - **TP-LOOP-01** From the profile's `loop_limit`-th identical call in a run (5 by default), each one asks before it runs, even when the policy allows it; the reason and the card say it's the same call N times
