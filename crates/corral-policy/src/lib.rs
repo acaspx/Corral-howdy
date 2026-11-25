@@ -33,7 +33,7 @@
 //! ```
 
 use corral_core::domain::{ActionClass, Risk};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
@@ -42,7 +42,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 /// What a profile or ceiling says about a class, from strictest to most permissive.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Rule {
     /// Never.
@@ -54,7 +54,7 @@ pub enum Rule {
 }
 
 /// What happens when a checkpoint isn't answered in time.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OnTimeout {
     /// The action is denied and the agent is told.
@@ -138,6 +138,29 @@ pub enum PolicyError {
     /// A loop limit under 2 or over 1,000.
     #[error("loop_limit must be from 2 to 1,000 (got {0})")]
     BadLoopLimit(u32),
+    /// An edit that would allow more than the global ceiling (security model T7).
+    #[error("{} can be at most {ceiling:?} for any agent", what(*class))]
+    AboveCeiling {
+        /// The class.
+        class: ActionClass,
+        /// Its ceiling.
+        ceiling: Rule,
+    },
+    /// A class the policy editor doesn't change: `unknown` is always denied, and provider-side
+    /// tools are switched in the agent editor.
+    #[error("{} can't be changed in the policy editor", what(*.0))]
+    NotEditable(ActionClass),
+    /// An allowed domain that isn't a plain hostname or a `*.` wildcard over one.
+    #[error(
+        "{0:?} isn't a domain like example.com or *.example.com (use punycode for international names)"
+    )]
+    BadDomain(String),
+    /// More allowed domains than [`MAX_NET_ALLOW`].
+    #[error("at most {MAX_NET_ALLOW} allowed domains (got {0})")]
+    TooManyDomains(usize),
+    /// The profile couldn't be written as TOML.
+    #[error("the profile couldn't be written: {0}")]
+    Write(String),
 }
 
 /// How many identical calls a run makes before each further one asks (EV-COST-02).
@@ -235,6 +258,185 @@ impl Profile {
     pub fn rule(&self, class: ActionClass) -> Option<Rule> {
         self.rules.get(&class).copied()
     }
+
+    /// The profile as TOML that [`Profile::from_toml`] reads back the same (TP-PED-02): rules
+    /// in [`CLASSES`] order, the timeout in whole hours, minutes or seconds.
+    pub fn to_toml(&self) -> Result<String, PolicyError> {
+        let file = ProfileOut {
+            sandbox_roots: &self.sandbox_roots,
+            net_allow: &self.net_allow,
+            checkpoint_timeout: duration_text(self.checkpoint_timeout),
+            on_timeout: self.on_timeout,
+            loop_limit: self.loop_limit,
+            rules: CLASSES
+                .iter()
+                .filter_map(|class| {
+                    self.rule(*class).map(|decision| RuleOut {
+                        class: *class,
+                        decision,
+                    })
+                })
+                .collect(),
+        };
+        toml::to_string(&file).map_err(|e| PolicyError::Write(e.to_string()))
+    }
+}
+
+/// A profile as it's written back.
+#[derive(Serialize)]
+struct ProfileOut<'a> {
+    #[serde(skip_serializing_if = "<[String]>::is_empty")]
+    sandbox_roots: &'a [String],
+    #[serde(skip_serializing_if = "<[String]>::is_empty")]
+    net_allow: &'a [String],
+    checkpoint_timeout: String,
+    on_timeout: OnTimeout,
+    loop_limit: u32,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    rules: Vec<RuleOut>,
+}
+
+#[derive(Serialize)]
+struct RuleOut {
+    class: ActionClass,
+    decision: Rule,
+}
+
+/// `2h`, `45m` or `90s`: the largest unit that divides it.
+fn duration_text(duration: Duration) -> String {
+    let s = duration.as_secs();
+    if s.is_multiple_of(3600) {
+        format!("{}h", s / 3600)
+    } else if s.is_multiple_of(60) {
+        format!("{}m", s / 60)
+    } else {
+        format!("{s}s")
+    }
+}
+
+/// Every action class, in the order the policy editor shows them (TP-PED-01).
+pub const CLASSES: [ActionClass; 13] = [
+    ActionClass::ReadLocal,
+    ActionClass::ReadLocalOutside,
+    ActionClass::WriteLocal,
+    ActionClass::DeleteLocal,
+    ActionClass::ExecShell,
+    ActionClass::NetRead,
+    ActionClass::NetReadUnlisted,
+    ActionClass::NetWrite,
+    ActionClass::CommsSend,
+    ActionClass::MoneySpend,
+    ActionClass::BudgetThreshold,
+    ActionClass::ProviderTools,
+    ActionClass::Unknown,
+];
+
+/// Whether the policy editor changes `class`: not `unknown` (always denied), nor
+/// `provider_tools` (switched in the agent editor).
+pub fn editable(class: ActionClass) -> bool {
+    match class {
+        ActionClass::Unknown | ActionClass::ProviderTools => false,
+        ActionClass::ReadLocal
+        | ActionClass::ReadLocalOutside
+        | ActionClass::WriteLocal
+        | ActionClass::DeleteLocal
+        | ActionClass::ExecShell
+        | ActionClass::NetRead
+        | ActionClass::NetReadUnlisted
+        | ActionClass::NetWrite
+        | ActionClass::CommsSend
+        | ActionClass::MoneySpend
+        | ActionClass::BudgetThreshold => true,
+    }
+}
+
+/// The most allowed domains a profile holds.
+pub const MAX_NET_ALLOW: usize = 100;
+
+/// Where a class's effective rule comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuleSource {
+    /// The default for every agent.
+    Default,
+    /// The agent's own rule.
+    Profile,
+    /// A global ceiling capped it.
+    Ceiling,
+    /// Always the same: `unknown` is denied.
+    Fixed,
+}
+
+/// What an agent's policy does with one class, for the policy editor (TP-PED-01).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Effective {
+    /// The class.
+    pub class: ActionClass,
+    /// What the policy decides.
+    pub rule: Rule,
+    /// Why.
+    pub source: RuleSource,
+    /// What it would be without the agent's own rule.
+    pub default: Rule,
+    /// The most any agent may have.
+    pub ceiling: Rule,
+    /// Whether the policy editor changes it.
+    pub editable: bool,
+}
+
+/// A policy editor's form (TP-PED-03): rule changes (`None` goes back to the default), and the
+/// whole of each setting. [`Policy::edited`] checks it against the ceilings.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProfileEdit {
+    /// Rules to set or clear; the others stay.
+    pub rules: Vec<(ActionClass, Option<Rule>)>,
+    /// Domains `net.read` may reach without asking.
+    pub net_allow: Vec<String>,
+    /// Like `30m`, `90s` or `2h`.
+    pub checkpoint_timeout: String,
+    /// What an unanswered checkpoint does.
+    pub on_timeout: OnTimeout,
+    /// From this many identical calls in a run on, each asks.
+    pub loop_limit: u32,
+}
+
+impl From<&Profile> for ProfileEdit {
+    /// The edit that changes nothing.
+    fn from(profile: &Profile) -> Self {
+        Self {
+            rules: Vec::new(),
+            net_allow: profile.net_allow.clone(),
+            checkpoint_timeout: duration_text(profile.checkpoint_timeout),
+            on_timeout: profile.on_timeout,
+            loop_limit: profile.loop_limit,
+        }
+    }
+}
+
+/// `raw` as an allowed domain: trimmed and lowercased, a hostname of at least two labels (letters,
+/// digits and inner hyphens, at most 63 each, 253 in all, not all digits at the end), optionally
+/// after one leading `*.` with at least two labels after it. Non-ASCII must be punycode
+/// (security model T20).
+fn domain(raw: &str) -> Result<String, PolicyError> {
+    let bad = || PolicyError::BadDomain(raw.to_owned());
+    let text = raw.trim().to_ascii_lowercase();
+    let host = text.strip_prefix("*.").unwrap_or(&text);
+    let labels: Vec<&str> = host.split('.').collect();
+    let label_ok = |label: &&str| {
+        !label.is_empty()
+            && label.len() <= 63
+            && label
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+            && !label.starts_with('-')
+            && !label.ends_with('-')
+    };
+    let top_ok = labels
+        .last()
+        .is_some_and(|top| !top.bytes().all(|b| b.is_ascii_digit()));
+    if host.len() > 253 || labels.len() < 2 || !labels.iter().all(label_ok) || !top_ok {
+        return Err(bad());
+    }
+    Ok(text)
 }
 
 /// `30m`, `90s`, `2h`: from one second to a week.
@@ -475,6 +677,115 @@ impl Policy {
     /// The profile.
     pub fn profile(&self) -> &Profile {
         &self.profile
+    }
+
+    /// The global ceilings.
+    pub fn ceilings(&self) -> &Ceilings {
+        &self.ceilings
+    }
+
+    /// `profile` under the default ceilings, if it's one the policy editor could have saved
+    /// (TP-PED-05): no rule above its ceiling, and every allowed domain a plain one. A saved
+    /// file that isn't is refused rather than capped or cleaned, so it never quietly changes.
+    pub fn checked(profile: Profile) -> Result<Policy, PolicyError> {
+        let ceilings = Ceilings::default();
+        for class in CLASSES {
+            if let Some(rule) = profile.rule(class) {
+                let ceiling = ceilings.ceiling(class);
+                if rule > ceiling {
+                    return Err(PolicyError::AboveCeiling { class, ceiling });
+                }
+            }
+        }
+        if profile.net_allow.len() > MAX_NET_ALLOW {
+            return Err(PolicyError::TooManyDomains(profile.net_allow.len()));
+        }
+        for entry in &profile.net_allow {
+            if domain(entry)? != *entry {
+                return Err(PolicyError::BadDomain(entry.clone()));
+            }
+        }
+        Ok(Policy::with_ceilings(profile, ceilings))
+    }
+
+    /// This policy with provider-side tools allowed (TP-PROV-14): the agent editor's switch.
+    /// Everything else stays.
+    pub fn allowing_provider_tools(&self) -> Policy {
+        let mut profile = self.profile.clone();
+        profile
+            .rules
+            .insert(ActionClass::ProviderTools, Rule::Allow);
+        Policy::with_ceilings(profile, self.ceilings.clone())
+    }
+
+    /// What this policy does with `class`, and why (TP-PED-01): the same rule [`Policy::decide`]
+    /// applies before any grant.
+    pub fn effective(&self, class: ActionClass) -> Effective {
+        let default = default_rule(class);
+        let ceiling = self.ceilings.ceiling(class);
+        let own = self.profile.rule(class);
+        let wanted = own.unwrap_or(default);
+        let (rule, source) = if class == ActionClass::Unknown {
+            (Rule::Deny, RuleSource::Fixed)
+        } else if wanted > ceiling {
+            (ceiling, RuleSource::Ceiling)
+        } else if own.is_some() {
+            (wanted, RuleSource::Profile)
+        } else {
+            (wanted, RuleSource::Default)
+        };
+        Effective {
+            class,
+            rule,
+            source,
+            default,
+            ceiling,
+            editable: editable(class),
+        }
+    }
+
+    /// This policy with `edit` applied, under the same ceilings, or why it can't be (TP-PED-03):
+    /// a rule above its ceiling is refused rather than capped, so what's saved is what applies.
+    pub fn edited(&self, edit: &ProfileEdit) -> Result<Policy, PolicyError> {
+        let mut profile = self.profile.clone();
+        for (class, rule) in &edit.rules {
+            if !editable(*class) {
+                return Err(PolicyError::NotEditable(*class));
+            }
+            match rule {
+                Some(rule) => {
+                    let ceiling = self.ceilings.ceiling(*class);
+                    if *rule > ceiling {
+                        return Err(PolicyError::AboveCeiling {
+                            class: *class,
+                            ceiling,
+                        });
+                    }
+                    profile.rules.insert(*class, *rule);
+                }
+                None => {
+                    profile.rules.remove(class);
+                }
+            }
+        }
+        if edit.net_allow.len() > MAX_NET_ALLOW {
+            return Err(PolicyError::TooManyDomains(edit.net_allow.len()));
+        }
+        let mut net_allow: Vec<String> = Vec::new();
+        for raw in &edit.net_allow {
+            let domain = domain(raw)?;
+            if !net_allow.contains(&domain) {
+                net_allow.push(domain);
+            }
+        }
+        profile.net_allow = net_allow;
+        profile.checkpoint_timeout = parse_duration(edit.checkpoint_timeout.trim())?;
+        profile.on_timeout = edit.on_timeout;
+        if !LOOP_LIMITS.contains(&edit.loop_limit) {
+            return Err(PolicyError::BadLoopLimit(edit.loop_limit));
+        }
+        profile.loop_limit = edit.loop_limit;
+        Ok(Policy::with_ceilings(profile, self.ceilings.clone()))
     }
 
     /// Decides one action (ADR-003). Unknown is denied first; then the profile's rule (or the

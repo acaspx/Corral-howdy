@@ -18,6 +18,7 @@ pub mod surface;
 #[cfg(any(test, all(target_os = "macos", feature = "native")))]
 pub mod touch_id;
 
+pub mod agent_policies;
 pub mod agent_tools;
 pub mod bindings;
 pub mod corral_order;

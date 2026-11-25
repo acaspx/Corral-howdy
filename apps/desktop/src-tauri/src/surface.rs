@@ -25,7 +25,8 @@
 //! corral's right-click menu. They never take tasks: their card's Open button opens the app's
 //! own site. The choice is kept in `linked-apps.json` ([`crate::linked`]).
 
-use crate::agent_tools::{agent_folder, allowing_provider_tools, file_tools, random_id};
+use crate::agent_policies::AgentPolicies;
+use crate::agent_tools::{agent_folder, allowing_provider_tools, file_tools_under, random_id};
 use crate::bridge::{
     AuthOutcome, BridgeError, Intent, NotificationRequest, PromptBarSnapshot, RosterSnapshot,
 };
@@ -577,8 +578,9 @@ fn claude_agent(
     ))
 }
 
-/// The file tools over `~/Corral/<agent name>` for `provider`'s agent, with checkpoints on
-/// `desk`.
+/// The file tools over `~/Corral/<agent name>` for `provider`'s agent, under its saved policy
+/// (TP-PED-06), with checkpoints on `desk`. A saved policy that can't be used means no tools:
+/// it fails closed rather than falling back to the defaults.
 fn agent_file_tools(
     app: &AppHandle,
     desk: &Arc<CheckpointDesk>,
@@ -588,8 +590,20 @@ fn agent_file_tools(
         .path()
         .home_dir()
         .map_err(|e| format!("no home folder: {e}"))?;
-    let name = agent_for(provider).name;
-    file_tools(&agent_folder(&home, &name), Arc::clone(desk))
+    let data = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("no app data folder: {e}"))?;
+    let agent = agent_for(provider);
+    let policy = AgentPolicies::new(data.join("policies"))
+        .load(&agent.id)
+        .map_err(|e| {
+            format!(
+                "{}'s policy can't be used, so it has no tools: {e}",
+                agent.name
+            )
+        })?;
+    file_tools_under(&agent_folder(&home, &agent.name), Arc::clone(desk), policy)
 }
 
 /// How far back launch reads spend: past the start of this month in any time zone.
