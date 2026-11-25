@@ -59,3 +59,25 @@ fn tp_ipc_06_the_types_match_what_serde_sends() {
     );
     assert!(ts.contains("last4: string | null"));
 }
+
+#[test]
+fn tp_ped_08_the_policy_editors_types_are_exported() {
+    let ts = typescript();
+    for name in [
+        "AgentPolicyView",
+        "PolicyClassView",
+        "AgentPolicyEdit",
+        "PolicyRuleChange",
+        "RuleChoice",
+        "RuleOrigin",
+        "TimeoutChoice",
+    ] {
+        assert_eq!(
+            ts.matches(&format!("export type {name} = ")).count(),
+            1,
+            "{name} is exported once"
+        );
+    }
+    assert!(ts.contains("export type RuleChoice = \"deny\" | \"ask\" | \"allow\";"));
+    assert!(ts.contains("export type TimeoutChoice = \"deny\" | \"cancelRun\";"));
+}

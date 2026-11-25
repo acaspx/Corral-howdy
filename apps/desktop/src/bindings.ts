@@ -209,3 +209,109 @@ value: string, };
 export type SpanKind = "run" | "model" | "tool" | "checkpoint" | "mark";
 
 export type SpanStatus = "running" | "ok" | "error" | "denied" | "cancelled";
+
+export type AgentPolicyView = {
+/**
+ * The agent's ID, e.g. `grok`.
+ */
+agent: string,
+/**
+ * Its name, e.g. `Grok`.
+ */
+agentName: string,
+/**
+ * Every class, in the editor's order.
+ */
+classes: Array<PolicyClassView>,
+/**
+ * Domains `net.read` may reach without asking.
+ */
+netAllow: Array<string>,
+/**
+ * How long a checkpoint waits, like `30m`.
+ */
+checkpointTimeout: string,
+/**
+ * What happens when it isn't answered.
+ */
+onTimeout: TimeoutChoice,
+/**
+ * From this many identical calls in a run on, each asks.
+ */
+loopLimit: number,
+/**
+ * Why the saved policy can't be used, in plain words; the defaults are shown instead.
+ */
+problem: string | null, };
+
+export type PolicyClassView = {
+/**
+ * The class as the policy names it, e.g. `write.local`.
+ */
+class: string,
+/**
+ * What it does, e.g. `Changing a file in its folder`.
+ */
+title: string,
+/**
+ * What the policy decides.
+ */
+rule: RuleChoice,
+/**
+ * Why.
+ */
+origin: RuleOrigin,
+/**
+ * What it would be without the agent's own rule.
+ */
+default: RuleChoice,
+/**
+ * The most any agent may have.
+ */
+ceiling: RuleChoice,
+/**
+ * The agent's own rule, if it has one.
+ */
+own: RuleChoice | null,
+/**
+ * Whether the editor changes it.
+ */
+editable: boolean, };
+
+export type AgentPolicyEdit = {
+/**
+ * Rules to set or clear; the others stay.
+ */
+rules: Array<PolicyRuleChange>,
+/**
+ * Domains `net.read` may reach without asking.
+ */
+netAllow: Array<string>,
+/**
+ * Like `30m`, `90s` or `2h`.
+ */
+checkpointTimeout: string,
+/**
+ * What an unanswered checkpoint does.
+ */
+onTimeout: TimeoutChoice,
+/**
+ * From this many identical calls in a run on, each asks.
+ */
+loopLimit: number, };
+
+export type PolicyRuleChange = {
+/**
+ * The class as the policy names it.
+ */
+class: string,
+/**
+ * Its new rule; `null` goes back to the default.
+ */
+rule: RuleChoice | null, };
+
+export type RuleChoice = "deny" | "ask" | "allow";
+
+export type RuleOrigin = "default" | "agent" | "ceiling" | "fixed";
+
+export type TimeoutChoice = "deny" | "cancelRun";

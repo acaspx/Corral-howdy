@@ -2,6 +2,8 @@ import { CorralSettings } from "./CorralSettings";
 import { corralSettingsApi as defaultCorralApi, type CorralSettingsApi } from "./corralSettingsApi";
 import { KeyIntake } from "./KeyIntake";
 import { keyApi as defaultKeyApi, type KeyApi } from "./keys";
+import { PolicyEditor } from "./PolicyEditor";
+import { policyApi as defaultPolicyApi, type PolicyApi } from "./policyApi";
 import { ProviderTools } from "./ProviderTools";
 import { providerToolsApi as defaultToolsApi, type ProviderToolsApi } from "./providerToolsApi";
 import { TraceViewer } from "./TraceViewer";
@@ -10,11 +12,10 @@ import { tracesApi as defaultTracesApi, type TracesApi } from "./tracesApi";
 /**
  * The main window: Corral's deep-work surface (traces, agent and policy editors, spend, settings).
  * The corral, hover cards and trace tree are native Swift (docs/07-brand-and-corral-surface.md).
- * The API keys, provider tools, the corral's settings and traces are real; the other sections arrive in M4.
+ * The API keys, provider tools, the corral's settings, policies and traces are real; the other sections arrive in M4.
  */
 const sections = [
   { title: "Agents", body: "Create and edit agents, their providers, tools and budgets." },
-  { title: "Policies", body: "What each agent may do on its own, and what stops for your approval." },
   { title: "Spend", body: "What each agent has cost, against its limits." },
 ] as const;
 
@@ -23,11 +24,13 @@ export function App({
   toolsApi = defaultToolsApi,
   tracesApi = defaultTracesApi,
   corralApi = defaultCorralApi,
+  policyApi = defaultPolicyApi,
 }: {
   keyApi?: KeyApi;
   toolsApi?: ProviderToolsApi;
   tracesApi?: TracesApi;
   corralApi?: CorralSettingsApi;
+  policyApi?: PolicyApi;
 }) {
   return (
     <main className="shell">
@@ -45,6 +48,7 @@ export function App({
       </ul>
       <KeyIntake api={keyApi} />
       <ProviderTools api={toolsApi} />
+      <PolicyEditor api={policyApi} />
       <CorralSettings api={corralApi} />
       <TraceViewer api={tracesApi} />
       <p className="status" role="status">

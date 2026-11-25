@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-agent-policies"
+description = "Enables the agent_policies command without any pre-configured scope."
+commands.allow = ["agent_policies"]
+
+[[permission]]
+identifier = "deny-agent-policies"
+description = "Denies the agent_policies command without any pre-configured scope."
+commands.deny = ["agent_policies"]

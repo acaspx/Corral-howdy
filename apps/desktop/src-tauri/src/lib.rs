@@ -101,6 +101,8 @@ pub fn run() {
             corral_settings::corral_settings,
             corral_settings::set_corral_shown,
             corral_settings::set_keep_order_fixed,
+            agent_policies::agent_policies,
+            agent_policies::save_agent_policy,
         ])
         .setup(|app| {
             let show = MenuItem::with_id(app, MENU_SHOW, "Show Corral", true, None::<&str>)?;
@@ -128,6 +130,8 @@ pub fn run() {
             app.manage(std::sync::Arc::new(provider_tools::ProviderTools::open(
                 data.join("provider-tools.json"),
             )));
+            // Each agent's policy, for the policy editor and the agents' next runs.
+            app.manage(agent_policies::PolicyEditor::open(data.join("policies")));
             // The trace viewer reads the event store once the corral opens it.
             app.manage(std::sync::Arc::new(traces::Traces::default()));
             app.manage(std::sync::Arc::new(

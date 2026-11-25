@@ -25,7 +25,7 @@
 //! corral's right-click menu. They never take tasks: their card's Open button opens the app's
 //! own site. The choice is kept in `linked-apps.json` ([`crate::linked`]).
 
-use crate::agent_policies::AgentPolicies;
+use crate::agent_policies::PolicyEditor;
 use crate::agent_tools::{agent_folder, allowing_provider_tools, file_tools_under, random_id};
 use crate::bridge::{
     AuthOutcome, BridgeError, Intent, NotificationRequest, PromptBarSnapshot, RosterSnapshot,
@@ -41,7 +41,9 @@ use crate::provider_tools::ProviderTools;
 use crate::touch_id::{Finished, TouchIdDesk};
 use crate::traces::Traces;
 use corral_adapters::agent::{MessagesAgent, ProviderTool, ResponsesAgent, ToolSetup};
-use corral_adapters::catalog::{AgentRouter, Switched, agent_for, agents_for, corral_agents};
+use corral_adapters::catalog::{
+    AgentRouter, Rebuilt, Switched, agent_for, agents_for, corral_agents,
+};
 use corral_adapters::linked::{LinkChange, LinkedApp, LinkedSettings};
 use corral_adapters::logos::{LogoId, ReqwestLogoFetcher};
 use corral_adapters::messages::{MessagesConfig, MessagesDriver};
@@ -492,34 +494,21 @@ fn supervisor(
     let transport = ReqwestTransport::new().map_err(|e| format!("no HTTPS client: {e}"))?;
     let keys = app.state::<Keys>().0.clone();
     let transport: Arc<dyn Transport> = Arc::new(transport);
-    // Without its folder, an agent still answers, with no tools.
-    let grok: Arc<dyn RunDriver> = match agent_file_tools(app, desk, Provider::Xai) {
-        Ok(tools) => Arc::new(ResponsesAgent::new(
+    // Each agent is built again for its next run after its policy is saved (TP-PED-07).
+    let editor = app.state::<PolicyEditor>().inner().clone();
+    let grok = rebuilt_on_save(&editor, Provider::Xai, {
+        let (app, desk, transport, keys) = (
+            app.clone(),
+            Arc::clone(desk),
             transport.clone(),
             keys.clone(),
-            ResponsesConfig::xai(GROK_MODEL),
-            tools,
-        )),
-        Err(reason) => {
-            eprintln!("corral: Grok has no tools: {reason}");
-            Arc::new(ResponsesDriver::new(
-                transport.clone(),
-                keys.clone(),
-                ResponsesConfig::xai(GROK_MODEL),
-            ))
-        }
-    };
-    let claude: Arc<dyn RunDriver> = match agent_file_tools(app, desk, Provider::Anthropic) {
-        Ok(tools) => claude_agent(app, transport, keys, tools),
-        Err(reason) => {
-            eprintln!("corral: Claude has no tools: {reason}");
-            Arc::new(MessagesDriver::new(
-                transport,
-                keys,
-                MessagesConfig::anthropic(CLAUDE_MODEL),
-            ))
-        }
-    };
+        );
+        move || grok_agent(&app, &desk, transport.clone(), keys.clone())
+    });
+    let claude = rebuilt_on_save(&editor, Provider::Anthropic, {
+        let (app, desk) = (app.clone(), Arc::clone(desk));
+        move || claude_with_tools(&app, &desk, transport.clone(), keys.clone())
+    });
     let mut drivers: HashMap<AgentId, Arc<dyn RunDriver>> = HashMap::new();
     drivers.insert(agent_for(Provider::Xai).id, grok);
     drivers.insert(agent_for(Provider::Anthropic).id, claude);
@@ -536,6 +525,66 @@ fn supervisor(
     );
     built.set_soft_limit(Some(SOFT_LIMIT_MICRO_USD));
     Ok(built)
+}
+
+/// `provider`'s agent from `build`, built again for the run after its policy is saved.
+fn rebuilt_on_save(
+    editor: &PolicyEditor,
+    provider: Provider,
+    build: impl Fn() -> Arc<dyn RunDriver> + Send + Sync + 'static,
+) -> Arc<dyn RunDriver> {
+    let editor = editor.clone();
+    let agent = agent_for(provider).id;
+    Arc::new(Rebuilt::new(
+        Arc::new(move || editor.version(&agent)),
+        Arc::new(build),
+    ))
+}
+
+/// Grok with its file tools. Without its folder or a usable policy, it still answers, with no
+/// tools.
+fn grok_agent(
+    app: &AppHandle,
+    desk: &Arc<CheckpointDesk>,
+    transport: Arc<dyn Transport>,
+    keys: Arc<dyn SecretStore>,
+) -> Arc<dyn RunDriver> {
+    match agent_file_tools(app, desk, Provider::Xai) {
+        Ok(tools) => Arc::new(ResponsesAgent::new(
+            transport,
+            keys,
+            ResponsesConfig::xai(GROK_MODEL),
+            tools,
+        )),
+        Err(reason) => {
+            eprintln!("corral: Grok has no tools: {reason}");
+            Arc::new(ResponsesDriver::new(
+                transport,
+                keys,
+                ResponsesConfig::xai(GROK_MODEL),
+            ))
+        }
+    }
+}
+
+/// Claude with its file tools, or with none without its folder or a usable policy.
+fn claude_with_tools(
+    app: &AppHandle,
+    desk: &Arc<CheckpointDesk>,
+    transport: Arc<dyn Transport>,
+    keys: Arc<dyn SecretStore>,
+) -> Arc<dyn RunDriver> {
+    match agent_file_tools(app, desk, Provider::Anthropic) {
+        Ok(tools) => claude_agent(app, transport, keys, tools),
+        Err(reason) => {
+            eprintln!("corral: Claude has no tools: {reason}");
+            Arc::new(MessagesDriver::new(
+                transport,
+                keys,
+                MessagesConfig::anthropic(CLAUDE_MODEL),
+            ))
+        }
+    }
 }
 
 /// Claude with its file tools, and with web search when the user turned it on in the main window
@@ -590,12 +639,10 @@ fn agent_file_tools(
         .path()
         .home_dir()
         .map_err(|e| format!("no home folder: {e}"))?;
-    let data = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("no app data folder: {e}"))?;
     let agent = agent_for(provider);
-    let policy = AgentPolicies::new(data.join("policies"))
+    let policy = app
+        .state::<PolicyEditor>()
+        .policies()
         .load(&agent.id)
         .map_err(|e| {
             format!(

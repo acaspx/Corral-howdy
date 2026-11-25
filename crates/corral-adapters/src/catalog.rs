@@ -14,7 +14,7 @@ use corral_core::ids::AgentId;
 use corral_core::supervisor::{CancelToken, EventSink, RunDriver, RunFuture, RunRequest};
 use corral_secrets::Provider;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// The agent a provider's key brings.
 pub fn agent_for(provider: Provider) -> AgentCard {
@@ -117,6 +117,60 @@ impl RunDriver for AgentRouter {
                 ),
             }));
         })
+    }
+}
+
+/// The version of an agent's settings, read when a run starts: it changes when they're saved.
+pub type SettingsVersion = Arc<dyn Fn() -> u64 + Send + Sync>;
+
+/// Builds the agent for its settings as they are now.
+pub type BuildAgent = Arc<dyn Fn() -> Arc<dyn RunDriver> + Send + Sync>;
+
+/// An agent rebuilt for the settings it has when each run starts (TP-PED-07): a saved policy
+/// applies from the agent's next run, without a restart. It builds again only when the
+/// settings' version changed; a run already going keeps the driver it started on.
+pub struct Rebuilt {
+    version: SettingsVersion,
+    build: BuildAgent,
+    built: Mutex<Option<(u64, Arc<dyn RunDriver>)>>,
+}
+
+impl Rebuilt {
+    /// An agent built by `build`, again whenever `version` changes.
+    pub fn new(version: SettingsVersion, build: BuildAgent) -> Self {
+        Self {
+            version,
+            build,
+            built: Mutex::new(None),
+        }
+    }
+
+    /// The driver for the settings as they are now.
+    fn current(&self) -> Arc<dyn RunDriver> {
+        let version = (self.version)();
+        let Ok(mut built) = self.built.lock() else {
+            // A poisoned cache only costs a build per run.
+            return (self.build)();
+        };
+        match built.as_ref() {
+            Some((at, driver)) if *at == version => Arc::clone(driver),
+            Some(_) | None => {
+                let driver = (self.build)();
+                *built = Some((version, Arc::clone(&driver)));
+                driver
+            }
+        }
+    }
+}
+
+impl RunDriver for Rebuilt {
+    /// Whether the agent as it's built now pauses.
+    fn pauses(&self, agent: &AgentId) -> bool {
+        self.current().pauses(agent)
+    }
+
+    fn run(&self, request: RunRequest, sink: EventSink, cancel: CancelToken) -> RunFuture {
+        self.current().run(request, sink, cancel)
     }
 }
 

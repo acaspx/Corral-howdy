@@ -4,6 +4,10 @@
 //! the core can't drift. The `invoke` wrappers stay small and hand-written next to the components
 //! (`keys.ts`, `providerToolsApi.ts`), typed with these.
 
+use crate::agent_policies::{
+    AgentPolicyEdit, AgentPolicyView, PolicyClassView, PolicyRuleChange, RuleChoice, RuleOrigin,
+    TimeoutChoice,
+};
 use crate::corral_order::{CorralAgentChoice, CorralSettingsView};
 use crate::keys::Connected;
 use crate::provider_tools::{ProviderToolChoice, ProviderToolsView};
@@ -33,6 +37,13 @@ pub fn typescript() -> String {
         Attribute::decl(&cfg),
         SpanKind::decl(&cfg),
         SpanStatus::decl(&cfg),
+        AgentPolicyView::decl(&cfg),
+        PolicyClassView::decl(&cfg),
+        AgentPolicyEdit::decl(&cfg),
+        PolicyRuleChange::decl(&cfg),
+        RuleChoice::decl(&cfg),
+        RuleOrigin::decl(&cfg),
+        TimeoutChoice::decl(&cfg),
     ];
     let mut out = String::from(
         "// Generated from the Rust types by apps/desktop/src-tauri/src/bindings.rs (TP-IPC-06).\n\

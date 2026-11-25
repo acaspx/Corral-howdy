@@ -20,6 +20,8 @@ const MAIN_WINDOW_PERMISSIONS: &[&str] = &[
     "allow-set-corral-shown",
     "allow-set-keep-order-fixed",
     "allow-take-open-run",
+    "allow-agent-policies",
+    "allow-save-agent-policy",
 ];
 
 fn main_window_capability() -> serde_json::Value {
