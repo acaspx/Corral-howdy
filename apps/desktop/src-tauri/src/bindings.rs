@@ -4,6 +4,7 @@
 //! the core can't drift. The `invoke` wrappers stay small and hand-written next to the components
 //! (`keys.ts`, `providerToolsApi.ts`), typed with these.
 
+use crate::agent_editor::{AgentEdit, AgentEditorView, ModelView};
 use crate::agent_policies::{
     AgentPolicyEdit, AgentPolicyView, PolicyClassView, PolicyRuleChange, RuleChoice, RuleOrigin,
     TimeoutChoice,
@@ -44,6 +45,9 @@ pub fn typescript() -> String {
         RuleChoice::decl(&cfg),
         RuleOrigin::decl(&cfg),
         TimeoutChoice::decl(&cfg),
+        AgentEditorView::decl(&cfg),
+        ModelView::decl(&cfg),
+        AgentEdit::decl(&cfg),
     ];
     let mut out = String::from(
         "// Generated from the Rust types by apps/desktop/src-tauri/src/bindings.rs (TP-IPC-06).\n\
