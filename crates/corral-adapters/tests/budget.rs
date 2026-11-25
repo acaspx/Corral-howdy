@@ -91,6 +91,7 @@ fn the_xai_config_prices_requests_at_grok_4_7_list_price() {
     assert_eq!(
         ResponsesConfig::xai("grok-4.7").price,
         Price::per_million_tokens(2_000_000, 6_000_000)
+            .with_long_prompt(200_000, 4_000_000, 12_000_000)
     );
     assert_eq!(REQUEST_OVERHEAD_TOKENS, 256);
 }
