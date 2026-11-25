@@ -14,7 +14,8 @@ use corral_adapters::catalog::{agent_for, default_model};
 use corral_adapters::messages::MessagesConfig;
 use corral_adapters::responses::ResponsesConfig;
 use corral_adapters::smoke::{
-    SMOKE_PROMPT, SMOKE_RUN_CAP_MICRO_USD, check_models, judge, live_keys, models_request,
+    SMOKE_PROMPT, SMOKE_RUN_CAP_MICRO_USD, check_models, check_offered_models, judge, live_keys,
+    models_request,
 };
 use corral_adapters::transport::{ReqwestTransport, Transport};
 use corral_core::budget::BudgetConfig;
@@ -120,7 +121,8 @@ async fn models(provider: Provider, key: &Secret) -> Result<(), String> {
         .json()
         .await
         .map_err(|e| e.without_url().to_string())?;
-    check_models(provider, &list)
+    check_models(provider, &list)?;
+    check_offered_models(provider, &list)
 }
 
 #[derive(Default)]
