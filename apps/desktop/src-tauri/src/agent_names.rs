@@ -69,35 +69,23 @@ impl AgentNames {
     /// another agent's catalog name, or an agent that isn't one of Corral's, is refused and
     /// changes nothing.
     pub fn set(&self, agent: &AgentId, name: Option<AgentName>) -> Result<(), String> {
-        if provider_of(agent).is_none() {
-            return Err(format!(
-                "{agent} isn't one of Corral's agents, so it can't be renamed."
-            ));
-        }
         let mut renamed = self.renamed.write().unwrap_or_else(PoisonError::into_inner);
-        let Some(name) = name else {
-            renamed.remove(agent);
-            return Ok(());
-        };
-        let taken = Provider::ALL
-            .into_iter()
-            .map(agent_for)
-            .filter(|card| card.id != *agent)
-            .find(|card| {
-                name.same_as(&card.name)
-                    || renamed
-                        .get(&card.id)
-                        .is_some_and(|other| name.same_as(other.as_str()))
-            });
-        if let Some(card) = taken {
-            return Err(format!(
-                "{:?} is taken by {}.",
-                name.as_str(),
-                name_in(&renamed, &card)
-            ));
+        check_in(&renamed, agent, name.as_ref())?;
+        match name {
+            Some(name) => {
+                renamed.insert(agent.clone(), name);
+            }
+            None => {
+                renamed.remove(agent);
+            }
         }
-        renamed.insert(agent.clone(), name);
         Ok(())
+    }
+
+    /// Whether [`Self::set`] would take this rename, without making it.
+    pub fn check(&self, agent: &AgentId, name: Option<&AgentName>) -> Result<(), String> {
+        let renamed = self.renamed.read().unwrap_or_else(PoisonError::into_inner);
+        check_in(&renamed, agent, name)
     }
 
     /// `agent`'s name: its rename, its catalog name, or for an agent Corral doesn't know, its ID.
@@ -135,6 +123,40 @@ impl AgentNames {
             },
             None => card,
         }
+    }
+}
+
+/// Whether `agent` can be renamed `name` among `renamed`.
+fn check_in(
+    renamed: &HashMap<AgentId, AgentName>,
+    agent: &AgentId,
+    name: Option<&AgentName>,
+) -> Result<(), String> {
+    if provider_of(agent).is_none() {
+        return Err(format!(
+            "{agent} isn't one of Corral's agents, so it can't be renamed."
+        ));
+    }
+    let Some(name) = name else {
+        return Ok(());
+    };
+    let taken = Provider::ALL
+        .into_iter()
+        .map(agent_for)
+        .filter(|card| card.id != *agent)
+        .find(|card| {
+            name.same_as(&card.name)
+                || renamed
+                    .get(&card.id)
+                    .is_some_and(|other| name.same_as(other.as_str()))
+        });
+    match taken {
+        Some(card) => Err(format!(
+            "{:?} is taken by {}.",
+            name.as_str(),
+            name_in(renamed, &card)
+        )),
+        None => Ok(()),
     }
 }
 

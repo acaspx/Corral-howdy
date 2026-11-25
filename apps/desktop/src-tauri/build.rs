@@ -18,6 +18,8 @@ const COMMANDS: &[&str] = &[
     "take_open_run",
     "agent_policies",
     "save_agent_policy",
+    "agent_editor",
+    "save_agent",
 ];
 
 fn main() {

@@ -25,6 +25,7 @@
 //! corral's right-click menu. They never take tasks: their card's Open button opens the app's
 //! own site. The choice is kept in `linked-apps.json` ([`crate::linked`]).
 
+use crate::agent_editor::AgentEditor;
 use crate::agent_names::AgentNames;
 use crate::agent_policies::PolicyEditor;
 use crate::agent_settings::{AgentSettings, messages_config, responses_config, seed_caps};
@@ -451,6 +452,10 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
     if corral_slot.set(corral.clone()).is_err() {
         eprintln!("corral: the corral was already set; keeping the first");
     }
+    // A rename in the agent editor shows on the agent's card at once (TP-AED-06).
+    let told = corral.clone();
+    app.state::<Arc<AgentEditor>>()
+        .on_change(Box::new(move || told.refresh(told.keys.as_ref())));
     corral.show_logos(&connected, &linked);
     Ok(corral)
 }
@@ -507,12 +512,16 @@ fn supervisor(
     for problem in seed_caps(&ledger, app.state::<AgentSettings>().inner(), &catalog) {
         eprintln!("corral: {problem}");
     }
+    // A cap saved in the agent editor goes into this ledger, from the agent's next request.
+    let agent_editor = Arc::clone(app.state::<Arc<AgentEditor>>().inner());
+    agent_editor.attach(Arc::clone(&ledger), Arc::clone(&clock));
     let transport = ReqwestTransport::new().map_err(|e| format!("no HTTPS client: {e}"))?;
     let keys = app.state::<Keys>().0.clone();
     let transport: Arc<dyn Transport> = Arc::new(transport);
-    // Each agent is built again for its next run after its policy is saved (TP-PED-07).
+    // Each agent is built again for its next run after its policy or its settings are saved
+    // (TP-PED-07, TP-AED-06).
     let editor = app.state::<PolicyEditor>().inner().clone();
-    let grok = rebuilt_on_save(&editor, Provider::Xai, {
+    let grok = rebuilt_on_save(&editor, &agent_editor, Provider::Xai, {
         let (app, desk, transport, keys) = (
             app.clone(),
             Arc::clone(desk),
@@ -521,7 +530,7 @@ fn supervisor(
         );
         move || grok_agent(&app, &desk, transport.clone(), keys.clone())
     });
-    let claude = rebuilt_on_save(&editor, Provider::Anthropic, {
+    let claude = rebuilt_on_save(&editor, &agent_editor, Provider::Anthropic, {
         let (app, desk) = (app.clone(), Arc::clone(desk));
         move || claude_with_tools(&app, &desk, transport.clone(), keys.clone())
     });
@@ -543,16 +552,23 @@ fn supervisor(
     Ok(built)
 }
 
-/// `provider`'s agent from `build`, built again for the run after its policy is saved.
+/// `provider`'s agent from `build`, built again for the run after its policy or its settings
+/// are saved. Each count only grows, so their sum changes whenever either does.
 fn rebuilt_on_save(
     editor: &PolicyEditor,
+    agent_editor: &Arc<AgentEditor>,
     provider: Provider,
     build: impl Fn() -> Arc<dyn RunDriver> + Send + Sync + 'static,
 ) -> Arc<dyn RunDriver> {
     let editor = editor.clone();
+    let agent_editor = Arc::clone(agent_editor);
     let agent = agent_for(provider).id;
     Arc::new(Rebuilt::new(
-        Arc::new(move || editor.version(&agent)),
+        Arc::new(move || {
+            editor
+                .version(&agent)
+                .saturating_add(agent_editor.version(&agent))
+        }),
         Arc::new(build),
     ))
 }

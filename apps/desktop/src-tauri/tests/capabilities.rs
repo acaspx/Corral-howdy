@@ -22,6 +22,8 @@ const MAIN_WINDOW_PERMISSIONS: &[&str] = &[
     "allow-take-open-run",
     "allow-agent-policies",
     "allow-save-agent-policy",
+    "allow-agent-editor",
+    "allow-save-agent",
 ];
 
 fn main_window_capability() -> serde_json::Value {

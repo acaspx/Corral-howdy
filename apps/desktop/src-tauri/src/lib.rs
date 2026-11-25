@@ -18,6 +18,7 @@ pub mod surface;
 #[cfg(any(test, all(target_os = "macos", feature = "native")))]
 pub mod touch_id;
 
+pub mod agent_editor;
 pub mod agent_names;
 pub mod agent_policies;
 pub mod agent_settings;
@@ -105,6 +106,8 @@ pub fn run() {
             corral_settings::set_keep_order_fixed,
             agent_policies::agent_policies,
             agent_policies::save_agent_policy,
+            agent_editor::agent_editor,
+            agent_editor::save_agent,
         ])
         .setup(|app| {
             let show = MenuItem::with_id(app, MENU_SHOW, "Show Corral", true, None::<&str>)?;
@@ -134,6 +137,20 @@ pub fn run() {
             for problem in problems {
                 eprintln!("corral: {problem}");
             }
+            // The agent editor, which the corral gives its ledger once it's running. Without a
+            // home folder it can't check that a renamed agent's folder is free, so renames wait.
+            let home = match app.path().home_dir() {
+                Ok(home) => Some(home),
+                Err(e) => {
+                    eprintln!("corral: no home folder, so agents can't be renamed: {e}");
+                    None
+                }
+            };
+            app.manage(std::sync::Arc::new(agent_editor::AgentEditor::open(
+                settings.clone(),
+                names.clone(),
+                home,
+            )));
             app.manage(settings);
             app.manage(names.clone());
             // Which provider-side tools the user turned on, for the window and the agents.

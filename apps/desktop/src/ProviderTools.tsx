@@ -28,9 +28,18 @@ function terms(choice: ProviderToolChoice): string {
 
 /**
  * The switches for tools that run on a provider's servers (TP-PROV-11, 12). Each is off until
- * turned on; the core saves the choice and the next task uses it.
+ * turned on; the core saves the choice and the next task uses it. Given an `agent`, only its
+ * switches, inside the agent editor (TP-AED-09).
  */
-export function ProviderTools({ api = providerToolsApi }: { api?: ProviderToolsApi }) {
+export function ProviderTools({
+  api = providerToolsApi,
+  agent,
+  agentName,
+}: {
+  api?: ProviderToolsApi;
+  agent?: string;
+  agentName?: string;
+}) {
   const [view, setView] = useState<ProviderToolsView | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,16 +69,21 @@ export function ProviderTools({ api = providerToolsApi }: { api?: ProviderToolsA
   }
 
   const problem = view?.problem ?? null;
-  return (
-    <section className="key-form" aria-labelledby={headingId}>
-      <h2 id={headingId}>Provider tools</h2>
-      <p className="key-status">
-        Tools that run on a provider's servers instead of in Corral. Each is off until you turn it
-        on, and your next task uses your choice.
-      </p>
-      {view && (
+  const choices = view?.choices.filter((c) => agent === undefined || c.agent === agent) ?? [];
+  const intro = (
+    <p className="key-status">
+      Tools that run on a provider's servers instead of in Corral. Each is off until you turn it
+      on, and your next task uses your choice.
+    </p>
+  );
+  const list = view && (
+    <>
+      {agent !== undefined && choices.length === 0 && (
+        <p className="tool-terms">No provider tools for {agentName ?? agent} yet.</p>
+      )}
+      {choices.length > 0 && (
         <ul className="tool-list">
-          {view.choices.map((choice) => (
+          {choices.map((choice) => (
             <li key={`${choice.agent}-${choice.tool}`}>
               <label className="tool-switch">
                 <input
@@ -85,11 +99,29 @@ export function ProviderTools({ api = providerToolsApi }: { api?: ProviderToolsA
           ))}
         </ul>
       )}
-      {(error ?? problem) && (
-        <p className="key-error" role="alert">
-          {error ?? problem}
-        </p>
-      )}
+    </>
+  );
+  const alert = (error ?? problem) && (
+    <p className="key-error" role="alert">
+      {error ?? problem}
+    </p>
+  );
+  if (agent !== undefined) {
+    return (
+      <div className="agent-tools" aria-labelledby={headingId}>
+        <h3 id={headingId}>Provider tools</h3>
+        {intro}
+        {list}
+        {alert}
+      </div>
+    );
+  }
+  return (
+    <section className="key-form" aria-labelledby={headingId}>
+      <h2 id={headingId}>Provider tools</h2>
+      {intro}
+      {list}
+      {alert}
     </section>
   );
 }

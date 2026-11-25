@@ -126,6 +126,27 @@ impl AgentSettings {
         self.write(agent, &file)
     }
 
+    /// Saves `agent`'s name, model and cap in one write, replacing a file that can't be read
+    /// (the agent editor's save). Another agent's catalog name is refused.
+    pub fn save_all(
+        &self,
+        agent: &AgentId,
+        setup: &AgentSetup,
+        name: Option<&AgentName>,
+    ) -> Result<(), String> {
+        if let Some(name) = name {
+            not_anothers(agent, name)?;
+        }
+        self.write(
+            agent,
+            &SetupFile {
+                name: name.map(|n| n.as_str().to_owned()),
+                model: setup.model.map(|m| m.id.to_owned()),
+                monthly_cap_micro_usd: setup.monthly_cap_micro_usd,
+            },
+        )
+    }
+
     /// The file's path, and what it holds if it's there. An error says which file can't be used.
     fn read(&self, agent: &AgentId) -> Result<(PathBuf, Option<SetupFile>), String> {
         let path = self.path(agent)?;

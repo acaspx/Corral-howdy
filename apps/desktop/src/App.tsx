@@ -4,7 +4,8 @@ import { KeyIntake } from "./KeyIntake";
 import { keyApi as defaultKeyApi, type KeyApi } from "./keys";
 import { PolicyEditor } from "./PolicyEditor";
 import { policyApi as defaultPolicyApi, type PolicyApi } from "./policyApi";
-import { ProviderTools } from "./ProviderTools";
+import { AgentEditor } from "./AgentEditor";
+import { agentEditorApi as defaultAgentApi, type AgentEditorApi } from "./agentEditorApi";
 import { providerToolsApi as defaultToolsApi, type ProviderToolsApi } from "./providerToolsApi";
 import { TraceViewer } from "./TraceViewer";
 import { tracesApi as defaultTracesApi, type TracesApi } from "./tracesApi";
@@ -12,10 +13,9 @@ import { tracesApi as defaultTracesApi, type TracesApi } from "./tracesApi";
 /**
  * The main window: Corral's deep-work surface (traces, agent and policy editors, spend, settings).
  * The corral, hover cards and trace tree are native Swift (docs/07-brand-and-corral-surface.md).
- * The API keys, provider tools, the corral's settings, policies and traces are real; the other sections arrive in M4.
+ * The API keys, agents (with their provider tools), the corral's settings, policies and traces are real; the other sections arrive in M4.
  */
 const sections = [
-  { title: "Agents", body: "Create and edit agents, their providers, tools and budgets." },
   { title: "Spend", body: "What each agent has cost, against its limits." },
 ] as const;
 
@@ -25,12 +25,14 @@ export function App({
   tracesApi = defaultTracesApi,
   corralApi = defaultCorralApi,
   policyApi = defaultPolicyApi,
+  agentApi = defaultAgentApi,
 }: {
   keyApi?: KeyApi;
   toolsApi?: ProviderToolsApi;
   tracesApi?: TracesApi;
   corralApi?: CorralSettingsApi;
   policyApi?: PolicyApi;
+  agentApi?: AgentEditorApi;
 }) {
   return (
     <main className="shell">
@@ -47,7 +49,7 @@ export function App({
         ))}
       </ul>
       <KeyIntake api={keyApi} />
-      <ProviderTools api={toolsApi} />
+      <AgentEditor api={agentApi} toolsApi={toolsApi} />
       <PolicyEditor api={policyApi} />
       <CorralSettings api={corralApi} />
       <TraceViewer api={tracesApi} />

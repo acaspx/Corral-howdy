@@ -81,3 +81,19 @@ fn tp_ped_08_the_policy_editors_types_are_exported() {
     assert!(ts.contains("export type RuleChoice = \"deny\" | \"ask\" | \"allow\";"));
     assert!(ts.contains("export type TimeoutChoice = \"deny\" | \"cancelRun\";"));
 }
+
+#[test]
+fn tp_aed_09_the_agent_editors_types_are_exported() {
+    let ts = typescript();
+    for name in ["AgentEditorView", "ModelView", "AgentEdit"] {
+        assert_eq!(
+            ts.matches(&format!("export type {name} = ")).count(),
+            1,
+            "{name} is exported once"
+        );
+    }
+    assert!(
+        ts.contains("monthlyCapMicroUsd: number | null"),
+        "amounts are numbers"
+    );
+}

@@ -315,3 +315,77 @@ export type RuleChoice = "deny" | "ask" | "allow";
 export type RuleOrigin = "default" | "agent" | "ceiling" | "fixed";
 
 export type TimeoutChoice = "deny" | "cancelRun";
+
+export type AgentEditorView = {
+/**
+ * The agent's ID, e.g. `claude`.
+ */
+agent: string,
+/**
+ * Its name now.
+ */
+name: string,
+/**
+ * Its catalog name, which an empty name goes back to.
+ */
+catalogName: string,
+/**
+ * Its folder, like `~/Corral/Claude`.
+ */
+folder: string,
+/**
+ * The models it can be given, its default first; none for an agent Corral can't run yet.
+ */
+models: Array<ModelView>,
+/**
+ * Its model.
+ */
+model: string | null,
+/**
+ * Its own monthly cap, or `null` for the default.
+ */
+monthlyCapMicroUsd: number | null,
+/**
+ * The default monthly cap.
+ */
+defaultCapMicroUsd: number,
+/**
+ * The most a cap can be: the cap for all agents together.
+ */
+maxCapMicroUsd: number,
+/**
+ * What it spent this month, once the corral is running.
+ */
+spentMicroUsd: number | null,
+/**
+ * Why its saved settings or name can't be used, in plain words.
+ */
+problem: string | null, };
+
+export type ModelView = {
+/**
+ * The model ID the provider's API takes.
+ */
+id: string,
+/**
+ * Its name.
+ */
+name: string,
+/**
+ * Its list price, in words.
+ */
+price: string, };
+
+export type AgentEdit = {
+/**
+ * Its name; `null` or blank goes back to its catalog name.
+ */
+name: string | null,
+/**
+ * Its model; `null` is its default.
+ */
+model: string | null,
+/**
+ * Its own monthly cap; `null` is the default.
+ */
+monthlyCapMicroUsd: number | null, };
