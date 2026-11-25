@@ -4,14 +4,14 @@
 //!
 //! - **Its own folder.** Each agent works in `~/Corral/<Name>` (security model: "Sandbox root per
 //!   agent"), made if it's missing. If it can't be made, the agent gets no tools.
-//! - **The file tools** (`fs.read`, `fs.write`, `fs.delete`) over that folder, under the default
-//!   policy: reading is allowed, writing asks, deleting asks at high risk.
+//! - **The file tools** (`fs.read`, `fs.write`, `fs.delete`) over that folder, under the agent's
+//!   own policy (`agent_policies`), the default unless it was edited: by default reading is
+//!   allowed, writing asks, deleting asks at high risk.
 //! - **One desk.** Checkpoints wait on the app's desk, where the card's answers go.
 //! - **Random IDs.** A checkpoint's ID is what makes an answer single use, so IDs come from the
 //!   operating system's random source (128 bits).
-//! - **Provider-side tools** (TP-PROV-14): an agent the user gave one runs under the default
-//!   profile with one rule more, allowing `provider_tools`, read strictly by the policy engine like
-//!   any profile.
+//! - **Provider-side tools** (TP-PROV-14): an agent the user gave one runs under its own policy
+//!   with one rule more, allowing `provider_tools`.
 //!   Whether a run gets the tool is the policy's decision (`corral_adapters::agent::allows`).
 
 use corral_adapters::agent::ToolSetup;
@@ -31,6 +31,16 @@ pub fn agent_folder(home: &Path, name: &str) -> PathBuf {
 /// The file tools over `folder` (made if missing), under the default policy, with checkpoints on
 /// `desk` and random IDs. An error says which folder couldn't be used.
 pub fn file_tools(folder: &Path, desk: Arc<CheckpointDesk>) -> Result<ToolSetup, String> {
+    file_tools_under(folder, desk, Policy::new(Profile::default()))
+}
+
+/// The file tools over `folder` as [`file_tools`] makes them, under the agent's own `policy`
+/// (TP-PED-06).
+pub fn file_tools_under(
+    folder: &Path,
+    desk: Arc<CheckpointDesk>,
+    policy: Policy,
+) -> Result<ToolSetup, String> {
     std::fs::create_dir_all(folder)
         .map_err(|e| format!("couldn't make {}: {e}", folder.display()))?;
     let sandbox = Arc::new(
@@ -49,23 +59,18 @@ pub fn file_tools(folder: &Path, desk: Arc<CheckpointDesk>) -> Result<ToolSetup,
             .map_err(|e| format!("couldn't set up the file tools: {e}"))?;
     }
     Ok(ToolSetup {
-        policy: Policy::new(Profile::default()),
+        policy,
         gateway: Arc::new(gateway),
         desk,
         ids: random_ids(),
     })
 }
 
-/// The one rule a profile adds for an agent the user gave provider-side tools.
-const ALLOW_PROVIDER_TOOLS: &str = "[[rules]]\nclass = \"provider_tools\"\ndecision = \"allow\"\n";
-
-/// `setup` under the default profile plus a rule allowing provider-side tools: the same tools,
-/// desk and IDs. (The file tools above use the default profile, so only that rule differs.)
+/// `setup` with one rule more, allowing provider-side tools: the same tools, desk and IDs, and
+/// the agent's own rules otherwise (TP-PED-06).
 pub fn allowing_provider_tools(setup: ToolSetup) -> Result<ToolSetup, String> {
-    let profile = Profile::from_toml(ALLOW_PROVIDER_TOOLS)
-        .map_err(|e| format!("couldn't allow provider tools: {e}"))?;
     Ok(ToolSetup {
-        policy: Policy::new(profile),
+        policy: setup.policy.allowing_provider_tools(),
         ..setup
     })
 }
