@@ -4,8 +4,8 @@
 //! event the supervisor logs to [`CorralTracker::observe`], then read [`CorralTracker::view`].
 //!
 //! - **A drop's state** comes from its agent's runs: any run waiting on a checkpoint shows
-//!   [`DropState::NeedsYou`]; otherwise any run queued, running or paused shows
-//!   [`DropState::Working`]; otherwise the most recently deployed run's outcome shows (Done, Error,
+//!   [`DropState::NeedsYou`]; otherwise any run queued or running shows
+//!   [`DropState::Working`]; otherwise a paused one shows [`DropState::Paused`]; otherwise the most recently deployed run's outcome shows (Done, Error,
 //!   or Available once it was cancelled or sent back).
 //! - **Each run follows the same lifecycle checks the supervisor applies** ([`next`]), so the view
 //!   can never disagree with the log. An event the lifecycle refuses changes nothing.
@@ -37,8 +37,10 @@ pub struct AgentCard {
 pub enum DropState {
     /// In the corral, ready to deploy.
     Available,
-    /// Queued, running or paused: the working ring.
+    /// Queued or running: the working ring.
     Working,
+    /// Paused: the ring held still, with a pause badge (TP-PAUSE-02).
+    Paused,
     /// A checkpoint is waiting on the user: the pulse and badge.
     NeedsYou,
     /// The latest run finished; its result can be read, or the agent prompted again.
@@ -216,6 +218,9 @@ impl CorralTracker {
         if runs.iter().any(|r| is_working(r.life.phase())) {
             return DropState::Working;
         }
+        if runs.iter().any(|r| r.life.phase() == Phase::Paused) {
+            return DropState::Paused;
+        }
         runs.sort_by_key(|r| r.order);
         runs.last()
             .map_or(DropState::Available, |latest| outcome(latest.life.phase()))
@@ -224,8 +229,9 @@ impl CorralTracker {
 
 fn is_working(phase: Phase) -> bool {
     match phase {
-        Phase::Queued | Phase::Running | Phase::Paused => true,
+        Phase::Queued | Phase::Running => true,
         Phase::Idle
+        | Phase::Paused
         | Phase::AwaitingCheckpoint
         | Phase::Completed
         | Phase::Failed
@@ -240,7 +246,8 @@ fn outcome(phase: Phase) -> DropState {
         Phase::Failed => DropState::Error,
         Phase::Idle | Phase::Cancelled => DropState::Available,
         // Not reached: active runs are handled before the latest run is consulted.
-        Phase::Queued | Phase::Running | Phase::Paused => DropState::Working,
+        Phase::Queued | Phase::Running => DropState::Working,
+        Phase::Paused => DropState::Paused,
         Phase::AwaitingCheckpoint => DropState::NeedsYou,
     }
 }

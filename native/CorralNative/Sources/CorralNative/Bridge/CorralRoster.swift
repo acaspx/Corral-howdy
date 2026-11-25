@@ -100,6 +100,7 @@ public struct CorralRoster: Equatable, Sendable {
         switch s {
         case "available": .available
         case "working": .working
+        case "paused": .paused
         case "needsYou": .needsYou
         case "done": .done
         case "error": .error
@@ -220,6 +221,8 @@ public enum CorralIntentWire {
         case .stop(let id): body = Body(kind: "stop", id: id)
         case .sendBack(let id): body = Body(kind: "sendBack", id: id)
         case .retry(let id): body = Body(kind: "retry", id: id)
+        case .pause(let id): body = Body(kind: "pause", id: id)
+        case .resume(let id): body = Body(kind: "resume", id: id)
         case .showLinked(let id, let look): body = Body(kind: "showLinked", id: id, look: look)
         case .hideLinked(let id): body = Body(kind: "hideLinked", id: id)
         case .openLinked(let id): body = Body(kind: "openLinked", id: id)

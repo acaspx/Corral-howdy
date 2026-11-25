@@ -314,6 +314,10 @@ pub enum CardStatusWire {
     Queued,
     /// Working.
     Working,
+    /// Working, and asked to pause (TP-PAUSE-04).
+    Pausing,
+    /// Paused.
+    Paused,
     /// Waiting on a checkpoint.
     NeedsYou,
     /// Finished.
@@ -330,6 +334,10 @@ pub enum CardStatusWire {
 pub enum CardActionWire {
     /// Stop.
     Stop,
+    /// Pause.
+    Pause,
+    /// Resume.
+    Resume,
     /// Send back.
     SendBack,
     /// New task.
@@ -347,6 +355,8 @@ impl From<CardStatus> for CardStatusWire {
         match status {
             CardStatus::Queued => Self::Queued,
             CardStatus::Working => Self::Working,
+            CardStatus::Pausing => Self::Pausing,
+            CardStatus::Paused => Self::Paused,
             CardStatus::NeedsYou => Self::NeedsYou,
             CardStatus::Done => Self::Done,
             CardStatus::Error => Self::Error,
@@ -359,6 +369,8 @@ impl From<CardAction> for CardActionWire {
     fn from(action: CardAction) -> Self {
         match action {
             CardAction::Stop => Self::Stop,
+            CardAction::Pause => Self::Pause,
+            CardAction::Resume => Self::Resume,
             CardAction::SendBack => Self::SendBack,
             CardAction::NewTask => Self::NewTask,
             CardAction::Retry => Self::Retry,
@@ -425,6 +437,8 @@ pub enum DropStatus {
     Available,
     /// Deployed and running.
     Working,
+    /// Paused (TP-PAUSE-04).
+    Paused,
     /// Waiting on a checkpoint.
     NeedsYou,
     /// Finished; can be prompted again or returned.
@@ -566,6 +580,7 @@ impl From<DropState> for DropStatus {
         match state {
             DropState::Available => Self::Available,
             DropState::Working => Self::Working,
+            DropState::Paused => Self::Paused,
             DropState::NeedsYou => Self::NeedsYou,
             DropState::Done => Self::Done,
             DropState::Error => Self::Error,
@@ -831,6 +846,10 @@ pub enum Intent {
     },
     /// Stop on a card.
     Stop(AgentId),
+    /// Pause on a card (TP-PAUSE-04).
+    Pause(AgentId),
+    /// Resume on a card.
+    Resume(AgentId),
     /// Send back on a card.
     SendBack(AgentId),
     /// Retry on a card.
@@ -1003,6 +1022,12 @@ enum IntentWire {
     Retry {
         id: String,
     },
+    Pause {
+        id: String,
+    },
+    Resume {
+        id: String,
+    },
     ShowLinked {
         id: String,
         #[serde(default)]
@@ -1150,6 +1175,8 @@ pub fn decode_intent(bytes: &[u8]) -> Result<Intent, BridgeError> {
             })
         }
         IntentWire::Stop { id } => Ok(Intent::Stop(agent_id(id)?)),
+        IntentWire::Pause { id } => Ok(Intent::Pause(agent_id(id)?)),
+        IntentWire::Resume { id } => Ok(Intent::Resume(agent_id(id)?)),
         IntentWire::SendBack { id } => Ok(Intent::SendBack(agent_id(id)?)),
         IntentWire::Retry { id } => Ok(Intent::Retry(agent_id(id)?)),
         IntentWire::ShowLinked { id, look } => {

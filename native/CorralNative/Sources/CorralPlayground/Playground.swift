@@ -107,6 +107,10 @@ final class PlaygroundModel: ObservableObject {
             note("sendBack \(name(of: id))")
             runs[id] = nil
             setStatus(id, .available)
+        case .pause(let id):
+            note("pause \(name(of: id))")
+        case .resume(let id):
+            note("resume \(name(of: id))")
         case .retry(let id):
             note("retry \(name(of: id))")
             if let prompt = runs[id]?.prompt { start(id, prompt: prompt) }
@@ -183,7 +187,8 @@ final class PlaygroundModel: ObservableObject {
         case .done: .done
         case .error: .error
         case .needsYou: .needsYou
-        case .queued, .working: .working
+        case .queued, .working, .pausing: .working
+        case .paused: .paused
         case .stopped: .available
         }
         setStatus(id, token)
@@ -201,6 +206,7 @@ final class PlaygroundModel: ObservableObject {
     static func actions(_ status: CorralRunCard.Status) -> [CorralRunCard.Action] {
         switch status {
         case .queued, .working: [.stop]
+        case .pausing, .paused: [.resume, .stop]
         case .needsYou: []
         case .done, .stopped: [.sendBack, .newTask]
         case .error: [.retry, .sendBack]

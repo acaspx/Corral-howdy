@@ -8,7 +8,7 @@
 import SwiftUI
 
 public struct CorralAgentToken: Identifiable, Equatable, Sendable {
-    public enum Status: Equatable, Sendable { case available, working, needsYou, done, error }
+    public enum Status: Equatable, Sendable { case available, working, paused, needsYou, done, error }
     public var id: String
     public var name: String
     public var monogram: String       // e.g. "Gk", or an SF Symbol name via `symbol`
@@ -37,6 +37,9 @@ public enum CorralIntent: Equatable, Sendable {
     case stop(id: String)
     case sendBack(id: String)
     case retry(id: String)
+    /// Pause and Resume on a run card (TP-PAUSE-05). Rust decides whether the run can pause.
+    case pause(id: String)
+    case resume(id: String)
     /// Linked apps (ADR-005), from the right-click menu: show one (your dot in a look), or hide it.
     case showLinked(id: String, look: String?)
     case hideLinked(id: String)
@@ -375,6 +378,14 @@ public struct CorralGlassView: View {
                         .stroke(Self.coral, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                         .rotationEffect(.degrees(reduceMotion ? -90 : turn * 360))
                 }
+            case .stillArc(let badge):
+                // Paused: the working arc, held still, with a pause badge.
+                Circle()
+                    .inset(by: 2)
+                    .trim(from: 0, to: 0.28)
+                    .stroke(Self.coral.opacity(0.6), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                badgeView(badge, tint: Self.ink)
             case .pulse(let badge):
                 TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
                     let phase = reduceMotion ? 1 : (sin(context.date.timeIntervalSinceReferenceDate * 3) + 1) / 2
@@ -443,6 +454,7 @@ public struct CorralGlassView: View {
         switch s {
         case .available: "available"
         case .working: "working"
+        case .paused: "paused"
         case .needsYou: "needs your approval"
         case .done: "done"
         case .error: "error"

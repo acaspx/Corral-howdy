@@ -405,11 +405,20 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
     let runnable: Vec<AgentId> = agents_for(&connected).into_iter().map(|c| c.id).collect();
     let desk = Arc::new(CheckpointDesk::default());
     let controls = match supervisor(app, &feed, clock, &desk) {
-        Ok(supervisor) => Some(Arc::new(CorralControls::new(
-            supervisor,
-            runnable,
-            id_source(),
-        ))),
+        Ok(supervisor) => {
+            // Cards offer Pause only for agents whose driver stops at safe points (TP-PAUSE-01).
+            feed.set_pausable(
+                Provider::ALL
+                    .iter()
+                    .map(|provider| agent_for(*provider).id)
+                    .filter(|agent| supervisor.can_pause(agent)),
+            );
+            Some(Arc::new(CorralControls::new(
+                supervisor,
+                runnable,
+                id_source(),
+            )))
+        }
         Err(reason) => {
             eprintln!("corral: tasks are off: {reason}");
             None
@@ -844,6 +853,27 @@ impl CorralFeed {
         }
     }
 
+    /// The agents whose cards offer Pause.
+    fn set_pausable(&self, agents: impl IntoIterator<Item = AgentId>) {
+        let Ok(mut views) = self.views.lock() else {
+            eprintln!("corral: the corral view is poisoned, so no card offers Pause");
+            return;
+        };
+        views.cards.set_pausable(agents);
+    }
+
+    /// Pause (`asked`) or Resume was pressed on `agent`'s card and the supervisor took it: the
+    /// card reads Pausing until the run reaches its safe point, or Working again (TP-PAUSE-01).
+    fn ask_pause(&self, agent: &AgentId, asked: bool) {
+        let Ok(mut views) = self.views.lock() else {
+            eprintln!("corral: the corral view is poisoned, so {agent}'s card wasn't updated");
+            return;
+        };
+        if views.cards.ask_pause(agent, asked) {
+            self.send(self.snapshot(&views));
+        }
+    }
+
     /// What a click on a checkpoint notification means, from the core (TP-CHK-23).
     fn note_click(&self, checkpoint: &CheckpointId, nonce: &str, click: NoteClick) -> NoteAnswer {
         let Ok(mut views) = self.views.lock() else {
@@ -1074,6 +1104,24 @@ fn on_intent(slot: &OnceLock<Corral>, result: Result<Intent, BridgeError>) {
             tauri::async_runtime::spawn(async move {
                 report("stop", &agent, controls.stop(&agent).await);
             });
+        }
+        Intent::Pause(agent) => {
+            let Some(controls) = tasks(&corral, &agent) else {
+                return;
+            };
+            match controls.pause(&agent) {
+                Ok(_) => corral.feed.ask_pause(&agent, true),
+                Err(e) => eprintln!("corral: pause for {agent} refused: {e}"),
+            }
+        }
+        Intent::Resume(agent) => {
+            let Some(controls) = tasks(&corral, &agent) else {
+                return;
+            };
+            match controls.resume(&agent) {
+                Ok(_) => corral.feed.ask_pause(&agent, false),
+                Err(e) => eprintln!("corral: resume for {agent} refused: {e}"),
+            }
         }
         Intent::SendBack(agent) => {
             let Some(controls) = tasks(&corral, &agent) else {

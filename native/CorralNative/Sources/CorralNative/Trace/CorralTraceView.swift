@@ -220,6 +220,8 @@ struct CorralTraceColumnView: View {
         switch status {
         case .queued: "Waiting to start"
         case .working: "Working"
+        case .pausing: "Pausing"
+        case .paused: "Paused"
         case .needsYou: "Needs you"
         }
     }

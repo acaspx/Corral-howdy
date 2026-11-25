@@ -14,7 +14,9 @@ use corral_core::run_card::CardStatus;
 pub fn bar_status(card: Option<CardStatus>) -> BarStatus {
     match card {
         None | Some(CardStatus::Done | CardStatus::Error | CardStatus::Stopped) => BarStatus::Ready,
-        Some(CardStatus::Queued | CardStatus::Working) => BarStatus::Working,
+        Some(
+            CardStatus::Queued | CardStatus::Working | CardStatus::Pausing | CardStatus::Paused,
+        ) => BarStatus::Working,
         Some(CardStatus::NeedsYou) => BarStatus::NeedsYou,
     }
 }

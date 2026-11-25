@@ -19,6 +19,8 @@ import Foundation
 public struct CorralCardModel: Equatable, Sendable {
     public enum Button: Equatable, Hashable, Sendable {
         case stop, sendBack, retry
+        /// Pause at the next safe point, and Resume (TP-PAUSE-05).
+        case pause, resume
         /// A linked drop's only button: opens the app it lives in (ADR-005).
         case open(String)
         /// Approve the waiting checkpoint. `touchID`: it's critical, so it needs Touch ID.
@@ -33,6 +35,8 @@ public struct CorralCardModel: Equatable, Sendable {
         public var title: String {
             switch self {
             case .stop: "Stop"
+            case .pause: "Pause"
+            case .resume: "Resume"
             case .sendBack: "Send back"
             case .retry: "Retry"
             case .open(let app): "Open \(app)"
@@ -257,6 +261,8 @@ public struct CorralCardModel: Equatable, Sendable {
         status = switch card.status {
         case .queued: "Waiting to start"
         case .working: place.map { "Step \($0) · \(time)" } ?? "Working · \(time) · \(card.spend)"
+        case .pausing: "Pausing after this step · \(time)"
+        case .paused: place.map { "Paused · step \($0)" } ?? "Paused · \(time) · \(card.spend)"
         case .needsYou: place.map { "Needs your approval · step \($0)" } ?? "Needs your approval · \(time)"
         case .done: "Done in \(time) · \(card.spend)"
         case .error: "Didn't finish · \(time)"
@@ -272,6 +278,8 @@ public struct CorralCardModel: Equatable, Sendable {
         buttons = card.actions.compactMap { action -> Button? in
             switch action {
             case .stop: .stop
+            case .pause: .pause
+            case .resume: .resume
             case .sendBack: .sendBack
             case .retry: .retry
             case .newTask: nil
@@ -309,7 +317,7 @@ public struct CorralCardModel: Equatable, Sendable {
             switch button {
             case .approve: .approve(checkpoint: shown.checkpointID, touchID: shown.risk == .critical)
             case .deny: .deny(checkpoint: shown.checkpointID)
-            case .stop, .sendBack, .retry, .open, .allowForRun, .approveEdited: button
+            case .stop, .pause, .resume, .sendBack, .retry, .open, .allowForRun, .approveEdited: button
             }
         }
         return model
@@ -329,6 +337,8 @@ public struct CorralCardModel: Equatable, Sendable {
     public static func intent(for button: Button, agentID: String) -> CorralIntent {
         switch button {
         case .stop: .stop(id: agentID)
+        case .pause: .pause(id: agentID)
+        case .resume: .resume(id: agentID)
         case .sendBack: .sendBack(id: agentID)
         case .retry: .retry(id: agentID)
         case .open: .openLinked(id: agentID)

@@ -34,6 +34,7 @@ use crate::transport::Transport;
 use corral_core::budget::RequestEstimate;
 use corral_core::domain::ActionClass;
 use corral_core::event::FailureReason;
+use corral_core::ids::AgentId;
 use corral_core::supervisor::{CancelToken, EventSink, RunDriver, RunFuture, RunRequest};
 use corral_policy::{Action, Decision, Policy, RunGrants};
 use corral_secrets::SecretStore;
@@ -190,6 +191,11 @@ impl<P: ToolProtocol> ToolAgent<P> {
 }
 
 impl<P: ToolProtocol> RunDriver for ToolAgent<P> {
+    /// The loop stops at safe points: before each model turn and each tool call.
+    fn pauses(&self, _agent: &AgentId) -> bool {
+        true
+    }
+
     fn run(&self, request: RunRequest, sink: EventSink, cancel: CancelToken) -> RunFuture {
         let setup = self.tools.clone();
         let agent = Agent {
