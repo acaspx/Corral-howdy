@@ -62,16 +62,18 @@ pub struct ResponsesConfig {
 }
 
 impl ResponsesConfig {
-    /// xAI's API with the given model, priced at grok-4.7's list price ($2 per million input
-    /// tokens, $6 per million output tokens, checked November 2026). Set [`Self::price`] for
-    /// another model; the versioned price table replaces this in M2.
+    /// xAI's API with the given model, priced at grok-4.7's list price: $2 per million input
+    /// tokens and $6 per million output tokens, doubling to $4 and $12 for every token of a
+    /// request whose prompt has 200,000 tokens or more (docs.x.ai pricing, checked 2026-11-24).
+    /// Set [`Self::price`] for another model.
     pub fn xai(model: impl Into<String>) -> Self {
         Self {
             provider: Provider::Xai,
             base_url: "https://api.x.ai/v1".into(),
             model: model.into(),
             max_output_tokens: 16_384,
-            price: Price::per_million_tokens(2_000_000, 6_000_000),
+            price: Price::per_million_tokens(2_000_000, 6_000_000)
+                .with_long_prompt(200_000, 4_000_000, 12_000_000),
             max_attempts: 3,
             idle_timeout: Duration::from_secs(300),
         }

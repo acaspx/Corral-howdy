@@ -56,6 +56,20 @@ pub struct Price {
     pub input_micro_usd_per_mtok: u64,
     /// Per million output tokens, reasoning included.
     pub output_micro_usd_per_mtok: u64,
+    /// A higher rate for a request whose prompt is long enough (TP-BUD-08), if the model has one.
+    pub long_prompt: Option<LongPrompt>,
+}
+
+/// The rate a request pays when its prompt has at least [`Self::from_input_tokens`] tokens: every
+/// token of that request, output included, is priced at it (Grok 4.7 doubles from 200,000).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LongPrompt {
+    /// The smallest prompt, in input tokens, that pays this rate.
+    pub from_input_tokens: u64,
+    /// Per million input tokens.
+    pub input_micro_usd_per_mtok: u64,
+    /// Per million output tokens, reasoning included.
+    pub output_micro_usd_per_mtok: u64,
 }
 
 impl Price {
@@ -64,15 +78,56 @@ impl Price {
         Self {
             input_micro_usd_per_mtok: input,
             output_micro_usd_per_mtok: output,
+            long_prompt: None,
         }
     }
 
-    /// What `tokens` input tokens cost, rounded up.
+    /// This price, with `input` and `output` per million tokens for a request whose prompt has
+    /// at least `from_input_tokens` tokens.
+    pub const fn with_long_prompt(self, from_input_tokens: u64, input: u64, output: u64) -> Self {
+        Self {
+            long_prompt: Some(LongPrompt {
+                from_input_tokens,
+                input_micro_usd_per_mtok: input,
+                output_micro_usd_per_mtok: output,
+            }),
+            ..self
+        }
+    }
+
+    /// The flat rate a request with `input_tokens` of prompt pays: the long rate from its
+    /// threshold on, each part never below the short rate.
+    pub fn for_prompt(&self, input_tokens: u64) -> Price {
+        let flat = Price::per_million_tokens(
+            self.input_micro_usd_per_mtok,
+            self.output_micro_usd_per_mtok,
+        );
+        match self.long_prompt {
+            Some(long) if input_tokens >= long.from_input_tokens => Price::per_million_tokens(
+                flat.input_micro_usd_per_mtok
+                    .max(long.input_micro_usd_per_mtok),
+                flat.output_micro_usd_per_mtok
+                    .max(long.output_micro_usd_per_mtok),
+            ),
+            Some(_) | None => flat,
+        }
+    }
+
+    /// What a request with `input_tokens` of prompt and `output_tokens` of output costs, at the
+    /// rate its prompt pays, rounded up.
+    pub fn cost(&self, input_tokens: u64, output_tokens: u64) -> u64 {
+        let rate = self.for_prompt(input_tokens);
+        rate.input_cost(input_tokens)
+            .saturating_add(rate.output_cost(output_tokens))
+    }
+
+    /// What `tokens` input tokens cost at the short rate, rounded up. For a whole request, use
+    /// [`Self::cost`] or [`Self::for_prompt`].
     pub fn input_cost(&self, tokens: u64) -> u64 {
         cost(tokens, self.input_micro_usd_per_mtok)
     }
 
-    /// What `tokens` output tokens cost, rounded up.
+    /// What `tokens` output tokens cost at the short rate, rounded up.
     pub fn output_cost(&self, tokens: u64) -> u64 {
         cost(tokens, self.output_micro_usd_per_mtok)
     }
@@ -305,7 +360,9 @@ impl RunBudget {
         estimate: &RequestEstimate,
         outer: Option<Outer>,
     ) -> Result<Admission, BudgetError> {
-        let price = estimate.price;
+        // The rate the input bound pays: the bound is never below the real prompt, so a request
+        // that comes in shorter is billed at this rate or less.
+        let price = estimate.price.for_prompt(estimate.input_tokens);
         let committed = self.committed();
         let limit = self.limit();
         let run_remaining = limit.saturating_sub(committed);
@@ -352,7 +409,7 @@ impl RunBudget {
         let worst_case = fixed.saturating_add(price.output_cost(max_output));
         self.reservations.push_back(Reservation {
             worst_case_micro_usd: worst_case,
-            price,
+            price: estimate.price,
             tool_fees_micro_usd: estimate.tool_fees_micro_usd,
         });
         Ok(Admission {
@@ -373,8 +430,7 @@ impl RunBudget {
         let reservation = self.reservations.pop_front();
         let floor = reservation.map_or(0, |r| {
             r.price
-                .input_cost(usage.input_tokens)
-                .saturating_add(r.price.output_cost(usage.output_tokens))
+                .cost(usage.input_tokens, usage.output_tokens)
                 .saturating_add(r.tool_fees_micro_usd)
         });
         let charged = usage.cost_micro_usd.max(floor);
