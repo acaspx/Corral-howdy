@@ -11,5 +11,7 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test-setup.ts"],
+    // The stylesheet as written, for the focus-ring check (src/a11y.test.tsx, TP-A11Y-06).
+    css: { include: [/styles\.css/] },
   },
 });
