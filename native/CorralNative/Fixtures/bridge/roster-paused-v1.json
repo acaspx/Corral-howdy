@@ -1,0 +1,41 @@
+{
+  "v": 1,
+  "agents": [
+    { "id": "scout", "name": "Scout", "monogram": "Sc", "status": "paused" },
+    { "id": "ranger", "name": "Ranger", "monogram": "Rg", "status": "working" },
+    { "id": "drover", "name": "Drover", "monogram": "Dv", "status": "working" }
+  ],
+  "hidden": 0,
+  "cards": [
+    {
+      "id": "scout",
+      "status": "paused",
+      "prompt": "Tidy my notes.",
+      "promptTruncated": false,
+      "elapsedMs": 3000,
+      "spend": "$0.00",
+      "answerTruncated": false,
+      "actions": ["resume", "stop"]
+    },
+    {
+      "id": "ranger",
+      "status": "pausing",
+      "prompt": "Tidy my notes.",
+      "promptTruncated": false,
+      "elapsedMs": 3000,
+      "spend": "$0.00",
+      "answerTruncated": false,
+      "actions": ["resume", "stop"]
+    },
+    {
+      "id": "drover",
+      "status": "working",
+      "prompt": "Tidy my notes.",
+      "promptTruncated": false,
+      "elapsedMs": 3000,
+      "spend": "$0.00",
+      "answerTruncated": false,
+      "actions": ["pause", "stop"]
+    }
+  ]
+}

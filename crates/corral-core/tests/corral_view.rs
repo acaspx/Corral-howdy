@@ -147,7 +147,7 @@ fn tp_view_01_each_phase_shows_its_drop_status() {
         (vec![queued("r", "scout"), started("r")], DropState::Working),
         (
             vec![queued("r", "scout"), started("r"), paused("r")],
-            DropState::Working,
+            DropState::Paused,
         ),
         (
             vec![queued("r", "scout"), started("r"), opened("r", "cp")],

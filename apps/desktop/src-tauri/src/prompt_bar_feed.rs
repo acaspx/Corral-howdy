@@ -247,4 +247,11 @@ mod tests {
         );
         assert_eq!(answer.view().chips, ["Grok"]);
     }
+
+    #[test]
+    fn tp_pause_04_a_paused_or_pausing_agent_is_busy_in_the_prompt_bar() {
+        for card in [CardStatus::Paused, CardStatus::Pausing] {
+            assert_eq!(bar_status(Some(card)), BarStatus::Working, "{card:?}");
+        }
+    }
 }

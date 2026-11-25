@@ -3124,3 +3124,116 @@ mod note_tests {
         assert_eq!(NoteTrouble::from(NoteFailure::Failed), NoteTrouble::Failed);
     }
 }
+
+#[cfg(test)]
+mod pause_tests {
+    //! TP-PAUSE-04: a paused drop, a pausing and a paused card, and Pause and Resume, on the wire
+    //! Swift decodes (`roster-paused-v1.json`, `intent-pause-v1.json`, `intent-resume-v1.json`).
+    use super::*;
+    use corral_core::corral_view::{AgentCard, CorralView, DropView};
+    use corral_core::event::*;
+    use corral_core::ids::{RunId, SessionId, SpanId};
+    use corral_core::run_card::RunCards;
+    use serde_json::Value;
+
+    const PAUSED: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/roster-paused-v1.json");
+    const PAUSE: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/intent-pause-v1.json");
+    const RESUME: &str =
+        include_str!("../../../../native/CorralNative/Fixtures/bridge/intent-resume-v1.json");
+
+    fn json(bytes: &[u8]) -> Value {
+        serde_json::from_slice(bytes).expect("json")
+    }
+
+    fn ev(run: &str, ts: u64, body: EventBody) -> Event {
+        Event {
+            run_id: RunId::from(run),
+            seq: 1,
+            ts,
+            span_id: SpanId::from("span"),
+            parent_span_id: None,
+            body,
+        }
+    }
+
+    fn drop(id: &str, name: &str, monogram: &str, state: DropState) -> DropView {
+        DropView {
+            agent: AgentCard {
+                id: AgentId::from(id),
+                name: name.into(),
+                monogram: monogram.into(),
+            },
+            state,
+        }
+    }
+
+    /// Three working runs at t = 4 s: Scout paused, Ranger asked to pause, Drover working.
+    fn three() -> (CorralView, RunCards) {
+        let mut cards = RunCards::default();
+        cards.set_pausable(["scout", "ranger", "drover"].map(AgentId::from));
+        for (run, agent) in [("r1", "scout"), ("r2", "ranger"), ("r3", "drover")] {
+            for e in [
+                ev(
+                    run,
+                    0,
+                    EventBody::RunQueued(RunQueued {
+                        agent_id: AgentId::from(agent),
+                        session_id: SessionId::from(format!("s-{run}")),
+                        prompt: "Tidy my notes.".into(),
+                    }),
+                ),
+                ev(
+                    run,
+                    1_000,
+                    EventBody::RunStarted(RunStarted {
+                        adapter: "xai".into(),
+                    }),
+                ),
+            ] {
+                cards.observe(&e).expect("legal");
+            }
+        }
+        cards
+            .observe(&ev(
+                "r1",
+                2_000,
+                EventBody::RunPaused(RunPaused {
+                    reason: PauseReason::User,
+                }),
+            ))
+            .expect("legal");
+        assert!(cards.ask_pause(&AgentId::from("ranger"), true));
+        let view = CorralView {
+            drops: vec![
+                drop("scout", "Scout", "Sc", DropState::Paused),
+                drop("ranger", "Ranger", "Rg", DropState::Working),
+                drop("drover", "Drover", "Dv", DropState::Working),
+            ],
+            hidden: 0,
+        };
+        (view, cards)
+    }
+
+    #[test]
+    fn tp_pause_04_paused_and_pausing_cards_go_as_the_fixture_swift_decodes() {
+        let (view, cards) = three();
+        let sent = RosterSnapshot::with_cards(&view, &cards, 4_000)
+            .to_bytes()
+            .expect("encode");
+        assert_eq!(json(&sent), json(PAUSED.as_bytes()));
+    }
+
+    #[test]
+    fn tp_pause_04_pause_and_resume_arrive_from_the_card() {
+        assert_eq!(
+            decode_intent(PAUSE.as_bytes()).expect("pause"),
+            Intent::Pause(AgentId::from("scout"))
+        );
+        assert_eq!(
+            decode_intent(RESUME.as_bytes()).expect("resume"),
+            Intent::Resume(AgentId::from("scout"))
+        );
+    }
+}
