@@ -18,6 +18,7 @@ pub mod surface;
 #[cfg(any(test, all(target_os = "macos", feature = "native")))]
 pub mod touch_id;
 
+pub mod agent_names;
 pub mod agent_policies;
 pub mod agent_settings;
 pub mod agent_tools;
@@ -126,17 +127,26 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // Which provider-side tools the user turned on, for the window and the agents.
             let data = app.path().app_data_dir()?;
-            app.manage(std::sync::Arc::new(provider_tools::ProviderTools::open(
-                data.join("provider-tools.json"),
-            )));
+            // Each agent's model, monthly cap and name (TP-AED-04, TP-ANM-03).
+            let settings = agent_settings::AgentSettings::new(data.join("agents"));
+            let (names, problems) = agent_names::AgentNames::load(&settings);
+            for problem in problems {
+                eprintln!("corral: {problem}");
+            }
+            app.manage(settings);
+            app.manage(names.clone());
+            // Which provider-side tools the user turned on, for the window and the agents.
+            app.manage(std::sync::Arc::new(
+                provider_tools::ProviderTools::open(data.join("provider-tools.json"))
+                    .named(names.clone()),
+            ));
             // Each agent's policy, for the policy editor and the agents' next runs.
-            app.manage(agent_policies::PolicyEditor::open(data.join("policies")));
-            // Each agent's model and monthly cap, read as the supervisor starts (TP-AED-04).
-            app.manage(agent_settings::AgentSettings::new(data.join("agents")));
+            app.manage(
+                agent_policies::PolicyEditor::open(data.join("policies")).named(names.clone()),
+            );
             // The trace viewer reads the event store once the corral opens it.
-            app.manage(std::sync::Arc::new(traces::Traces::default()));
+            app.manage(std::sync::Arc::new(traces::Traces::named(names)));
             app.manage(std::sync::Arc::new(
                 corral_settings::CorralSettings::default(),
             ));

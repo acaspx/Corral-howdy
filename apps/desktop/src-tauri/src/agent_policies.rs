@@ -14,7 +14,7 @@
 //! - **Plain names only.** An agent ID that isn't letters, digits, `-` and `_` is refused, so a
 //!   path never leaves the folder.
 
-use corral_adapters::catalog::agent_for;
+use crate::agent_names::AgentNames;
 use corral_core::corral_view::AgentCard;
 use corral_core::domain::ActionClass;
 use corral_core::ids::AgentId;
@@ -267,6 +267,7 @@ pub struct AgentPolicyEdit {
 pub struct PolicyEditor {
     policies: AgentPolicies,
     versions: Arc<Mutex<HashMap<AgentId, u64>>>,
+    names: AgentNames,
 }
 
 impl PolicyEditor {
@@ -275,7 +276,13 @@ impl PolicyEditor {
         Self {
             policies: AgentPolicies::new(dir),
             versions: Arc::new(Mutex::new(HashMap::new())),
+            names: AgentNames::default(),
         }
+    }
+
+    /// The editor, naming agents from `names` (TP-ANM-04).
+    pub fn named(self, names: AgentNames) -> Self {
+        Self { names, ..self }
     }
 
     /// The saved policies it edits.
@@ -294,7 +301,7 @@ impl PolicyEditor {
         Provider::ALL
             .into_iter()
             .map(|provider| {
-                let card = agent_for(provider);
+                let card = self.names.card(provider);
                 match self.policies.load(&card.id) {
                     Ok(policy) => view(&card, &policy, None),
                     Err(why) => view(
@@ -312,7 +319,7 @@ impl PolicyEditor {
     pub fn save(&self, agent: &str, edit: AgentPolicyEdit) -> Result<AgentPolicyView, String> {
         let card = Provider::ALL
             .into_iter()
-            .map(agent_for)
+            .map(|provider| self.names.card(provider))
             .find(|card| card.id.as_str() == agent)
             .ok_or_else(|| format!("{agent:?} isn't an agent Corral keeps a policy for"))?;
         let mut rules = Vec::with_capacity(edit.rules.len());
