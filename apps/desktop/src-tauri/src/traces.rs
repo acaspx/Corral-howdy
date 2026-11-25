@@ -3,7 +3,8 @@
 //! tree, which the core projects (`corral_core::trace_view`), with the run's events as JSON to
 //! copy. Each answer is one query. Before the store is open, both say so.
 
-use corral_adapters::catalog::{agent_for, provider_of};
+use crate::agent_names::AgentNames;
+use corral_adapters::catalog::provider_of;
 use corral_core::agent_text::AgentText;
 use corral_core::event::Event;
 use corral_core::ids::RunId;
@@ -80,6 +81,8 @@ pub struct Traces {
     store: OnceLock<Arc<Store>>,
     /// The run a click in the corral asked to open, until the viewer takes it (TP-TRACE-05).
     open: Mutex<Option<RunId>>,
+    /// The agents' names (TP-ANM-04).
+    names: AgentNames,
 }
 
 /// Run in the main window after a click in the corral asks for a run: it tells the viewer to
@@ -87,6 +90,14 @@ pub struct Traces {
 pub const OPEN_RUN_SCRIPT: &str = "window.dispatchEvent(new Event('corral-open-run'))";
 
 impl Traces {
+    /// The viewer, naming agents from `names`.
+    pub fn named(names: AgentNames) -> Self {
+        Self {
+            names,
+            ..Self::default()
+        }
+    }
+
     /// Asks the viewer to open `run` (a task card clicked in the trace tree). A later click
     /// replaces an earlier one not yet taken.
     pub fn open_run(&self, run: RunId) {
@@ -125,7 +136,7 @@ impl Traces {
             .into_iter()
             .map(|run| RunListItem {
                 agent_name: provider_of(&run.agent_id)
-                    .map(|p| agent_for(p).name)
+                    .map(|_| self.names.name_of(&run.agent_id))
                     .unwrap_or_else(|| {
                         AgentText::new(run.agent_id.as_str(), MAX_PROMPT_CHARS)
                             .as_str()

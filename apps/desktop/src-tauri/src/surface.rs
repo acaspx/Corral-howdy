@@ -25,9 +25,10 @@
 //! corral's right-click menu. They never take tasks: their card's Open button opens the app's
 //! own site. The choice is kept in `linked-apps.json` ([`crate::linked`]).
 
+use crate::agent_names::AgentNames;
 use crate::agent_policies::PolicyEditor;
 use crate::agent_settings::{AgentSettings, messages_config, responses_config, seed_caps};
-use crate::agent_tools::{agent_folder, allowing_provider_tools, file_tools_under, random_id};
+use crate::agent_tools::{allowing_provider_tools, file_tools_under, random_id};
 use crate::bridge::{
     AuthOutcome, BridgeError, Intent, NotificationRequest, PromptBarSnapshot, RosterSnapshot,
 };
@@ -121,6 +122,8 @@ pub struct Corral {
     desk: Arc<CheckpointDesk>,
     /// The Touch ID prompt for a critical checkpoint, if one is up (TP-CHK-17).
     touch_id: Arc<Mutex<TouchIdDesk>>,
+    /// The agents' names, for their cards (TP-ANM-03).
+    names: AgentNames,
 }
 
 impl Corral {
@@ -255,8 +258,10 @@ impl Corral {
             // Only the agents Corral runs take tasks; a linked drop never does (ADR-005).
             controls.set_agents(agents_for(&connected).into_iter().map(|c| c.id));
         }
-        self.feed
-            .set_agents(corral_agents(&connected, &linked), linked);
+        self.feed.set_agents(
+            self.names.rename(corral_agents(&connected, &linked)),
+            linked,
+        );
         self.show_logos(&connected, &linked);
     }
 
@@ -380,7 +385,8 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
     if let Some(problem) = order.problem() {
         eprintln!("corral: {problem}");
     }
-    let all_cards = corral_agents(&connected, &linked);
+    let names = app.state::<AgentNames>().inner().clone();
+    let all_cards = names.rename(corral_agents(&connected, &linked));
     let placed = order.place(all_cards.clone(), clock.now_ms());
     if placed.choose_shown {
         eprintln!("corral: the corral holds up to 8 agents; a new one is hidden until you choose");
@@ -429,6 +435,7 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
         }
     };
     let corral = Corral {
+        names,
         feed,
         controls,
         logos,
@@ -664,7 +671,9 @@ fn agent_file_tools(
                 agent.name
             )
         })?;
-    file_tools_under(&agent_folder(&home, &agent.name), Arc::clone(desk), policy)
+    // The folder follows the agent's name (TP-ANM-03).
+    let folder = app.state::<AgentNames>().folder(&home, &agent.id);
+    file_tools_under(&folder, Arc::clone(desk), policy)
 }
 
 /// How far back launch reads spend: past the start of this month in any time zone.

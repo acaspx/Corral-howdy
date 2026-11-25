@@ -1,5 +1,5 @@
-//! Each agent's settings, saved (M4 item 6; TP-AED-03..04): the model it uses and its own
-//! monthly cap. What can be chosen is the core's: the models are the catalog's, each at its
+//! Each agent's settings, saved (M4 item 6; TP-AED-03..04, TP-ANM-02): the model it uses, its
+//! own monthly cap and its name. What can be chosen is the core's: the models are the catalog's, each at its
 //! checked price (`corral_adapters::catalog::models`), and a cap is held by the spend ledger,
 //! which refuses one above the all-agents cap. This only keeps the choices.
 //!
@@ -16,8 +16,10 @@
 use corral_adapters::catalog::{ModelChoice, agent_for, model_choice, models, provider_of};
 use corral_adapters::messages::MessagesConfig;
 use corral_adapters::responses::ResponsesConfig;
+use corral_core::agent_name::AgentName;
 use corral_core::budget::SpendLedger;
 use corral_core::ids::AgentId;
+use corral_secrets::Provider;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -41,6 +43,8 @@ pub struct AgentSetup {
 #[serde(deny_unknown_fields)]
 struct SetupFile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     model: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     monthly_cap_micro_usd: Option<u64>,
@@ -61,13 +65,74 @@ impl AgentSettings {
     /// `agent`'s settings: its saved file, or the defaults when it has none. An error says which
     /// file can't be used and why.
     pub fn load(&self, agent: &AgentId) -> Result<AgentSetup, String> {
+        let (path, file) = self.read(agent)?;
+        let Some(file) = file else {
+            return Ok(defaults(agent));
+        };
+        let model = match file.model {
+            None => defaults(agent).model,
+            Some(id) => {
+                Some(offered(agent, &id).map_err(|why| format!("{}: {why}", path.display()))?)
+            }
+        };
+        Ok(AgentSetup {
+            model,
+            monthly_cap_micro_usd: file.monthly_cap_micro_usd,
+        })
+    }
+
+    /// `agent`'s saved name (TP-ANM-02), if it was renamed. An error says which file can't be
+    /// used and why, including a name that is another agent's catalog name.
+    pub fn name(&self, agent: &AgentId) -> Result<Option<AgentName>, String> {
+        let (path, file) = self.read(agent)?;
+        let Some(text) = file.and_then(|f| f.name) else {
+            return Ok(None);
+        };
+        let fail = |why: String| format!("{}: {why}", path.display());
+        let name = AgentName::new(&text).map_err(|e| fail(e.to_string()))?;
+        not_anothers(agent, &name).map_err(fail)?;
+        Ok(Some(name))
+    }
+
+    /// Saves `agent`'s model and cap, keeping its saved name: a temporary file, then a rename.
+    /// A file that can't be read is replaced.
+    pub fn save(&self, agent: &AgentId, setup: &AgentSetup) -> Result<(), String> {
+        let name = match self.read(agent) {
+            Ok((_, Some(file))) => file.name,
+            Ok((_, None)) | Err(_) => None,
+        };
+        self.write(
+            agent,
+            &SetupFile {
+                name,
+                model: setup.model.map(|m| m.id.to_owned()),
+                monthly_cap_micro_usd: setup.monthly_cap_micro_usd,
+            },
+        )
+    }
+
+    /// Saves `agent`'s name, or `None` to go back to its catalog name, keeping its model and
+    /// cap. Another agent's catalog name is refused, and so is a file that can't be read: it may
+    /// hold a cap the user lowered.
+    pub fn save_name(&self, agent: &AgentId, name: Option<&AgentName>) -> Result<(), String> {
+        if let Some(name) = name {
+            not_anothers(agent, name)?;
+        }
+        let (_, file) = self.read(agent)?;
+        let file = SetupFile {
+            name: name.map(|n| n.as_str().to_owned()),
+            ..file.unwrap_or_default()
+        };
+        self.write(agent, &file)
+    }
+
+    /// The file's path, and what it holds if it's there. An error says which file can't be used.
+    fn read(&self, agent: &AgentId) -> Result<(PathBuf, Option<SetupFile>), String> {
         let path = self.path(agent)?;
         let fail = |why: String| format!("{}: {why}", path.display());
         let bytes = match std::fs::read(&path) {
             Ok(bytes) => bytes,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(defaults(agent));
-            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok((path, None)),
             Err(e) => return Err(fail(e.to_string())),
         };
         if bytes.len() > MAX_SETTINGS_FILE_BYTES {
@@ -86,25 +151,14 @@ impl AgentSettings {
                     .join(" "),
             )
         })?;
-        let model = match file.model {
-            None => defaults(agent).model,
-            Some(id) => Some(offered(agent, &id).map_err(fail)?),
-        };
-        Ok(AgentSetup {
-            model,
-            monthly_cap_micro_usd: file.monthly_cap_micro_usd,
-        })
+        Ok((path, Some(file)))
     }
 
-    /// Saves `agent`'s settings: a temporary file, then a rename.
-    pub fn save(&self, agent: &AgentId, setup: &AgentSetup) -> Result<(), String> {
+    /// Writes `file` for `agent`: a temporary file, then a rename.
+    fn write(&self, agent: &AgentId, file: &SetupFile) -> Result<(), String> {
         let path = self.path(agent)?;
         let fail = |why: String| format!("Couldn't save {agent}'s settings: {why}");
-        let file = SetupFile {
-            model: setup.model.map(|m| m.id.to_owned()),
-            monthly_cap_micro_usd: setup.monthly_cap_micro_usd,
-        };
-        let text = toml::to_string(&file).map_err(|e| fail(e.to_string()))?;
+        let text = toml::to_string(file).map_err(|e| fail(e.to_string()))?;
         std::fs::create_dir_all(&self.dir).map_err(|e| fail(e.to_string()))?;
         let mut temp = path.clone().into_os_string();
         temp.push(".tmp");
@@ -131,6 +185,19 @@ impl AgentSettings {
             return Err(format!("{id:?} isn't an agent Corral keeps settings for"));
         }
         Ok(Path::new(&self.dir).join(format!("{id}.toml")))
+    }
+}
+
+/// Refuses `name` for `agent` if it is another agent's catalog name, so every agent's default
+/// folder stays its own.
+fn not_anothers(agent: &AgentId, name: &AgentName) -> Result<(), String> {
+    match Provider::ALL
+        .into_iter()
+        .map(agent_for)
+        .find(|card| card.id != *agent && name.same_as(&card.name))
+    {
+        Some(card) => Err(format!("{:?} is {}'s name", name.as_str(), card.name)),
+        None => Ok(()),
     }
 }
 

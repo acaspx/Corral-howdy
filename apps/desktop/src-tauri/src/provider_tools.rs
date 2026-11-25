@@ -9,6 +9,7 @@
 //!   window says why. A choice that can't be saved doesn't take effect.
 //! - **Whole or not at all.** A choice is written to a temporary file, then renamed over the old.
 
+use crate::agent_names::AgentNames;
 use corral_adapters::agent::ProviderTool;
 use corral_adapters::catalog::{self, agent_for};
 use corral_adapters::messages::{WEB_SEARCH_MICRO_USD, WEB_SEARCHES_PER_TURN};
@@ -148,6 +149,7 @@ struct Saved {
 pub struct ProviderTools {
     path: PathBuf,
     saved: Mutex<Saved>,
+    names: AgentNames,
 }
 
 impl ProviderTools {
@@ -169,7 +171,13 @@ impl ProviderTools {
         Self {
             path,
             saved: Mutex::new(saved),
+            names: AgentNames::default(),
         }
+    }
+
+    /// The choices, naming agents from `names` (TP-ANM-04).
+    pub fn named(self, names: AgentNames) -> Self {
+        Self { names, ..self }
     }
 
     fn saved(&self) -> std::sync::MutexGuard<'_, Saved> {
@@ -183,7 +191,7 @@ impl ProviderTools {
         let saved = self.saved();
         let choices = offered()
             .into_iter()
-            .filter_map(|(provider, agent, agent_name, tool)| {
+            .filter_map(|(provider, agent, _, tool)| {
                 let (cost_micro_usd, per_turn) = price(provider, tool)?;
                 let on = saved
                     .choices
@@ -191,7 +199,7 @@ impl ProviderTools {
                     .is_some_and(|tools| tools.contains(&tool));
                 Some(ProviderToolChoice {
                     agent: agent.to_string(),
-                    agent_name,
+                    agent_name: self.names.name_of(&agent),
                     tool,
                     runs_on: provider.display_name().to_owned(),
                     cost_micro_usd,
@@ -222,8 +230,9 @@ impl ProviderTools {
         on: bool,
     ) -> Result<ProviderToolsView, String> {
         if !is_offered(agent, tool) {
-            let name = catalog::provider_of(&AgentId::from(agent))
-                .map(|p| agent_for(p).name)
+            let id = AgentId::from(agent);
+            let name = catalog::provider_of(&id)
+                .map(|_| self.names.name_of(&id))
                 .unwrap_or_else(|| "That agent".to_owned());
             return Err(format!("{name} can't be given {} yet.", label(tool)));
         }
