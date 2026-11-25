@@ -190,3 +190,208 @@ fn tp_ped_05_ids_with_dashes_and_underscores_are_plain_names() {
         assert_eq!(s.policies().load(&agent), Ok(edited()), "{id}");
     }
 }
+
+// ---- TP-PED-08: the editor's view and save, for the main window ---------------------------
+
+mod editor {
+    use super::Scratch;
+    use corral_core::ids::AgentId;
+    use corral_desktop_lib::agent_policies::{
+        AgentPolicyEdit, AgentPolicyView, PolicyEditor, PolicyRuleChange, RuleChoice, RuleOrigin,
+        TimeoutChoice,
+    };
+
+    fn editor(s: &Scratch) -> PolicyEditor {
+        PolicyEditor::open(s.0.join("policies"))
+    }
+
+    fn grok(views: &[AgentPolicyView]) -> &AgentPolicyView {
+        views.iter().find(|v| v.agent == "grok").expect("grok")
+    }
+
+    fn unchanged(view: &AgentPolicyView) -> AgentPolicyEdit {
+        AgentPolicyEdit {
+            rules: Vec::new(),
+            net_allow: view.net_allow.clone(),
+            checkpoint_timeout: view.checkpoint_timeout.clone(),
+            on_timeout: view.on_timeout,
+            loop_limit: view.loop_limit,
+        }
+    }
+
+    fn change(class: &str, rule: Option<RuleChoice>) -> PolicyRuleChange {
+        PolicyRuleChange {
+            class: class.into(),
+            rule,
+        }
+    }
+
+    #[test]
+    fn tp_ped_08_every_agent_shows_each_class_with_its_decision_and_why() {
+        let s = Scratch::new();
+        let views = editor(&s).views();
+        assert!(views.iter().any(|v| v.agent == "claude"));
+        let g = grok(&views);
+        assert_eq!(g.agent_name, "Grok");
+        assert_eq!(g.problem, None);
+        let classes: Vec<&str> = g.classes.iter().map(|c| c.class.as_str()).collect();
+        assert_eq!(classes.first(), Some(&"read.local"));
+        assert_eq!(classes.last(), Some(&"unknown"));
+        assert_eq!(classes.len(), 13);
+        let write = g
+            .classes
+            .iter()
+            .find(|c| c.class == "write.local")
+            .expect("write");
+        assert_eq!(
+            (write.rule, write.origin, write.own, write.editable),
+            (RuleChoice::Ask, RuleOrigin::Default, None, true)
+        );
+        assert_eq!(write.title, "Changing a file in its folder");
+        let money = g
+            .classes
+            .iter()
+            .find(|c| c.class == "money.spend")
+            .expect("money");
+        assert_eq!(
+            money.ceiling,
+            RuleChoice::Ask,
+            "the editor offers no more than this"
+        );
+        let unknown = g
+            .classes
+            .iter()
+            .find(|c| c.class == "unknown")
+            .expect("unknown");
+        assert_eq!(
+            (unknown.rule, unknown.origin, unknown.editable),
+            (RuleChoice::Deny, RuleOrigin::Fixed, false)
+        );
+        assert_eq!(g.checkpoint_timeout, "30m");
+        assert_eq!(g.on_timeout, TimeoutChoice::Deny);
+        assert_eq!(g.loop_limit, 5);
+    }
+
+    #[test]
+    fn tp_ped_08_a_save_is_checked_kept_and_counted_for_the_next_run() {
+        let s = Scratch::new();
+        let e = editor(&s);
+        let before = e.version(&AgentId::from("grok"));
+        let mut edit = unchanged(grok(&e.views()));
+        edit.rules = vec![
+            change("write.local", Some(RuleChoice::Allow)),
+            change("comms.send", Some(RuleChoice::Deny)),
+        ];
+        edit.net_allow = vec!["*.wikipedia.org".into()];
+        edit.on_timeout = TimeoutChoice::CancelRun;
+        let saved = e.save("grok", edit).expect("saved");
+        let write = saved
+            .classes
+            .iter()
+            .find(|c| c.class == "write.local")
+            .expect("write");
+        assert_eq!(
+            (write.rule, write.origin, write.own),
+            (
+                RuleChoice::Allow,
+                RuleOrigin::Agent,
+                Some(RuleChoice::Allow)
+            )
+        );
+        assert_eq!(saved.net_allow, ["*.wikipedia.org"]);
+        assert_eq!(saved.on_timeout, TimeoutChoice::CancelRun);
+        assert_eq!(
+            e.version(&AgentId::from("grok")),
+            before + 1,
+            "the next run rebuilds"
+        );
+        assert_eq!(
+            e.version(&AgentId::from("claude")),
+            0,
+            "only that agent's runs change"
+        );
+        assert_eq!(
+            &grok(&editor(&s).views()).classes,
+            &saved.classes,
+            "kept on disk"
+        );
+        let mut back = unchanged(&saved);
+        back.rules = vec![change("write.local", None)];
+        let reset = e.save("grok", back).expect("saved");
+        let write = reset
+            .classes
+            .iter()
+            .find(|c| c.class == "write.local")
+            .expect("write");
+        assert_eq!(
+            (write.origin, write.own),
+            (RuleOrigin::Default, None),
+            "back to the default"
+        );
+    }
+
+    #[test]
+    fn tp_ped_08_a_refused_edit_says_why_and_changes_nothing() {
+        let s = Scratch::new();
+        let e = editor(&s);
+        let start = grok(&e.views()).clone();
+        for (rules, net, why) in [
+            (
+                vec![change("money.spend", Some(RuleChoice::Allow))],
+                vec![],
+                "at most",
+            ),
+            (
+                vec![change("unknown", Some(RuleChoice::Deny))],
+                vec![],
+                "can't be changed",
+            ),
+            (
+                vec![change("provider_tools", Some(RuleChoice::Allow))],
+                vec![],
+                "can't be changed",
+            ),
+            (
+                vec![change("teleport", Some(RuleChoice::Allow))],
+                vec![],
+                "teleport",
+            ),
+            (
+                vec![],
+                vec!["https://example.com".to_owned()],
+                "isn't a domain",
+            ),
+        ] {
+            let mut edit = unchanged(&start);
+            edit.rules = rules;
+            edit.net_allow = net;
+            let error = e.save("grok", edit).expect_err(why);
+            assert!(error.contains(why), "{why}: {error}");
+        }
+        assert_eq!(e.version(&AgentId::from("grok")), 0, "nothing saved");
+        assert_eq!(grok(&e.views()), &start);
+        assert!(
+            e.save("nobody", unchanged(&start)).is_err(),
+            "no such agent"
+        );
+    }
+
+    #[test]
+    fn tp_ped_08_a_broken_file_is_shown_and_a_save_replaces_it() {
+        let s = Scratch::new();
+        std::fs::create_dir_all(s.0.join("policies")).expect("dir");
+        std::fs::write(s.file("grok"), "colour = \"blue\"\n").expect("write");
+        let e = editor(&s);
+        let g = grok(&e.views()).clone();
+        let problem = g.problem.clone().expect("a problem");
+        assert!(problem.contains("Grok has no tools"), "{problem}");
+        assert!(problem.contains("Saving here replaces it"), "{problem}");
+        let saved = e.save("grok", unchanged(&g)).expect("replaced");
+        assert_eq!(saved.problem, None);
+        assert!(
+            corral_desktop_lib::agent_policies::AgentPolicies::new(s.0.join("policies"))
+                .load(&AgentId::from("grok"))
+                .is_ok()
+        );
+    }
+}
