@@ -44,6 +44,8 @@ dev:
 native-test:
     cd native/CorralNative && xcodebuild test -scheme CorralNative-Package -destination 'platform=macOS'
 
-# UI components with fixture event streams (lands in M4).
+# The main window's components, a story per state, the trace viewer's from real event streams
+# (TP-SB-01, 02). Serves on http://localhost:6006.
 storybook:
-    @echo "Storybook arrives with the main-window components in M4 (docs/03-build-plan.md)."
+    pnpm install
+    pnpm --filter @corral/desktop storybook

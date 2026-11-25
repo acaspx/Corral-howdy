@@ -1,0 +1,613 @@
+{
+  "runs": [
+    {
+      "agentName": "Claude",
+      "costMicroUsd": 0,
+      "endedMs": null,
+      "outcome": "running",
+      "prompt": "Send the itinerary to Sam",
+      "queuedMs": 1795971720000,
+      "runId": "run-itinerary"
+    },
+    {
+      "agentName": "Grok",
+      "costMicroUsd": 0,
+      "endedMs": 1795971720000,
+      "outcome": "cancelled",
+      "prompt": "Research Lisbon neighborhoods",
+      "queuedMs": 1795971630000,
+      "runId": "run-research"
+    },
+    {
+      "agentName": "Grok",
+      "costMicroUsd": 0,
+      "endedMs": 1795971630000,
+      "outcome": "failed",
+      "prompt": "Find flights to Lisbon",
+      "queuedMs": 1795971626000,
+      "runId": "run-flights"
+    },
+    {
+      "agentName": "Claude",
+      "costMicroUsd": 2500,
+      "endedMs": 1795971626000,
+      "outcome": "completed",
+      "prompt": "Email the summary to Sam",
+      "queuedMs": 1795971614000,
+      "runId": "run-email"
+    },
+    {
+      "agentName": "Claude",
+      "costMicroUsd": 13100,
+      "endedMs": 1795971614000,
+      "outcome": "completed",
+      "prompt": "Tidy my notes",
+      "queuedMs": 1795971602000,
+      "runId": "run-tidy"
+    },
+    {
+      "agentName": "Grok",
+      "costMicroUsd": 4400,
+      "endedMs": 1795971602000,
+      "outcome": "completed",
+      "prompt": "Plan my week",
+      "queuedMs": 1795971600000,
+      "runId": "run-plan"
+    }
+  ],
+  "traces": {
+    "run-email": {
+      "json": "[\n  {\n    \"run_id\": \"run-email\",\n    \"seq\": 1,\n    \"ts\": 1795971614000,\n    \"span_id\": \"run-email:invoke_agent\",\n    \"kind\": \"run.queued\",\n    \"payload\": {\n      \"agent_id\": \"claude\",\n      \"session_id\": \"s-run-email\",\n      \"prompt\": \"Email the summary to Sam\"\n    }\n  },\n  {\n    \"run_id\": \"run-email\",\n    \"seq\": 2,\n    \"ts\": 1795971614000,\n    \"span_id\": \"run-email:invoke_agent\",\n    \"kind\": \"run.started\",\n    \"payload\": {\n      \"adapter\": \"driver\"\n    }\n  },\n  {\n    \"run_id\": \"run-email\",\n    \"seq\": 3,\n    \"ts\": 1795971614000,\n    \"span_id\": \"run-email:invoke_agent\",\n    \"kind\": \"model.request\",\n    \"payload\": {\n      \"provider\": \"fake\",\n      \"model\": \"fake-1\"\n    }\n  },\n  {\n    \"run_id\": \"run-email\",\n    \"seq\": 4,\n    \"ts\": 1795971614000,\n    \"span_id\": \"run-email:invoke_agent\",\n    \"kind\": \"model.delta\",\n    \"payload\": {\n      \"text\": \"Sending the summary to Sam.\"\n    }\n  },\n  {\n    \"run_id\": \"run-email\",\n    \"seq\": 5,\n    \"ts\": 1795971614000,\n    \"span_id\": \"run-email:invoke_agent\",\n    \"kind\": \"tool.requested\",\n    \"payload\": {\n      \"tool_call_id\": \"id-4\",\n      \"tool\": \"email.send\",\n      \"action_class\": \"comms.send\",\n      \"args\": {\n        \"body\": \"The Q4 summary\",\n        \"to\": \"sam@example.test\"\n      }\n    }\n  },\n  {\n    \"run_id\": \"run-email\",\n    \"seq\": 6,\n    \"ts\": 1795971614000,\n    \"span_id\": \"run-email:invoke_agent\",\n    \"kind\": \"policy.decided\",\n    \"payload\": {\n      \"tool_call_id\": \"id-4\",\n      \"decision\": {\n        \"outcome\": \"ask\",\n        \"risk\": \"high\",\n        \"reason\": \"Sending a message or email needs your approval.\"\n      }\n    }\n  },\n  {\n    \"run_id\": \"run-email\",\n    \"seq\": 7,\n    \"ts\": 1795971614000,\n    \"span_id\": \"run-email:invoke_agent\",\n    \"kind\": \"checkpoint.opened\",\n    \"payload\": {\n      \"checkpoint_id\": \"id-5\",\n      \"tool_call_id\": \"id-4\",\n      \"action_class\": \"comms.send\",\n      \"risk\": \"high\",\n      \"title\": \"Sending a message or email\",\n      \"detail\": \"email.send to sam@example.test\\n{\\\"body\\\":\\\"The Q4 summary\\\",\\\"to\\\":\\\"sam@example.test\\\"}\"\n    }\n  },\n  {\n    \"run_id\": \"run-email\",\n    \"seq\": 8,\n    \"ts\": 1795971626000,\n    \"span_id\": \"run-email:invoke_agent\",\n    \"kind\": \"checkpoint.resolved\",\n    \"payload\": {\n      \"checkpoint_id\": \"id-5\",\n      \"resolution\": {\n        \"outcome\": \"denied\",\n        \"note\": \"Not yet: I'll send it myself.\"\n      }\n    }\n  },\n  {\n    \"run_id\": \"run-email\",\n    \"seq\": 9,\n    \"ts\": 1795971626000,\n    \"span_id\": \"run-email:invoke_agent\",\n    \"kind\": \"model.delta\",\n    \"payload\": {\n      \"text\": \" OK, I won't send it.\"\n    }\n  },\n  {\n    \"run_id\": \"run-email\",\n    \"seq\": 10,\n    \"ts\": 1795971626000,\n    \"span_id\": \"run-email:invoke_agent\",\n    \"kind\": \"model.response\",\n    \"payload\": {\n      \"text\": \"Sending the summary to Sam. OK, I won't send it.\",\n      \"finish_reason\": \"stop\"\n    }\n  },\n  {\n    \"run_id\": \"run-email\",\n    \"seq\": 11,\n    \"ts\": 1795971626000,\n    \"span_id\": \"run-email:invoke_agent\",\n    \"kind\": \"usage.reported\",\n    \"payload\": {\n      \"input_tokens\": 900,\n      \"output_tokens\": 120,\n      \"cost_micro_usd\": 2500\n    }\n  },\n  {\n    \"run_id\": \"run-email\",\n    \"seq\": 12,\n    \"ts\": 1795971626000,\n    \"span_id\": \"run-email:invoke_agent\",\n    \"kind\": \"run.completed\",\n    \"payload\": {\n      \"summary\": null\n    }\n  }\n]",
+      "view": {
+        "endMs": 1795971626000,
+        "runId": "run-email",
+        "spans": [
+          {
+            "attributes": [
+              {
+                "key": "prompt",
+                "value": "Email the summary to Sam"
+              },
+              {
+                "key": "adapter",
+                "value": "driver"
+              },
+              {
+                "key": "input tokens",
+                "value": "900"
+              },
+              {
+                "key": "output tokens",
+                "value": "120"
+              },
+              {
+                "key": "cost",
+                "value": "$0.0025"
+              }
+            ],
+            "endMs": 1795971626000,
+            "id": "run",
+            "kind": "run",
+            "name": "invoke_agent claude",
+            "parent": null,
+            "startMs": 1795971614000,
+            "status": "ok"
+          },
+          {
+            "attributes": [
+              {
+                "key": "provider",
+                "value": "fake"
+              },
+              {
+                "key": "model",
+                "value": "fake-1"
+              },
+              {
+                "key": "finish reason",
+                "value": "stop"
+              },
+              {
+                "key": "response",
+                "value": "Sending the summary to Sam. OK, I won't send it."
+              },
+              {
+                "key": "input tokens",
+                "value": "900"
+              },
+              {
+                "key": "output tokens",
+                "value": "120"
+              },
+              {
+                "key": "cost",
+                "value": "$0.0025"
+              }
+            ],
+            "endMs": 1795971626000,
+            "id": "model-1",
+            "kind": "model",
+            "name": "chat fake-1",
+            "parent": "run",
+            "startMs": 1795971614000,
+            "status": "ok"
+          },
+          {
+            "attributes": [
+              {
+                "key": "class",
+                "value": "comms.send"
+              },
+              {
+                "key": "arguments",
+                "value": "{\"body\":\"The Q4 summary\",\"to\":\"sam@example.test\"}"
+              },
+              {
+                "key": "decision",
+                "value": "ask (high): Sending a message or email needs your approval."
+              }
+            ],
+            "endMs": 1795971626000,
+            "id": "tool-id-4",
+            "kind": "tool",
+            "name": "execute_tool email.send",
+            "parent": "run",
+            "startMs": 1795971614000,
+            "status": "ok"
+          },
+          {
+            "attributes": [
+              {
+                "key": "risk",
+                "value": "high"
+              },
+              {
+                "key": "detail",
+                "value": "email.send to sam@example.test\n{\"body\":\"The Q4 summary\",\"to\":\"sam@example.test\"}"
+              },
+              {
+                "key": "resolution",
+                "value": "denied: Not yet: I'll send it myself."
+              }
+            ],
+            "endMs": 1795971626000,
+            "id": "checkpoint-id-5",
+            "kind": "checkpoint",
+            "name": "checkpoint: Sending a message or email",
+            "parent": "tool-id-4",
+            "startMs": 1795971614000,
+            "status": "denied"
+          }
+        ],
+        "startMs": 1795971614000
+      }
+    },
+    "run-flights": {
+      "json": "[\n  {\n    \"run_id\": \"run-flights\",\n    \"seq\": 1,\n    \"ts\": 1795971626000,\n    \"span_id\": \"run-flights:invoke_agent\",\n    \"kind\": \"run.queued\",\n    \"payload\": {\n      \"agent_id\": \"grok\",\n      \"session_id\": \"s-run-flights\",\n      \"prompt\": \"Find flights to Lisbon\"\n    }\n  },\n  {\n    \"run_id\": \"run-flights\",\n    \"seq\": 2,\n    \"ts\": 1795971626000,\n    \"span_id\": \"run-flights:invoke_agent\",\n    \"kind\": \"run.started\",\n    \"payload\": {\n      \"adapter\": \"driver\"\n    }\n  },\n  {\n    \"run_id\": \"run-flights\",\n    \"seq\": 3,\n    \"ts\": 1795971626000,\n    \"span_id\": \"run-flights:invoke_agent\",\n    \"kind\": \"model.request\",\n    \"payload\": {\n      \"provider\": \"fake\",\n      \"model\": \"fake-1\"\n    }\n  },\n  {\n    \"run_id\": \"run-flights\",\n    \"seq\": 4,\n    \"ts\": 1795971626000,\n    \"span_id\": \"run-flights:invoke_agent\",\n    \"kind\": \"model.delta\",\n    \"payload\": {\n      \"text\": \"Looking up flights\"\n    }\n  },\n  {\n    \"run_id\": \"run-flights\",\n    \"seq\": 5,\n    \"ts\": 1795971630000,\n    \"span_id\": \"run-flights:invoke_agent\",\n    \"kind\": \"run.failed\",\n    \"payload\": {\n      \"reason\": \"provider\",\n      \"message\": \"xAI returned 503: the service is overloaded\"\n    }\n  }\n]",
+      "view": {
+        "endMs": 1795971630000,
+        "runId": "run-flights",
+        "spans": [
+          {
+            "attributes": [
+              {
+                "key": "prompt",
+                "value": "Find flights to Lisbon"
+              },
+              {
+                "key": "adapter",
+                "value": "driver"
+              },
+              {
+                "key": "error",
+                "value": "xAI returned 503: the service is overloaded"
+              }
+            ],
+            "endMs": 1795971630000,
+            "id": "run",
+            "kind": "run",
+            "name": "invoke_agent grok",
+            "parent": null,
+            "startMs": 1795971626000,
+            "status": "error"
+          },
+          {
+            "attributes": [
+              {
+                "key": "provider",
+                "value": "fake"
+              },
+              {
+                "key": "model",
+                "value": "fake-1"
+              }
+            ],
+            "endMs": 1795971630000,
+            "id": "model-1",
+            "kind": "model",
+            "name": "chat fake-1",
+            "parent": "run",
+            "startMs": 1795971626000,
+            "status": "error"
+          }
+        ],
+        "startMs": 1795971626000
+      }
+    },
+    "run-itinerary": {
+      "json": "[\n  {\n    \"run_id\": \"run-itinerary\",\n    \"seq\": 1,\n    \"ts\": 1795971720000,\n    \"span_id\": \"run-itinerary:invoke_agent\",\n    \"kind\": \"run.queued\",\n    \"payload\": {\n      \"agent_id\": \"claude\",\n      \"session_id\": \"s-run-itinerary\",\n      \"prompt\": \"Send the itinerary to Sam\"\n    }\n  },\n  {\n    \"run_id\": \"run-itinerary\",\n    \"seq\": 2,\n    \"ts\": 1795971720000,\n    \"span_id\": \"run-itinerary:invoke_agent\",\n    \"kind\": \"run.started\",\n    \"payload\": {\n      \"adapter\": \"driver\"\n    }\n  },\n  {\n    \"run_id\": \"run-itinerary\",\n    \"seq\": 3,\n    \"ts\": 1795971720000,\n    \"span_id\": \"run-itinerary:invoke_agent\",\n    \"kind\": \"model.request\",\n    \"payload\": {\n      \"provider\": \"fake\",\n      \"model\": \"fake-1\"\n    }\n  },\n  {\n    \"run_id\": \"run-itinerary\",\n    \"seq\": 4,\n    \"ts\": 1795971720000,\n    \"span_id\": \"run-itinerary:invoke_agent\",\n    \"kind\": \"model.delta\",\n    \"payload\": {\n      \"text\": \"Sending the itinerary.\"\n    }\n  },\n  {\n    \"run_id\": \"run-itinerary\",\n    \"seq\": 5,\n    \"ts\": 1795971720000,\n    \"span_id\": \"run-itinerary:invoke_agent\",\n    \"kind\": \"tool.requested\",\n    \"payload\": {\n      \"tool_call_id\": \"id-6\",\n      \"tool\": \"email.send\",\n      \"action_class\": \"comms.send\",\n      \"args\": {\n        \"body\": \"The itinerary\",\n        \"to\": \"sam@example.test\"\n      }\n    }\n  },\n  {\n    \"run_id\": \"run-itinerary\",\n    \"seq\": 6,\n    \"ts\": 1795971720000,\n    \"span_id\": \"run-itinerary:invoke_agent\",\n    \"kind\": \"policy.decided\",\n    \"payload\": {\n      \"tool_call_id\": \"id-6\",\n      \"decision\": {\n        \"outcome\": \"ask\",\n        \"risk\": \"high\",\n        \"reason\": \"Sending a message or email needs your approval.\"\n      }\n    }\n  },\n  {\n    \"run_id\": \"run-itinerary\",\n    \"seq\": 7,\n    \"ts\": 1795971720000,\n    \"span_id\": \"run-itinerary:invoke_agent\",\n    \"kind\": \"checkpoint.opened\",\n    \"payload\": {\n      \"checkpoint_id\": \"id-7\",\n      \"tool_call_id\": \"id-6\",\n      \"action_class\": \"comms.send\",\n      \"risk\": \"high\",\n      \"title\": \"Sending a message or email\",\n      \"detail\": \"email.send to sam@example.test\\n{\\\"body\\\":\\\"The itinerary\\\",\\\"to\\\":\\\"sam@example.test\\\"}\"\n    }\n  }\n]",
+      "view": {
+        "endMs": null,
+        "runId": "run-itinerary",
+        "spans": [
+          {
+            "attributes": [
+              {
+                "key": "prompt",
+                "value": "Send the itinerary to Sam"
+              },
+              {
+                "key": "adapter",
+                "value": "driver"
+              }
+            ],
+            "endMs": null,
+            "id": "run",
+            "kind": "run",
+            "name": "invoke_agent claude",
+            "parent": null,
+            "startMs": 1795971720000,
+            "status": "running"
+          },
+          {
+            "attributes": [
+              {
+                "key": "provider",
+                "value": "fake"
+              },
+              {
+                "key": "model",
+                "value": "fake-1"
+              }
+            ],
+            "endMs": null,
+            "id": "model-1",
+            "kind": "model",
+            "name": "chat fake-1",
+            "parent": "run",
+            "startMs": 1795971720000,
+            "status": "running"
+          },
+          {
+            "attributes": [
+              {
+                "key": "class",
+                "value": "comms.send"
+              },
+              {
+                "key": "arguments",
+                "value": "{\"body\":\"The itinerary\",\"to\":\"sam@example.test\"}"
+              },
+              {
+                "key": "decision",
+                "value": "ask (high): Sending a message or email needs your approval."
+              }
+            ],
+            "endMs": null,
+            "id": "tool-id-6",
+            "kind": "tool",
+            "name": "execute_tool email.send",
+            "parent": "run",
+            "startMs": 1795971720000,
+            "status": "running"
+          },
+          {
+            "attributes": [
+              {
+                "key": "risk",
+                "value": "high"
+              },
+              {
+                "key": "detail",
+                "value": "email.send to sam@example.test\n{\"body\":\"The itinerary\",\"to\":\"sam@example.test\"}"
+              }
+            ],
+            "endMs": null,
+            "id": "checkpoint-id-7",
+            "kind": "checkpoint",
+            "name": "checkpoint: Sending a message or email",
+            "parent": "tool-id-6",
+            "startMs": 1795971720000,
+            "status": "running"
+          }
+        ],
+        "startMs": 1795971720000
+      }
+    },
+    "run-plan": {
+      "json": "[\n  {\n    \"run_id\": \"run-plan\",\n    \"seq\": 1,\n    \"ts\": 1795971600000,\n    \"span_id\": \"run-plan:invoke_agent\",\n    \"kind\": \"run.queued\",\n    \"payload\": {\n      \"agent_id\": \"grok\",\n      \"session_id\": \"s-run-plan\",\n      \"prompt\": \"Plan my week\"\n    }\n  },\n  {\n    \"run_id\": \"run-plan\",\n    \"seq\": 2,\n    \"ts\": 1795971600000,\n    \"span_id\": \"run-plan:invoke_agent\",\n    \"kind\": \"run.started\",\n    \"payload\": {\n      \"adapter\": \"driver\"\n    }\n  },\n  {\n    \"run_id\": \"run-plan\",\n    \"seq\": 3,\n    \"ts\": 1795971600000,\n    \"span_id\": \"run-plan:invoke_agent\",\n    \"kind\": \"model.request\",\n    \"payload\": {\n      \"provider\": \"fake\",\n      \"model\": \"fake-1\"\n    }\n  },\n  {\n    \"run_id\": \"run-plan\",\n    \"seq\": 4,\n    \"ts\": 1795971602000,\n    \"span_id\": \"run-plan:invoke_agent\",\n    \"kind\": \"model.delta\",\n    \"payload\": {\n      \"text\": \"Here's a plan: Monday for the Q4 draft, Wednesday for errands, Friday free.\"\n    }\n  },\n  {\n    \"run_id\": \"run-plan\",\n    \"seq\": 5,\n    \"ts\": 1795971602000,\n    \"span_id\": \"run-plan:invoke_agent\",\n    \"kind\": \"model.response\",\n    \"payload\": {\n      \"text\": \"Here's a plan: Monday for the Q4 draft, Wednesday for errands, Friday free.\",\n      \"finish_reason\": \"stop\"\n    }\n  },\n  {\n    \"run_id\": \"run-plan\",\n    \"seq\": 6,\n    \"ts\": 1795971602000,\n    \"span_id\": \"run-plan:invoke_agent\",\n    \"kind\": \"usage.reported\",\n    \"payload\": {\n      \"input_tokens\": 1200,\n      \"output_tokens\": 340,\n      \"cost_micro_usd\": 4400\n    }\n  },\n  {\n    \"run_id\": \"run-plan\",\n    \"seq\": 7,\n    \"ts\": 1795971602000,\n    \"span_id\": \"run-plan:invoke_agent\",\n    \"kind\": \"run.completed\",\n    \"payload\": {\n      \"summary\": null\n    }\n  }\n]",
+      "view": {
+        "endMs": 1795971602000,
+        "runId": "run-plan",
+        "spans": [
+          {
+            "attributes": [
+              {
+                "key": "prompt",
+                "value": "Plan my week"
+              },
+              {
+                "key": "adapter",
+                "value": "driver"
+              },
+              {
+                "key": "input tokens",
+                "value": "1200"
+              },
+              {
+                "key": "output tokens",
+                "value": "340"
+              },
+              {
+                "key": "cost",
+                "value": "$0.0044"
+              }
+            ],
+            "endMs": 1795971602000,
+            "id": "run",
+            "kind": "run",
+            "name": "invoke_agent grok",
+            "parent": null,
+            "startMs": 1795971600000,
+            "status": "ok"
+          },
+          {
+            "attributes": [
+              {
+                "key": "provider",
+                "value": "fake"
+              },
+              {
+                "key": "model",
+                "value": "fake-1"
+              },
+              {
+                "key": "finish reason",
+                "value": "stop"
+              },
+              {
+                "key": "response",
+                "value": "Here's a plan: Monday for the Q4 draft, Wednesday for errands, Friday free."
+              },
+              {
+                "key": "input tokens",
+                "value": "1200"
+              },
+              {
+                "key": "output tokens",
+                "value": "340"
+              },
+              {
+                "key": "cost",
+                "value": "$0.0044"
+              }
+            ],
+            "endMs": 1795971602000,
+            "id": "model-1",
+            "kind": "model",
+            "name": "chat fake-1",
+            "parent": "run",
+            "startMs": 1795971600000,
+            "status": "ok"
+          }
+        ],
+        "startMs": 1795971600000
+      }
+    },
+    "run-research": {
+      "json": "[\n  {\n    \"run_id\": \"run-research\",\n    \"seq\": 1,\n    \"ts\": 1795971630000,\n    \"span_id\": \"run-research:invoke_agent\",\n    \"kind\": \"run.queued\",\n    \"payload\": {\n      \"agent_id\": \"grok\",\n      \"session_id\": \"s-run-research\",\n      \"prompt\": \"Research Lisbon neighborhoods\"\n    }\n  },\n  {\n    \"run_id\": \"run-research\",\n    \"seq\": 2,\n    \"ts\": 1795971630000,\n    \"span_id\": \"run-research:invoke_agent\",\n    \"kind\": \"run.started\",\n    \"payload\": {\n      \"adapter\": \"driver\"\n    }\n  },\n  {\n    \"run_id\": \"run-research\",\n    \"seq\": 3,\n    \"ts\": 1795971630000,\n    \"span_id\": \"run-research:invoke_agent\",\n    \"kind\": \"model.request\",\n    \"payload\": {\n      \"provider\": \"fake\",\n      \"model\": \"fake-1\"\n    }\n  },\n  {\n    \"run_id\": \"run-research\",\n    \"seq\": 4,\n    \"ts\": 1795971630000,\n    \"span_id\": \"run-research:invoke_agent\",\n    \"kind\": \"model.delta\",\n    \"payload\": {\n      \"text\": \"Reading travel guides\"\n    }\n  },\n  {\n    \"run_id\": \"run-research\",\n    \"seq\": 5,\n    \"ts\": 1795971720000,\n    \"span_id\": \"run-research:invoke_agent\",\n    \"kind\": \"run.cancelled\",\n    \"payload\": {\n      \"by\": \"user\"\n    }\n  }\n]",
+      "view": {
+        "endMs": 1795971720000,
+        "runId": "run-research",
+        "spans": [
+          {
+            "attributes": [
+              {
+                "key": "prompt",
+                "value": "Research Lisbon neighborhoods"
+              },
+              {
+                "key": "adapter",
+                "value": "driver"
+              }
+            ],
+            "endMs": 1795971720000,
+            "id": "run",
+            "kind": "run",
+            "name": "invoke_agent grok",
+            "parent": null,
+            "startMs": 1795971630000,
+            "status": "cancelled"
+          },
+          {
+            "attributes": [
+              {
+                "key": "provider",
+                "value": "fake"
+              },
+              {
+                "key": "model",
+                "value": "fake-1"
+              }
+            ],
+            "endMs": 1795971720000,
+            "id": "model-1",
+            "kind": "model",
+            "name": "chat fake-1",
+            "parent": "run",
+            "startMs": 1795971630000,
+            "status": "cancelled"
+          }
+        ],
+        "startMs": 1795971630000
+      }
+    },
+    "run-tidy": {
+      "json": "[\n  {\n    \"run_id\": \"run-tidy\",\n    \"seq\": 1,\n    \"ts\": 1795971602000,\n    \"span_id\": \"run-tidy:invoke_agent\",\n    \"kind\": \"run.queued\",\n    \"payload\": {\n      \"agent_id\": \"claude\",\n      \"session_id\": \"s-run-tidy\",\n      \"prompt\": \"Tidy my notes\"\n    }\n  },\n  {\n    \"run_id\": \"run-tidy\",\n    \"seq\": 2,\n    \"ts\": 1795971602000,\n    \"span_id\": \"run-tidy:invoke_agent\",\n    \"kind\": \"run.started\",\n    \"payload\": {\n      \"adapter\": \"driver\"\n    }\n  },\n  {\n    \"run_id\": \"run-tidy\",\n    \"seq\": 3,\n    \"ts\": 1795971602000,\n    \"span_id\": \"run-tidy:invoke_agent\",\n    \"kind\": \"model.request\",\n    \"payload\": {\n      \"provider\": \"fake\",\n      \"model\": \"fake-1\"\n    }\n  },\n  {\n    \"run_id\": \"run-tidy\",\n    \"seq\": 4,\n    \"ts\": 1795971602000,\n    \"span_id\": \"run-tidy:invoke_agent\",\n    \"kind\": \"model.delta\",\n    \"payload\": {\n      \"text\": \"I'll read your notes first.\"\n    }\n  },\n  {\n    \"run_id\": \"run-tidy\",\n    \"seq\": 5,\n    \"ts\": 1795971602000,\n    \"span_id\": \"run-tidy:invoke_agent\",\n    \"kind\": \"tool.requested\",\n    \"payload\": {\n      \"tool_call_id\": \"id-1\",\n      \"tool\": \"fs.read\",\n      \"action_class\": \"read.local\",\n      \"args\": {\n        \"path\": \"notes.md\"\n      }\n    }\n  },\n  {\n    \"run_id\": \"run-tidy\",\n    \"seq\": 6,\n    \"ts\": 1795971602000,\n    \"span_id\": \"run-tidy:invoke_agent\",\n    \"kind\": \"policy.decided\",\n    \"payload\": {\n      \"tool_call_id\": \"id-1\",\n      \"decision\": {\n        \"outcome\": \"allow\"\n      }\n    }\n  },\n  {\n    \"run_id\": \"run-tidy\",\n    \"seq\": 7,\n    \"ts\": 1795971602000,\n    \"span_id\": \"run-tidy:invoke_agent\",\n    \"kind\": \"tool.started\",\n    \"payload\": {\n      \"tool_call_id\": \"id-1\"\n    }\n  },\n  {\n    \"run_id\": \"run-tidy\",\n    \"seq\": 8,\n    \"ts\": 1795971602000,\n    \"span_id\": \"run-tidy:invoke_agent\",\n    \"kind\": \"tool.result\",\n    \"payload\": {\n      \"tool_call_id\": \"id-1\",\n      \"ok\": true,\n      \"output\": \"- Call the dentist\\n- Draft the Q4 plan\\n- Book flights for December\"\n    }\n  },\n  {\n    \"run_id\": \"run-tidy\",\n    \"seq\": 9,\n    \"ts\": 1795971605000,\n    \"span_id\": \"run-tidy:invoke_agent\",\n    \"kind\": \"model.delta\",\n    \"payload\": {\n      \"text\": \" Grouping them by week.\"\n    }\n  },\n  {\n    \"run_id\": \"run-tidy\",\n    \"seq\": 10,\n    \"ts\": 1795971605000,\n    \"span_id\": \"run-tidy:invoke_agent\",\n    \"kind\": \"tool.requested\",\n    \"payload\": {\n      \"tool_call_id\": \"id-2\",\n      \"tool\": \"fs.write\",\n      \"action_class\": \"write.local\",\n      \"args\": {\n        \"path\": \"notes.md\",\n        \"text\": \"## This week\\n- Call the dentist\"\n      }\n    }\n  },\n  {\n    \"run_id\": \"run-tidy\",\n    \"seq\": 11,\n    \"ts\": 1795971605000,\n    \"span_id\": \"run-tidy:invoke_agent\",\n    \"kind\": \"policy.decided\",\n    \"payload\": {\n      \"tool_call_id\": \"id-2\",\n      \"decision\": {\n        \"outcome\": \"ask\",\n        \"risk\": \"normal\",\n        \"reason\": \"Changing a file in its folder needs your approval.\"\n      }\n    }\n  },\n  {\n    \"run_id\": \"run-tidy\",\n    \"seq\": 12,\n    \"ts\": 1795971605000,\n    \"span_id\": \"run-tidy:invoke_agent\",\n    \"kind\": \"checkpoint.opened\",\n    \"payload\": {\n      \"checkpoint_id\": \"id-3\",\n      \"tool_call_id\": \"id-2\",\n      \"action_class\": \"write.local\",\n      \"risk\": \"normal\",\n      \"title\": \"Changing a file in its folder\",\n      \"detail\": \"fs.write\\n{\\\"path\\\":\\\"notes.md\\\",\\\"text\\\":\\\"## This week\\\\n- Call the dentist\\\"}\"\n    }\n  },\n  {\n    \"run_id\": \"run-tidy\",\n    \"seq\": 13,\n    \"ts\": 1795971614000,\n    \"span_id\": \"run-tidy:invoke_agent\",\n    \"kind\": \"checkpoint.resolved\",\n    \"payload\": {\n      \"checkpoint_id\": \"id-3\",\n      \"resolution\": {\n        \"outcome\": \"approved\"\n      }\n    }\n  },\n  {\n    \"run_id\": \"run-tidy\",\n    \"seq\": 14,\n    \"ts\": 1795971614000,\n    \"span_id\": \"run-tidy:invoke_agent\",\n    \"kind\": \"tool.started\",\n    \"payload\": {\n      \"tool_call_id\": \"id-2\"\n    }\n  },\n  {\n    \"run_id\": \"run-tidy\",\n    \"seq\": 15,\n    \"ts\": 1795971614000,\n    \"span_id\": \"run-tidy:invoke_agent\",\n    \"kind\": \"tool.result\",\n    \"payload\": {\n      \"tool_call_id\": \"id-2\",\n      \"ok\": true,\n      \"output\": \"Saved notes.md (412 bytes).\"\n    }\n  },\n  {\n    \"run_id\": \"run-tidy\",\n    \"seq\": 16,\n    \"ts\": 1795971614000,\n    \"span_id\": \"run-tidy:invoke_agent\",\n    \"kind\": \"model.delta\",\n    \"payload\": {\n      \"text\": \" Done: notes.md is grouped by week.\"\n    }\n  },\n  {\n    \"run_id\": \"run-tidy\",\n    \"seq\": 17,\n    \"ts\": 1795971614000,\n    \"span_id\": \"run-tidy:invoke_agent\",\n    \"kind\": \"model.response\",\n    \"payload\": {\n      \"text\": \"I'll read your notes first. Grouping them by week. Done: notes.md is grouped by week.\",\n      \"finish_reason\": \"stop\"\n    }\n  },\n  {\n    \"run_id\": \"run-tidy\",\n    \"seq\": 18,\n    \"ts\": 1795971614000,\n    \"span_id\": \"run-tidy:invoke_agent\",\n    \"kind\": \"usage.reported\",\n    \"payload\": {\n      \"input_tokens\": 3800,\n      \"output_tokens\": 910,\n      \"cost_micro_usd\": 13100\n    }\n  },\n  {\n    \"run_id\": \"run-tidy\",\n    \"seq\": 19,\n    \"ts\": 1795971614000,\n    \"span_id\": \"run-tidy:invoke_agent\",\n    \"kind\": \"run.completed\",\n    \"payload\": {\n      \"summary\": null\n    }\n  }\n]",
+      "view": {
+        "endMs": 1795971614000,
+        "runId": "run-tidy",
+        "spans": [
+          {
+            "attributes": [
+              {
+                "key": "prompt",
+                "value": "Tidy my notes"
+              },
+              {
+                "key": "adapter",
+                "value": "driver"
+              },
+              {
+                "key": "input tokens",
+                "value": "3800"
+              },
+              {
+                "key": "output tokens",
+                "value": "910"
+              },
+              {
+                "key": "cost",
+                "value": "$0.0131"
+              }
+            ],
+            "endMs": 1795971614000,
+            "id": "run",
+            "kind": "run",
+            "name": "invoke_agent claude",
+            "parent": null,
+            "startMs": 1795971602000,
+            "status": "ok"
+          },
+          {
+            "attributes": [
+              {
+                "key": "provider",
+                "value": "fake"
+              },
+              {
+                "key": "model",
+                "value": "fake-1"
+              },
+              {
+                "key": "finish reason",
+                "value": "stop"
+              },
+              {
+                "key": "response",
+                "value": "I'll read your notes first. Grouping them by week. Done: notes.md is grouped by week."
+              },
+              {
+                "key": "input tokens",
+                "value": "3800"
+              },
+              {
+                "key": "output tokens",
+                "value": "910"
+              },
+              {
+                "key": "cost",
+                "value": "$0.0131"
+              }
+            ],
+            "endMs": 1795971614000,
+            "id": "model-1",
+            "kind": "model",
+            "name": "chat fake-1",
+            "parent": "run",
+            "startMs": 1795971602000,
+            "status": "ok"
+          },
+          {
+            "attributes": [
+              {
+                "key": "class",
+                "value": "read.local"
+              },
+              {
+                "key": "arguments",
+                "value": "{\"path\":\"notes.md\"}"
+              },
+              {
+                "key": "decision",
+                "value": "allow"
+              },
+              {
+                "key": "result",
+                "value": "\"- Call the dentist\\n- Draft the Q4 plan\\n- Book flights for December\""
+              }
+            ],
+            "endMs": 1795971602000,
+            "id": "tool-id-1",
+            "kind": "tool",
+            "name": "execute_tool fs.read",
+            "parent": "run",
+            "startMs": 1795971602000,
+            "status": "ok"
+          },
+          {
+            "attributes": [
+              {
+                "key": "class",
+                "value": "write.local"
+              },
+              {
+                "key": "arguments",
+                "value": "{\"path\":\"notes.md\",\"text\":\"## This week\\n- Call the dentist\"}"
+              },
+              {
+                "key": "decision",
+                "value": "ask (normal): Changing a file in its folder needs your approval."
+              },
+              {
+                "key": "result",
+                "value": "\"Saved notes.md (412 bytes).\""
+              }
+            ],
+            "endMs": 1795971614000,
+            "id": "tool-id-2",
+            "kind": "tool",
+            "name": "execute_tool fs.write",
+            "parent": "run",
+            "startMs": 1795971605000,
+            "status": "ok"
+          },
+          {
+            "attributes": [
+              {
+                "key": "risk",
+                "value": "normal"
+              },
+              {
+                "key": "detail",
+                "value": "fs.write\n{\"path\":\"notes.md\",\"text\":\"## This week\\n- Call the dentist\"}"
+              },
+              {
+                "key": "resolution",
+                "value": "approved"
+              }
+            ],
+            "endMs": 1795971614000,
+            "id": "checkpoint-id-3",
+            "kind": "checkpoint",
+            "name": "checkpoint: Changing a file in its folder",
+            "parent": "tool-id-2",
+            "startMs": 1795971605000,
+            "status": "ok"
+          }
+        ],
+        "startMs": 1795971602000
+      }
+    }
+  }
+}
