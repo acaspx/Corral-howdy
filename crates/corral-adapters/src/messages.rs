@@ -694,8 +694,7 @@ impl MessageDecoder {
         self.finished = true;
         let cost = self
             .price
-            .input_cost(self.input_tokens)
-            .saturating_add(self.price.output_cost(self.output_tokens))
+            .cost(self.input_tokens, self.output_tokens)
             .saturating_add(self.searches.saturating_mul(WEB_SEARCH_MICRO_USD));
         if !self.open.is_empty() || !self.querying.is_empty() {
             return self.fail(

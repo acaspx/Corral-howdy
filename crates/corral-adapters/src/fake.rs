@@ -382,9 +382,7 @@ impl Turn {
         let billed_output = self
             .billed_output
             .min(u64::from(admitted.max_output_tokens));
-        let billed = price
-            .input_cost(self.billed_input)
-            .saturating_add(price.output_cost(billed_output));
+        let billed = price.cost(self.billed_input, billed_output);
         UsageReported {
             input_tokens: self.input.saturating_add(self.billed_input),
             output_tokens: self.output.saturating_add(billed_output),
