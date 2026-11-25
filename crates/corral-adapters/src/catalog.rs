@@ -8,6 +8,7 @@
 
 use crate::agent::ProviderTool;
 use crate::linked::{LinkedApp, LinkedSettings};
+use corral_core::budget::Price;
 use corral_core::corral_view::AgentCard;
 use corral_core::event::{EventBody, FailureReason, RunFailed};
 use corral_core::ids::AgentId;
@@ -52,6 +53,63 @@ pub const GROK_MODEL: &str = "grok-4.7";
 
 /// The model Claude's agent uses (SK-7).
 pub const CLAUDE_MODEL: &str = "claude-sonnet-5-5";
+
+/// A model an agent can be given, at its list price (TP-AED-02). The budget meters it at this
+/// price, so a model is offered only with one checked on the provider's pricing page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ModelChoice {
+    /// The model ID the provider's API takes.
+    pub id: &'static str,
+    /// Its name, for the agent editor.
+    pub name: &'static str,
+    /// Its list price.
+    pub price: Price,
+}
+
+/// xAI's models (docs.x.ai pricing, checked 2026-11-24): every token of a request doubles in
+/// price once its prompt reaches 200,000 tokens.
+const XAI_MODELS: [ModelChoice; 1] = [ModelChoice {
+    id: GROK_MODEL,
+    name: "Grok 4.7",
+    price: Price::per_million_tokens(2_000_000, 6_000_000)
+        .with_long_prompt(200_000, 4_000_000, 12_000_000),
+}];
+
+/// Anthropic's models (platform.claude.com pricing, checked 2026-11-24), at the global rate.
+/// Haiku 5.5 costs five times as much for a request whose prompt is over 100,000 tokens.
+const ANTHROPIC_MODELS: [ModelChoice; 3] = [
+    ModelChoice {
+        id: CLAUDE_MODEL,
+        name: "Claude Sonnet 5.5",
+        price: Price::per_million_tokens(2_000_000, 10_000_000),
+    },
+    ModelChoice {
+        id: "claude-opus-5-5",
+        name: "Claude Opus 5.5",
+        price: Price::per_million_tokens(4_000_000, 20_000_000),
+    },
+    ModelChoice {
+        id: "claude-haiku-5-5",
+        name: "Claude Haiku 5.5",
+        price: Price::per_million_tokens(100_000, 500_000)
+            .with_long_prompt(100_001, 500_000, 2_500_000),
+    },
+];
+
+/// The models `provider`'s agent can be given, its default first; none for a provider without
+/// a client yet.
+pub fn models(provider: Provider) -> &'static [ModelChoice] {
+    match provider {
+        Provider::Xai => &XAI_MODELS,
+        Provider::Anthropic => &ANTHROPIC_MODELS,
+        Provider::OpenAi | Provider::Meta => &[],
+    }
+}
+
+/// `provider`'s model `id`, if Corral offers it.
+pub fn model_choice(provider: Provider, id: &str) -> Option<&'static ModelChoice> {
+    models(provider).iter().find(|m| m.id == id)
+}
 
 /// The model `provider`'s agent uses, for the providers with a client so far. The nightly live
 /// check makes sure each is still listed (EV-PROV-03).

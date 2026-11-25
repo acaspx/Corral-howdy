@@ -25,7 +25,7 @@
 
 pub mod ledger;
 
-pub use ledger::{LedgerConfig, LocalMonths, Month, MonthlyCap, SpendLedger};
+pub use ledger::{CapError, LedgerConfig, LocalMonths, Month, MonthlyCap, SpendLedger};
 
 use crate::event::UsageReported;
 use std::collections::VecDeque;

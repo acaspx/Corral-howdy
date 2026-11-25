@@ -26,6 +26,7 @@
 //! own site. The choice is kept in `linked-apps.json` ([`crate::linked`]).
 
 use crate::agent_policies::PolicyEditor;
+use crate::agent_settings::{AgentSettings, messages_config, responses_config, seed_caps};
 use crate::agent_tools::{agent_folder, allowing_provider_tools, file_tools_under, random_id};
 use crate::bridge::{
     AuthOutcome, BridgeError, Intent, NotificationRequest, PromptBarSnapshot, RosterSnapshot,
@@ -42,7 +43,7 @@ use crate::touch_id::{Finished, TouchIdDesk};
 use crate::traces::Traces;
 use corral_adapters::agent::{MessagesAgent, ProviderTool, ResponsesAgent, ToolSetup};
 use corral_adapters::catalog::{
-    AgentRouter, Rebuilt, Switched, agent_for, agents_for, corral_agents,
+    AgentRouter, ModelChoice, Rebuilt, Switched, agent_for, agents_for, corral_agents, models,
 };
 use corral_adapters::linked::{LinkChange, LinkedApp, LinkedSettings};
 use corral_adapters::logos::{LogoId, ReqwestLogoFetcher};
@@ -491,6 +492,14 @@ fn supervisor(
     for spend in spends {
         ledger.seed(&spend.agent, spend.ts_ms, spend.cost_micro_usd);
     }
+    // Each agent's own monthly cap (TP-AED-04). Settings that can't be used leave it at $0.
+    let catalog: Vec<AgentId> = Provider::ALL
+        .into_iter()
+        .map(|provider| agent_for(provider).id)
+        .collect();
+    for problem in seed_caps(&ledger, app.state::<AgentSettings>().inner(), &catalog) {
+        eprintln!("corral: {problem}");
+    }
     let transport = ReqwestTransport::new().map_err(|e| format!("no HTTPS client: {e}"))?;
     let keys = app.state::<Keys>().0.clone();
     let transport: Arc<dyn Transport> = Arc::new(transport);
@@ -549,20 +558,13 @@ fn grok_agent(
     transport: Arc<dyn Transport>,
     keys: Arc<dyn SecretStore>,
 ) -> Arc<dyn RunDriver> {
+    let config = agent_model(app, Provider::Xai)
+        .map_or_else(|| ResponsesConfig::xai(GROK_MODEL), responses_config);
     match agent_file_tools(app, desk, Provider::Xai) {
-        Ok(tools) => Arc::new(ResponsesAgent::new(
-            transport,
-            keys,
-            ResponsesConfig::xai(GROK_MODEL),
-            tools,
-        )),
+        Ok(tools) => Arc::new(ResponsesAgent::new(transport, keys, config, tools)),
         Err(reason) => {
             eprintln!("corral: Grok has no tools: {reason}");
-            Arc::new(ResponsesDriver::new(
-                transport,
-                keys,
-                ResponsesConfig::xai(GROK_MODEL),
-            ))
+            Arc::new(ResponsesDriver::new(transport, keys, config))
         }
     }
 }
@@ -574,15 +576,26 @@ fn claude_with_tools(
     transport: Arc<dyn Transport>,
     keys: Arc<dyn SecretStore>,
 ) -> Arc<dyn RunDriver> {
+    let config = agent_model(app, Provider::Anthropic)
+        .map_or_else(|| MessagesConfig::anthropic(CLAUDE_MODEL), messages_config);
     match agent_file_tools(app, desk, Provider::Anthropic) {
-        Ok(tools) => claude_agent(app, transport, keys, tools),
+        Ok(tools) => claude_agent(app, transport, keys, config, tools),
         Err(reason) => {
             eprintln!("corral: Claude has no tools: {reason}");
-            Arc::new(MessagesDriver::new(
-                transport,
-                keys,
-                MessagesConfig::anthropic(CLAUDE_MODEL),
-            ))
+            Arc::new(MessagesDriver::new(transport, keys, config))
+        }
+    }
+}
+
+/// The model `provider`'s agent uses: its saved one, or its default when its settings can't be
+/// used (it can't spend then: its cap is $0).
+fn agent_model(app: &AppHandle, provider: Provider) -> Option<&'static ModelChoice> {
+    let agent = agent_for(provider);
+    match app.state::<AgentSettings>().load(&agent.id) {
+        Ok(setup) => setup.model,
+        Err(reason) => {
+            eprintln!("corral: {}'s settings can't be used: {reason}", agent.name);
+            models(provider).first()
         }
     }
 }
@@ -594,12 +607,13 @@ fn claude_agent(
     app: &AppHandle,
     transport: Arc<dyn Transport>,
     keys: Arc<dyn SecretStore>,
+    config: MessagesConfig,
     tools: ToolSetup,
 ) -> Arc<dyn RunDriver> {
     let plain: Arc<dyn RunDriver> = Arc::new(MessagesAgent::new(
         transport.clone(),
         keys.clone(),
-        MessagesConfig::anthropic(CLAUDE_MODEL),
+        config.clone(),
         tools.clone(),
     ));
     let searching_tools = match allowing_provider_tools(tools) {
@@ -614,7 +628,7 @@ fn claude_agent(
         keys,
         MessagesConfig {
             web_search: true,
-            ..MessagesConfig::anthropic(CLAUDE_MODEL)
+            ..config
         },
         searching_tools,
     ));

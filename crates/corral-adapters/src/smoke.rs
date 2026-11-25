@@ -8,7 +8,8 @@
 //!   variable is a provider without a key; no keys at all fails, so the check never passes having
 //!   checked nothing. A key is only ever named by its variable.
 //! - **EV-PROV-03:** the provider's model list, asked for the way the key check asks
-//!   ([`models_request`]), still has the model the app's agent uses.
+//!   ([`models_request`]), still has the model the app's agent uses, and every model the agent
+//!   editor offers ([`check_offered_models`]).
 //! - **EV-PROV-01:** one short task ([`SMOKE_PROMPT`]) through the agent loop ends with one
 //!   `run.completed` and nothing after it, an answer, and usage with tokens and a cost.
 
@@ -76,6 +77,36 @@ pub fn check_models(provider: Provider, list: &Value) -> Result<(), String> {
     } else {
         Err(format!(
             "{name} no longer lists {model}, the model Corral's agent uses"
+        ))
+    }
+}
+
+/// Whether `provider`'s model list has every model the agent editor offers for it
+/// ([`crate::catalog::models`]); the error names the missing ones.
+pub fn check_offered_models(provider: Provider, list: &Value) -> Result<(), String> {
+    let name = provider.display_name();
+    let offered = crate::catalog::models(provider);
+    if offered.is_empty() {
+        return Err(format!("Corral offers no models for {name} yet"));
+    }
+    let Some(data) = list.get("data").and_then(Value::as_array) else {
+        return Err(format!("{name}'s model list couldn't be read"));
+    };
+    let listed = |id: &str| {
+        data.iter()
+            .any(|m| m.get("id").and_then(Value::as_str) == Some(id))
+    };
+    let missing: Vec<&str> = offered
+        .iter()
+        .map(|m| m.id)
+        .filter(|id| !listed(id))
+        .collect();
+    if missing.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "{name} no longer lists {}, offered in Corral's agent editor",
+            missing.join(", ")
         ))
     }
 }

@@ -34,6 +34,8 @@ corral-policy = { path = "../../../crates/corral-policy" }
 corral-tools = { path = "../../../crates/corral-tools" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+# Each agent's saved settings (TP-AED-03), the format agent policies use.
+toml = "1"
 thiserror = { workspace = true }
 # Checkpoint IDs make an answer single use, so they come from the OS random source (TP-TOOL-14).
 getrandom = "0.4"
@@ -54,5 +56,7 @@ todo = "warn"
 
 [dev-dependencies]
 serde_json = { workspace = true }
+# Each agent's saved settings (TP-AED-03), the format agent policies use.
+toml = "1"
 # Async tests for the key check (tests/connect.rs).
 tokio = { version = "1", features = ["macros", "rt"] }

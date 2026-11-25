@@ -19,6 +19,7 @@ pub mod surface;
 pub mod touch_id;
 
 pub mod agent_policies;
+pub mod agent_settings;
 pub mod agent_tools;
 pub mod bindings;
 pub mod corral_order;
@@ -132,6 +133,8 @@ pub fn run() {
             )));
             // Each agent's policy, for the policy editor and the agents' next runs.
             app.manage(agent_policies::PolicyEditor::open(data.join("policies")));
+            // Each agent's model and monthly cap, read as the supervisor starts (TP-AED-04).
+            app.manage(agent_settings::AgentSettings::new(data.join("agents")));
             // The trace viewer reads the event store once the corral opens it.
             app.manage(std::sync::Arc::new(traces::Traces::default()));
             app.manage(std::sync::Arc::new(

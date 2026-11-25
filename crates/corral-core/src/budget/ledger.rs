@@ -10,6 +10,9 @@
 //! - **Months are the user's calendar months** ([`LocalMonths`]): spend rolls over at local
 //!   midnight on the first. A request in flight at midnight stays held, and its cost is billed
 //!   to the month its usage arrives in. A clock that goes back never reopens an old month.
+//! - **Each agent's own cap** (TP-AED-01): the agent editor sets one from $0 up to the cap for
+//!   all agents together, which still holds for everyone; an agent without one has
+//!   [`LedgerConfig::agent_month_cap_micro_usd`]. A cap takes effect at the agent's next request.
 //! - **Seeding:** this month's spend comes back from the event log at launch, replayed in order
 //!   with [`SpendLedger::seed`].
 
@@ -29,6 +32,23 @@ pub enum MonthlyCap {
     Agent,
     /// The cap for all agents together.
     All,
+}
+
+/// Why an agent's cap wasn't set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum CapError {
+    /// Above the cap for all agents together.
+    #[error(
+        "An agent's monthly cap can be at most {}, the cap for all agents together (asked for {}).",
+        super::usd(*all_agents_micro_usd),
+        super::usd(*cap_micro_usd)
+    )]
+    AboveAllAgents {
+        /// The cap asked for.
+        cap_micro_usd: u64,
+        /// The cap for all agents together.
+        all_agents_micro_usd: u64,
+    },
 }
 
 /// The monthly caps. The defaults are the security model's: $25 per agent, $100 for all agents.
@@ -102,6 +122,8 @@ struct State {
     spent: HashMap<AgentId, u64>,
     /// Held for requests in flight, by agent, whatever month they were admitted in.
     held: HashMap<AgentId, u64>,
+    /// Agents' own monthly caps, over the default.
+    caps: HashMap<AgentId, u64>,
 }
 
 impl State {
@@ -112,6 +134,13 @@ impl State {
             self.month = Some(month);
             self.spent.clear();
         }
+    }
+
+    fn agent_cap(&self, agent: &AgentId, config: &LedgerConfig) -> u64 {
+        self.caps
+            .get(agent)
+            .copied()
+            .unwrap_or(config.agent_month_cap_micro_usd)
     }
 
     fn committed(&self, agent: &AgentId) -> u64 {
@@ -157,6 +186,39 @@ impl SpendLedger {
         self.config
     }
 
+    /// Sets `agent`'s own monthly cap, from its next request on; `None` goes back to the
+    /// default. A cap above the cap for all agents together is refused and changes nothing.
+    pub fn set_agent_cap(
+        &self,
+        agent: &AgentId,
+        cap_micro_usd: Option<u64>,
+    ) -> Result<(), CapError> {
+        let all = self.config.global_month_cap_micro_usd;
+        if let Some(cap) = cap_micro_usd
+            && cap > all
+        {
+            return Err(CapError::AboveAllAgents {
+                cap_micro_usd: cap,
+                all_agents_micro_usd: all,
+            });
+        }
+        let mut state = self.lock_now();
+        match cap_micro_usd {
+            Some(cap) => {
+                state.caps.insert(agent.clone(), cap);
+            }
+            None => {
+                state.caps.remove(agent);
+            }
+        }
+        Ok(())
+    }
+
+    /// `agent`'s monthly cap: its own, or the default.
+    pub fn agent_cap(&self, agent: &AgentId) -> u64 {
+        self.lock_now().agent_cap(agent, &self.config)
+    }
+
     /// Admits a request from `agent`'s run at `ts_ms` under the run's limits and both monthly
     /// caps, and holds its worst case against the month. Refused: nothing is held anywhere.
     pub fn admit(
@@ -169,10 +231,8 @@ impl SpendLedger {
         let mut state = self.lock(ts_ms);
         let agent_committed = state.committed(agent);
         let all_committed = state.committed_all();
-        let agent_room = self
-            .config
-            .agent_month_cap_micro_usd
-            .saturating_sub(agent_committed);
+        let agent_cap = state.agent_cap(agent, &self.config);
+        let agent_room = agent_cap.saturating_sub(agent_committed);
         let all_room = self
             .config
             .global_month_cap_micro_usd
@@ -181,7 +241,7 @@ impl SpendLedger {
             Outer {
                 room_micro_usd: agent_room,
                 cap: MonthlyCap::Agent,
-                cap_micro_usd: self.config.agent_month_cap_micro_usd,
+                cap_micro_usd: agent_cap,
                 committed_micro_usd: agent_committed,
             }
         } else {
