@@ -189,6 +189,7 @@ Each ID maps to a test module named the same way (e.g. `tp_pol_03_unknown_class_
 - **TP-A11Y-04** axe finds nothing in the main window: in every story (every state of every component; a component on its own skips only the page-landmark rule) and in the whole window, landmarks included. Colour contrast needs a real renderer and is checked by eye over the stories (`apps/desktop/src/a11y.test.tsx`)
 - **TP-A11Y-05** Tab reaches every enabled control in the main window, in order, a radio group being one stop, and nothing is taken out of the tab order (`apps/desktop/src/a11y.test.tsx`)
 - **TP-A11Y-06** A focused control shows a 2px ring (`:focus-visible`), no rule removes it, and nothing else draws an outline, so focus is never confused with a selection (`apps/desktop/src/a11y.test.tsx`)
+- **TP-GLZ-01** The main window is one Glaze scope (`.glaze` with its portal provider, ADR-016), and its theme follows macOS's light or dark setting live, as it did before Glaze (`apps/desktop/src/lib/GlazeRoot.test.tsx`)
 
 ### Loop detector (protected)
 - **TP-LOOP-01** From the profile's `loop_limit`-th identical call in a run (5 by default), each one asks before it runs, even when the policy allows it; the reason and the card say it's the same call N times
