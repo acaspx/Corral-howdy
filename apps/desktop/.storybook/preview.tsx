@@ -1,6 +1,5 @@
 import type { Preview } from "@storybook/react-vite";
 import "@/components/glaze/styles.css";
-import "../src/styles.css";
 import { GlazeRoot } from "../src/lib/GlazeRoot";
 
 const preview: Preview = {

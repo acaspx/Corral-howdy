@@ -14,6 +14,6 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test-setup.ts"],
     // The stylesheet as written, for the focus-ring check (src/a11y.test.tsx, TP-A11Y-06).
-    css: { include: [/\/src\/styles\.css(\?|$)/] },
+    css: { include: [/\/src\/components\/glaze\/(base|tokens|styles)\.css\?raw$/] },
   },
 });

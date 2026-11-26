@@ -43,6 +43,9 @@ corral, its drops and the other native surfaces in `native/CorralNative`, which 
 - Glaze's code is ours to keep up to date: a new component is copied the same way, and an update
   is a new copy from a newer commit, with the local changes reapplied.
 - The corral's look (docs/07) is unchanged; the main window no longer borrows its glass tint.
+- The window has no stylesheet of its own: every screen is Glaze's components and tokens, and
+  Glaze's lint covers the whole app. `index.html`'s body drops the browser's margin (`m-0`),
+  since Glaze ships no reset.
 
 ## Alternatives
 - **Keep the hand-written stylesheet.** Cheapest now, but every screen drifts on its own.
