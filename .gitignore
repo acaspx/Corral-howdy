@@ -35,8 +35,12 @@ evals/reports/*
 # Other agents' local config and skill folders (any layout, e.g. .gemini/antigravity/skills/).
 .cursor/
 .gemini/
-.agents/
+.agents/*
 .codex/
+# ...except Glaze's skill, which its install writes for every agent (ADR-016).
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/glaze/
 
 # cargo-mutants output
 mutants.out*/
