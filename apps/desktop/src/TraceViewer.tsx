@@ -1,5 +1,40 @@
-import { useEffect, useId, useState } from "react";
-import type { RunListItem, RunTrace, Span, SpanKind } from "./bindings";
+import { useEffect, useId, useState, type CSSProperties } from "react";
+import { Alert, AlertDescription } from "@/components/glaze/ui/alert";
+import { Button } from "@/components/glaze/ui/button";
+import {
+  DataList,
+  DataListItem,
+  DataListLabel,
+  DataListValue,
+} from "@/components/glaze/ui/data-list";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/glaze/ui/empty-state";
+import {
+  SegmentedControl,
+  SegmentedControlItem,
+} from "@/components/glaze/ui/segmented-control";
+import { Status } from "@/components/glaze/ui/status";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/glaze/ui/table";
+import { cn } from "@/lib/glaze/utils";
+import type {
+  RunListItem,
+  RunListOutcome,
+  RunTrace,
+  Span,
+  SpanKind,
+  SpanStatus,
+} from "./bindings";
 import { errorText } from "./keys";
 import { duration, tracesApi, usd, type TracesApi } from "./tracesApi";
 
@@ -12,6 +47,27 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: "checkpoint", label: "Checkpoints" },
   { value: "mark", label: "Marks" },
 ];
+
+type Tone = "running" | "ok" | "fail" | "idle";
+
+/** How each outcome reads; the word stays the core's. */
+const OUTCOME_TONE: Record<RunListOutcome, Tone> = {
+  running: "running",
+  completed: "ok",
+  failed: "fail",
+  cancelled: "idle",
+};
+
+const SPAN_TONE: Record<SpanStatus, Tone> = {
+  running: "running",
+  ok: "ok",
+  error: "fail",
+  denied: "fail",
+  cancelled: "idle",
+};
+
+const isFilter = (value: string): value is Filter =>
+  FILTERS.some((f) => f.value === value);
 
 /** How deep each span sits under the run. */
 function depths(spans: Span[]): Map<string, number> {
@@ -29,6 +85,9 @@ function depths(spans: Span[]): Map<string, number> {
   }
   return depth;
 }
+
+/** Custom properties for a class to read, such as start-(--start). */
+const vars = (values: Record<`--${string}`, string>) => values as CSSProperties;
 
 /** A percentage, rounded so styles stay short. */
 const pct = (n: number) => `${Math.round(n * 1_000) / 1_000}%`;
@@ -48,7 +107,6 @@ export function TraceViewer({ api = tracesApi }: { api?: TracesApi }) {
   const [notice, setNotice] = useState<string | null>(null);
   const headingId = useId();
   const detailsId = useId();
-  const filterName = useId();
 
   async function load() {
     setError(null);
@@ -125,133 +183,209 @@ export function TraceViewer({ api = tracesApi }: { api?: TracesApi }) {
   const view = trace?.view;
   const spans = view?.spans ?? [];
   const depth = depths(spans);
-  const shown = spans.filter((s) => s.kind === "run" || filter === "all" || s.kind === filter);
+  const shown = spans.filter(
+    (s) => s.kind === "run" || filter === "all" || s.kind === filter,
+  );
   const start = view?.startMs ?? 0;
-  const end = view?.endMs ?? Math.max(start, ...spans.map((s) => s.endMs ?? s.startMs));
+  const end =
+    view?.endMs ?? Math.max(start, ...spans.map((s) => s.endMs ?? s.startMs));
   const total = Math.max(end - start, 1);
   const detail = spans.find((s) => s.id === picked) ?? spans[0];
 
   return (
-    <section className="key-form traces" aria-labelledby={headingId}>
-      <h2 id={headingId}>Traces</h2>
-      <div className="trace-actions">
-        <button type="button" onClick={() => void load()}>
+    <section aria-labelledby={headingId} className="flex flex-col gap-3">
+      <div className="flex items-center gap-3">
+        <h2 id={headingId} className="type-heading">
+          Traces
+        </h2>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="ms-auto"
+          onClick={() => void load()}
+        >
           Refresh
-        </button>
+        </Button>
       </div>
       {runs && runs.length === 0 && (
-        <p className="key-status">
-          No runs yet. Give an agent a task from the corral, and its trace shows here.
-        </p>
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>No runs yet</EmptyTitle>
+            <EmptyDescription>
+              Give an agent a task from the corral, and its trace shows here.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       )}
       {runs && runs.length > 0 && (
-        <ul className="run-list">
-          {runs.map((run) => (
-            <li key={run.runId}>
-              <button
-                type="button"
-                aria-pressed={openRun === run.runId}
-                onClick={() => void open(run.runId)}
-              >
-                <strong>{run.agentName}</strong> <span className="run-prompt">{run.prompt}</span>{" "}
-                <span className={`badge badge-${run.outcome}`}>{run.outcome}</span>{" "}
-                <span className="run-cost">{usd(run.costMicroUsd)}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <Table aria-label="Runs" maxHeight={240} stickyHeader>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Run</TableHead>
+              <TableHead>Outcome</TableHead>
+              <TableHead numeric>Cost</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {runs.map((run) => (
+              <TableRow key={run.runId} selected={openRun === run.runId}>
+                <TableCell className="w-full max-w-0 ps-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-pressed={openRun === run.runId}
+                    onClick={() => void open(run.runId)}
+                  >
+                    <span>{run.agentName}</span>
+                    <span className="truncate text-text-2">{run.prompt}</span>
+                  </Button>
+                </TableCell>
+                <TableCell>
+                  <Status status={OUTCOME_TONE[run.outcome]} size="sm">
+                    {run.outcome}
+                  </Status>
+                </TableCell>
+                <TableCell numeric>{usd(run.costMicroUsd)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
       {view && (
         <>
-          <div className="trace-actions">
-            <div role="radiogroup" aria-label="Show" className="trace-filter">
+          <div className="flex flex-wrap items-center gap-3">
+            <SegmentedControl
+              size="sm"
+              aria-label="Show"
+              value={filter}
+              onValueChange={(value) => isFilter(value) && setFilter(value)}
+            >
               {FILTERS.map((f) => (
-                <label key={f.value}>
-                  <input
-                    type="radio"
-                    name={filterName}
-                    checked={filter === f.value}
-                    onChange={() => setFilter(f.value)}
-                  />
+                <SegmentedControlItem key={f.value} value={f.value}>
                   {f.label}
-                </label>
+                </SegmentedControlItem>
               ))}
-            </div>
-            <button type="button" onClick={() => void copy()}>
+            </SegmentedControl>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="ms-auto"
+              onClick={() => void copy()}
+            >
               Copy as JSON
-            </button>
+            </Button>
           </div>
-          <table className="trace-table" aria-label="Spans">
-            <thead>
-              <tr>
-                <th scope="col">Step</th>
-                <th scope="col">Status</th>
-                <th scope="col">Time</th>
-                <th scope="col">Timeline</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table aria-label="Spans">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Step</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead numeric>Time</TableHead>
+                <TableHead className="w-full">Timeline</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {shown.map((s) => {
                 const d = depth.get(s.id) ?? 0;
                 const left = ((s.startMs - start) * 100) / total;
-                const width = Math.max((((s.endMs ?? end) - s.startMs) * 100) / total, 0.5);
+                const width = Math.max(
+                  (((s.endMs ?? end) - s.startMs) * 100) / total,
+                  0.5,
+                );
+                const trouble = SPAN_TONE[s.status] === "fail";
                 return (
-                  <tr key={s.id} data-span={s.id} data-depth={d} aria-selected={picked === s.id}>
-                    <td>
-                      <button
-                        type="button"
-                        className="span-name"
+                  <TableRow
+                    key={s.id}
+                    data-span={s.id}
+                    data-depth={d}
+                    selected={picked === s.id}
+                  >
+                    <TableCell
+                      className="ps-(--indent)"
+                      style={vars({
+                        "--indent": `calc(var(--space-1) + ${d} * var(--space-4))`,
+                      })}
+                    >
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         aria-pressed={picked === s.id}
-                        style={{ paddingLeft: `${d * 16}px` }}
                         onClick={() => setPicked(s.id)}
                       >
                         {s.name}
-                      </button>
-                    </td>
-                    <td>
-                      <span className={`badge badge-${s.status}`}>{s.status}</span>
-                    </td>
-                    <td>{s.endMs === null ? "running" : duration(s.endMs - s.startMs)}</td>
-                    <td>
-                      <div className="trace-track" aria-hidden="true">
+                      </Button>
+                    </TableCell>
+                    <TableCell>
+                      <Status status={SPAN_TONE[s.status]} size="sm">
+                        {s.status}
+                      </Status>
+                    </TableCell>
+                    <TableCell numeric>
+                      {s.endMs === null
+                        ? "running"
+                        : duration(s.endMs - s.startMs)}
+                    </TableCell>
+                    <TableCell>
+                      <div aria-hidden="true" className="relative h-3 min-w-40">
                         <div
-                          className={`trace-bar trace-${s.kind}`}
-                          style={{ left: pct(left), width: pct(width) }}
+                          data-slot="trace-bar"
+                          data-kind={s.kind}
+                          className={cn(
+                            "absolute inset-y-0 start-(--start) w-(--width) min-w-1 rounded-pill forced-colors:bg-[CanvasText]",
+                            trouble
+                              ? "bg-fail"
+                              : picked === s.id
+                                ? "bg-ink"
+                                : "bg-line-strong",
+                          )}
+                          style={vars({
+                            "--start": pct(left),
+                            "--width": pct(width),
+                          })}
                         />
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
           {detail && (
-            <section className="trace-details" aria-labelledby={detailsId}>
-              <h3 id={detailsId}>Details</h3>
-              <p className="span-title">{detail.name}</p>
-              <dl>
-                <dt>status</dt>
-                <dd>{detail.status}</dd>
+            <section
+              aria-labelledby={detailsId}
+              className="flex flex-col gap-1"
+            >
+              <h3 id={detailsId} className="type-heading-sm">
+                Details
+              </h3>
+              <p className="type-label">{detail.name}</p>
+              <DataList>
+                <DataListItem>
+                  <DataListLabel>status</DataListLabel>
+                  <DataListValue>{detail.status}</DataListValue>
+                </DataListItem>
                 {detail.attributes.map((a) => (
-                  <div key={a.key} className="span-attribute">
-                    <dt>{a.key}</dt>
-                    <dd>{a.value}</dd>
-                  </div>
+                  <DataListItem key={a.key}>
+                    <DataListLabel>{a.key}</DataListLabel>
+                    <DataListValue className="whitespace-pre-wrap">
+                      {a.value}
+                    </DataListValue>
+                  </DataListItem>
                 ))}
-              </dl>
+              </DataList>
             </section>
           )}
         </>
       )}
       {notice && (
-        <p className="key-status" role="status">
-          {notice}
-        </p>
+        <Alert status="ok">
+          <AlertDescription>{notice}</AlertDescription>
+        </Alert>
       )}
       {error && (
-        <p className="key-error" role="alert">
-          {error}
-        </p>
+        <Alert status="fail">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
     </section>
   );
