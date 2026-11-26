@@ -114,9 +114,10 @@ describe("TraceViewer", () => {
       expect.stringContaining("Claude"),
       expect.stringContaining("Grok"),
     ]);
-    expect(buttons[0]).toHaveTextContent("running");
-    expect(buttons[1]).toHaveTextContent("completed");
-    expect(buttons[1]).toHaveTextContent("$0.0015");
+    const rows = buttons.map((b) => b.closest("tr") as HTMLElement);
+    expect(rows[0]).toHaveTextContent("running");
+    expect(rows[1]).toHaveTextContent("completed");
+    expect(rows[1]).toHaveTextContent("$0.0015");
   });
 
   it("TP-TV-13 says how to get a first trace when there are no runs", async () => {
@@ -139,12 +140,12 @@ describe("TraceViewer", () => {
     expect(row("model-1")).toHaveTextContent("500 ms");
     expect(row("run")).toHaveTextContent("1.0 s");
 
-    const bar = row("model-1").querySelector(".trace-bar") as HTMLElement;
-    expect(bar.style.left).toBe("10%");
-    expect(bar.style.width).toBe("50%");
-    const mark = row("mark-1").querySelector(".trace-bar") as HTMLElement;
-    expect(mark.style.left).toBe("95%");
-    expect(parseFloat(mark.style.width)).toBeGreaterThan(0);
+    const bar = row("model-1").querySelector('[data-slot="trace-bar"]') as HTMLElement;
+    expect(bar.style.getPropertyValue("--start")).toBe("10%");
+    expect(bar.style.getPropertyValue("--width")).toBe("50%");
+    const mark = row("mark-1").querySelector('[data-slot="trace-bar"]') as HTMLElement;
+    expect(mark.style.getPropertyValue("--start")).toBe("95%");
+    expect(parseFloat(mark.style.getPropertyValue("--width"))).toBeGreaterThan(0);
   });
 
   it("TP-TV-14 the run's details show first, and a span's when it's picked", async () => {

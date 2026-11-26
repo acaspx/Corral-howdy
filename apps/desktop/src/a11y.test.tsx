@@ -4,7 +4,9 @@ import axe from "axe-core";
 import { userEvent } from "storybook/test";
 import preview from "../.storybook/preview";
 import * as AppStories from "./App.stories";
-import css from "./styles.css?raw";
+import base from "@/components/glaze/base.css?raw";
+import glaze from "@/components/glaze/styles.css?raw";
+import tokens from "@/components/glaze/tokens.css?raw";
 
 // The main window's accessibility pass (M4 item 8; TP-A11Y-04..06). axe checks every story,
 // every state of every component, and the whole window, which is what M4's exit asks for ("axe
@@ -13,6 +15,12 @@ import css from "./styles.css?raw";
 // control in the window, and a focused control always shows a ring of its own.
 
 setProjectAnnotations(preview);
+
+const own = import.meta.glob<string>(["./*.tsx", "./lib/*.tsx"], {
+  eager: true,
+  query: "?raw",
+  import: "default",
+});
 
 type Runnable = { run: () => Promise<void> };
 type StoryModule = Parameters<typeof composeStories>[0];
@@ -66,9 +74,16 @@ describe("accessibility", () => {
   it("TP-A11Y-05 Tab reaches every control in the window, in order", async () => {
     try {
       await MainWindow.run();
+      // What a keyboard user meets: native controls and controls by role (Glaze's switches and
+      // checkboxes), not the hidden inputs that mirror them for forms (aria-hidden).
       const controls = Array.from(
-        document.querySelectorAll<HTMLElement>("button, input, select, textarea, a[href]"),
-      ).filter((el) => !el.matches(":disabled"));
+        document.querySelectorAll<HTMLElement>(
+          'button, input, select, textarea, a[href], [role="switch"], [role="checkbox"], [role="radio"]',
+        ),
+      ).filter(
+        (el) =>
+          !el.matches(":disabled, [aria-disabled='true']") && !el.closest("[aria-hidden='true']"),
+      );
       expect(controls.length).toBeGreaterThan(20);
       for (const el of controls) {
         expect(el.tabIndex, el.outerHTML.slice(0, 80)).toBeGreaterThanOrEqual(0);
@@ -98,13 +113,28 @@ describe("accessibility", () => {
   });
 
   it("TP-A11Y-06 a focused control shows a ring, and only focus draws one", () => {
-    expect(css).toMatch(/:focus-visible\s*\{[^}]*outline:\s*2px solid[^}]*\}/);
-    const outlines = css
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .split("}")
-      .filter((rule) => /outline:\s*(?!none)\S/.test(rule))
-      .map((rule) => rule.split("{")[0]?.trim());
-    expect(outlines).toEqual([":focus-visible"]);
-    expect(css).not.toMatch(/outline:\s*(none|0)\b/);
+    // Glaze rings every focused element in the window's scope, 2px wide.
+    expect(base).toMatch(
+      /\.glaze :where\(\*\):is\(:focus-visible[^)]*\)\s*\{\s*outline: var\(--focus-width\) solid var\(--focus\)/,
+    );
+    expect(tokens).toMatch(/--focus-width:\s*2px;/);
+    // Three places swap the ring for another mark of focus, and nowhere else turns it off: a field
+    // darkens its border, an item's link and a table row draw a ring around the whole row.
+    const off = (glaze.match(/outline:\s*(none|0)\b/g) ?? []).length;
+    expect(off).toBe(3);
+    expect(glaze).toMatch(
+      /:focus-visible, \[data-force-focus-visible\]\) \{ outline: none; \}\s*&:is\(:focus-within[^)]*\) \{ border-color: var\(--line-focus\); \}/,
+    );
+    expect(glaze).toMatch(/\.glaze :where\(\[data-control\]\):is\(:focus-visible[^)]*\) \{ outline: none; \}/);
+    expect(glaze).toMatch(/&:is\(tr\) \{ outline: none; \}\s*&:is\(tr\) > \* \{ box-shadow: inset/);
+    // Selection is a fill, never an outline, except in forced colours, where fills are dropped.
+    const outlines = glaze
+      .split("\n")
+      .filter((line) => /outline(-\d|:)/.test(line) && !/forced-colors|focus|outline: none/.test(line));
+    expect(outlines).toEqual([]);
+    // And the window's own code never turns the ring off.
+    for (const [file, source] of Object.entries(own)) {
+      expect(source, file).not.toMatch(/outline-none|outline:\s*(none|0)\b/);
+    }
   });
 });

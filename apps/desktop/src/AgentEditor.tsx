@@ -1,4 +1,10 @@
 import { useEffect, useId, useState } from "react";
+import { Alert, AlertDescription } from "@/components/glaze/ui/alert";
+import { Button } from "@/components/glaze/ui/button";
+import { Card, CardContent, CardFooter, CardMeta } from "@/components/glaze/ui/card";
+import { Field, FieldDescription, FieldLabel } from "@/components/glaze/ui/field";
+import { Input } from "@/components/glaze/ui/input";
+import { NativeSelect } from "@/components/glaze/ui/select";
 import { errorText } from "./keys";
 import {
   agentEditorApi,
@@ -39,7 +45,6 @@ export function AgentEditor({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const headingId = useId();
-  const ids = useId();
 
   useEffect(() => {
     let live = true;
@@ -105,11 +110,15 @@ export function AgentEditor({
 
   const alert = error ?? view?.problem ?? null;
   return (
-    <section className="key-form agent-editor" aria-labelledby={headingId}>
-      <h2 id={headingId}>Agents</h2>
-      <p className="key-status">
-        Each agent's name, the model it runs on, and how much it may spend in a month.
-      </p>
+    <section aria-labelledby={headingId} className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <h2 id={headingId} className="type-heading">
+          Agents
+        </h2>
+        <p className="type-body-sm text-text-2">
+          Each agent's name, the model it runs on, and how much it may spend in a month.
+        </p>
+      </div>
       {views && view && draft && (
         <form
           onSubmit={(e) => {
@@ -117,80 +126,90 @@ export function AgentEditor({
             void save(view, draft);
           }}
         >
-          <label htmlFor={`${ids}-agent`}>Agent</label>
-          <select
-            id={`${ids}-agent`}
-            value={view.agent}
-            disabled={busy}
-            onChange={(e) => pick(e.target.value)}
-          >
-            {views.map((v) => (
-              <option key={v.agent} value={v.agent}>
-                {v.name}
-              </option>
-            ))}
-          </select>
-          <label htmlFor={`${ids}-name`}>Name</label>
-          <input
-            id={`${ids}-name`}
-            type="text"
-            value={draft.name}
-            maxLength={32}
-            placeholder={view.catalogName}
-            disabled={busy}
-            onChange={(e) => edit({ name: e.target.value })}
-          />
-          <p className="tool-terms">
-            Works in {view.folder}. A new name starts a new folder; the old one stays as it was.
-          </p>
-          {view.models.length > 0 ? (
-            <>
-              <label htmlFor={`${ids}-model`}>Model</label>
-              <select
-                id={`${ids}-model`}
-                value={draft.model ?? ""}
-                disabled={busy}
-                onChange={(e) => edit({ model: e.target.value })}
-              >
-                {view.models.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {`${m.name}: ${m.price}`}
-                  </option>
-                ))}
-              </select>
-            </>
-          ) : (
-            <p className="tool-terms">Corral can't run {view.name} yet.</p>
-          )}
-          <label htmlFor={`${ids}-cap`}>Monthly cap, in dollars</label>
-          <input
-            id={`${ids}-cap`}
-            type="text"
-            inputMode="decimal"
-            value={draft.cap}
-            placeholder={capText(view.defaultCapMicroUsd)}
-            disabled={busy}
-            onChange={(e) => edit({ cap: e.target.value })}
-          />
-          <p className="tool-terms">
-            Empty is the default, {dollars(view.defaultCapMicroUsd)}. At most{" "}
-            {dollars(view.maxCapMicroUsd)}.
-            {view.spentMicroUsd !== null && ` Spent ${dollars(view.spentMicroUsd)} this month.`}
-          </p>
-          <button type="submit" disabled={busy}>
-            Save {view.name}
-          </button>
+          <Card>
+            <CardContent className="gap-4">
+              <Field>
+                <FieldLabel>Agent</FieldLabel>
+                <NativeSelect value={view.agent} disabled={busy} onChange={(e) => pick(e.target.value)}>
+                  {views.map((v) => (
+                    <option key={v.agent} value={v.agent}>
+                      {v.name}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </Field>
+              <Field>
+                <FieldLabel>Name</FieldLabel>
+                <Input
+                  value={draft.name}
+                  maxLength={32}
+                  placeholder={view.catalogName}
+                  autoComplete="off"
+                  disabled={busy}
+                  onChange={(e) => edit({ name: e.target.value })}
+                />
+                <FieldDescription>
+                  Works in {view.folder}. A new name starts a new folder; the old one stays as it
+                  was.
+                </FieldDescription>
+              </Field>
+              {view.models.length > 0 ? (
+                <Field>
+                  <FieldLabel>Model</FieldLabel>
+                  <NativeSelect
+                    value={draft.model ?? ""}
+                    disabled={busy}
+                    onChange={(e) => edit({ model: e.target.value })}
+                  >
+                    {view.models.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                  <FieldDescription>
+                    {view.models.find((m) => m.id === draft.model)?.price ?? view.models[0]?.price}
+                  </FieldDescription>
+                </Field>
+              ) : (
+                <p className="type-body-sm text-text-2">Corral can't run {view.name} yet.</p>
+              )}
+              <Field>
+                <FieldLabel>Monthly cap, in dollars</FieldLabel>
+                <Input
+                  inputMode="decimal"
+                  value={draft.cap}
+                  placeholder={capText(view.defaultCapMicroUsd)}
+                  autoComplete="off"
+                  disabled={busy}
+                  onChange={(e) => edit({ cap: e.target.value })}
+                />
+                <FieldDescription>
+                  Empty is the default, {dollars(view.defaultCapMicroUsd)}. At most{" "}
+                  {dollars(view.maxCapMicroUsd)}.
+                </FieldDescription>
+              </Field>
+            </CardContent>
+            <CardFooter>
+              {view.spentMicroUsd !== null && (
+                <CardMeta>Spent {dollars(view.spentMicroUsd)} this month.</CardMeta>
+              )}
+              <Button type="submit" size="sm" pending={busy} pendingLabel="Saving">
+                Save {view.name}
+              </Button>
+            </CardFooter>
+          </Card>
         </form>
       )}
       {saved && (
-        <p className="key-status" role="status">
-          {saved}
-        </p>
+        <Alert status="ok">
+          <AlertDescription>{saved}</AlertDescription>
+        </Alert>
       )}
       {alert && (
-        <p className="key-error" role="alert">
-          {alert}
-        </p>
+        <Alert status="fail">
+          <AlertDescription>{alert}</AlertDescription>
+        </Alert>
       )}
       {view && (
         <ProviderTools

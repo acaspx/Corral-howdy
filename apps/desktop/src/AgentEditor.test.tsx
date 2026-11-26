@@ -90,9 +90,13 @@ describe("AgentEditor", () => {
     const model = within(section).getByRole("combobox", { name: "Model" });
     expect(model).toHaveValue("claude-sonnet-5-5");
     expect(within(model).getAllByRole("option").map((o) => o.textContent)).toEqual([
-      "Claude Sonnet 5.5: $2.00 in and $10.00 out",
-      "Claude Haiku 5.5: $0.10 in and $0.50 out",
+      "Claude Sonnet 5.5",
+      "Claude Haiku 5.5",
     ]);
+    expect(section).toHaveTextContent("$2.00 in and $10.00 out");
+    fireEvent.change(model, { target: { value: "claude-haiku-5-5" } });
+    expect(section).toHaveTextContent("$0.10 in and $0.50 out");
+    expect(section).not.toHaveTextContent("$2.00 in and $10.00 out");
     expect(within(section).getByRole("textbox", { name: /Monthly cap/ })).toHaveValue("");
     expect(section).toHaveTextContent("Empty is the default, $25.00. At most $100.00.");
     expect(section).toHaveTextContent("Spent $1.25 this month.");
@@ -173,7 +177,7 @@ describe("AgentEditor", () => {
   it("TP-AED-09 the agent's provider tools are switched here", async () => {
     const toolsApi = fakeTools();
     const section = await renderEditor(fakeApi(), toolsApi);
-    const search = within(section).getByRole("checkbox", { name: "Claude can search the web" });
+    const search = within(section).getByRole("switch", { name: "Claude can search the web" });
     await act(async () => {
       fireEvent.click(search);
     });

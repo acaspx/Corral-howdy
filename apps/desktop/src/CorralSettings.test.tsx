@@ -42,7 +42,7 @@ describe("CorralSettings", () => {
     expect(boxes).toHaveLength(9);
     const i = within(section).getByRole("checkbox", { name: "I" });
     expect(i).not.toBeChecked();
-    expect(i).toBeDisabled();
+    expect(i).toHaveAttribute("aria-disabled", "true");
     expect(section).toHaveTextContent("8 of 8 shown");
   });
 
@@ -54,7 +54,7 @@ describe("CorralSettings", () => {
     });
     expect(api.choose).toHaveBeenCalledWith(["a", "b", "c", "d", "e", "f", "g"]);
     const i = within(section).getByRole("checkbox", { name: "I" });
-    expect(i).toBeEnabled();
+    expect(i).not.toHaveAttribute("aria-disabled");
     await act(async () => {
       fireEvent.click(i);
     });
@@ -65,7 +65,7 @@ describe("CorralSettings", () => {
     const api = fakeApi({ ...nine(), needsChoice: false });
     const section = await renderSettings(api);
     expect(section).not.toHaveTextContent("Your corral holds up to 8");
-    const fixed = within(section).getByRole("checkbox", { name: "Keep order fixed" });
+    const fixed = within(section).getByRole("switch", { name: "Keep order fixed" });
     expect(fixed).not.toBeChecked();
     expect(section).toHaveTextContent(/still count/);
     await act(async () => {
