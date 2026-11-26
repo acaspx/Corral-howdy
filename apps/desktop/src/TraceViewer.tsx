@@ -201,6 +201,7 @@ export function TraceViewer({ api = tracesApi }: { api?: TracesApi }) {
                       <button
                         type="button"
                         className="span-name"
+                        aria-pressed={picked === s.id}
                         style={{ paddingLeft: `${d * 16}px` }}
                         onClick={() => setPicked(s.id)}
                       >
