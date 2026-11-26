@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "kty": "RSA",
+      "use": "sig",
+      "alg": "RS256",
+      "kid": "corral-test-key",
+      "n": "lZuAt3Uk7R0zyKt_9wcFqApgPxI3UHzG4b1k9t3_BU-PZF9jZPyAmPeoFUVJrlVJ7p_qqm1KB1D07pVg9QHhOj83PKYabHL4OOSpwcBR3agF5LEUvBOvPPtrhJalAQLmLvZ7289AGoc7yExXMUBq21ACZ-ROAVf5x18PsENSKu5Qomh_4ni3ReXhT6sjTLeGt3hvSuGwVJwGqpkbjVa1kkbWxnhPsPDjXKnf1p6nSBCoBwwjYF-nStcYupn_bObvlxByu9WE2x16hTugx54rdp6p5_unPsoor_ImkNdwt7bS5MJzaRxA46EeXCggeD-EpmLRvtoH4iOD-VO5I4xm8Q",
+      "e": "AQAB"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "description": "The plan route refuses an input (400 subscription_sharing_unsupported_capability, param tools[0]): not resent.",
+  "responses": [
+    {
+      "status": 400,
+      "body": [
+        "{\"error\": {\"type\": \"invalid_request_error\", \"code\": \"subscription_sharing_unsupported_capability\", \"message\": \"x\", \"param\": \"tools[0]\"}}"
+      ]
+    }
+  ]
+}

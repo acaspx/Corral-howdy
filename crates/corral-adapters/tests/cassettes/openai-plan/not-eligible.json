@@ -1,0 +1,11 @@
+{
+  "description": "Plan usage isn't available to this user or workspace (403 subscription_sharing_user_not_eligible): not retried.",
+  "responses": [
+    {
+      "status": 403,
+      "body": [
+        "{\"error\": {\"type\": \"invalid_request_error\", \"code\": \"subscription_sharing_user_not_eligible\", \"message\": \"x\", \"param\": null}}"
+      ]
+    }
+  ]
+}
