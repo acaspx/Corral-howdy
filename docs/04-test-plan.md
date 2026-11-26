@@ -20,7 +20,7 @@ Status: Draft v0.1 · Last updated: 2026-11-09
 | Contract | Shared `adapter_contract!` macro | Every adapter must pass the same suite | Every PR (cassettes) |
 | Integration (Rust) | nextest + temp SQLite + `FakeAdapter` scenarios | Supervisor + store + policy + tools together | Every PR |
 | Component visual | Storybook + snapshot tests | Every component state from fixture event streams | Every PR |
-| E2E | Per Spike S2 (default plan: Playwright against the frontend with a mocked IPC bridge, plus a thin native smoke layer) | User journeys J0–J12 | Every PR (mocked) / nightly (native) |
+| E2E | Journey transcripts ([S2](spikes/S2-ui-test-harness.md)): the real core plays each journey with `FakeAdapter` and records what it sends the corral; the corral's models replay it and must emit the same intents; main-window steps in Vitest on the same fixtures. Plus a thin native smoke (XCUITest on the bundled app) | User journeys J0–J12 | Every PR (transcripts) / nightly (native smoke and performance) |
 | Live provider smoke | Real keys in a protected GitHub environment, $1 cap | One short task per provider | Nightly + before release |
 | Fuzz | `cargo-fuzz` | Manifest parser, policy matcher, path canonicalizer, event decoder | Nightly 30 min/target; 1 h before release |
 | Evals | `corral-evals` | Behavior and safety at the system level (see [05-evals.md](05-evals.md)) | Gate suite every PR; full suite nightly |
