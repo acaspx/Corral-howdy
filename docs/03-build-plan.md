@@ -49,7 +49,7 @@ Goal: add an xAI key, click Grok's drop, ask a question, watch the ring turn and
 2. **M2:** tools, the policy engine and checkpoints; approvals appear in the hover card
 3. **Rest of M3:** Grok's tools through the gate, nightly live smoke
 4. **M4:** the full corral UI: setup flow, prompt bar, trace tree, Compare
-5. **M5:** Claude Code, Devin and other CLI agents over ACP, Claude and Muse Spark APIs, OpenAI Agents
+5. **M5:** your subscriptions first (ADR-017: ChatGPT Plus or Pro through Sign in with ChatGPT, SuperGrok through Grok Build over ACP), then Claude Code, Devin and other CLI agents over ACP, Claude and Muse Spark APIs, OpenAI Agents
 
 ### Alongside
 | Work | Issue | When |
@@ -57,7 +57,7 @@ Goal: add an xAI key, click Grok's drop, ask a question, watch the ring turn and
 | **S5** Glass on real hardware, with the playground: screenshots at 0–8 agents over light, dark and busy wallpapers; TP-GLASS-05 in Activity Monitor | #7 | During SK-1 |
 | **S6** Hover card, trace tree, logos in SwiftUI | #12 | Before SK-6 |
 | **S2** UI test harness ✅ (2026-11-25, [spikes/S2-ui-test-harness.md](spikes/S2-ui-test-harness.md)) | #4 | Before M4 |
-| **S4** ACP client | #6 | Before M5 |
+| **S4** ACP client. Grok Build ✅ findings v1 (2026-11-25, [spikes/S4-acp-grok-build.md](spikes/S4-acp-grok-build.md)); the toy run and the other CLIs to come | #6 | Before M5 |
 | Design to spec: setup flow, prompt bar, done card, Compare into docs/07 and docs/01 (TP-SETUP-01..04, TP-HOVER-10, TP-COMPARE-01..03, J12). Prompt bar ✅ (2026-11-20, 07 §6.1, TP-BAR-01..07) | Design issue | Before M4 |
 
 ### Not now
@@ -177,10 +177,11 @@ Progress: the nightly live smoke is wired (2026-11-19: `.github/workflows/live-s
 **Exit:** E2E journeys J1–J6 and J9–J11 (test plan §6) green; TP-SHAPE-*, TP-RANK-*, TP-USAGE-*, TP-GLASS-*, TP-PLACE-*, TP-HOVER-*, TP-TRACE-*, TP-LOGO-* green; axe zero serious violations; performance budgets met (corral summon p95 < 150 ms, event→UI p95 < 100 ms, idle corral 0 frames, morph < 2 ms GPU).
 
 ## M5: More adapters (~3 weeks; issues parallelize well)
+0. **ChatGPT plan usage** (ADR-017): Sign in with ChatGPT's open-source flow in the shell (loopback, PKCE), the tokens in the Keychain, the Responses client on the plan's route, "Using ChatGPT plan" and Manage usage in the window (TP-SUB-01..03). Fully gated: the agent loop is Corral's
 1. `anthropic_messages` client + native agents on Claude models (client ✅ SK-7; tools through the shared agent loop ✅ 2026-11-19, pulled forward, TP-TOOL-16..18)
 2. Meta Model API (Muse Spark) through the OpenAI-compatible client (config + cassettes)
 3. `managed` adapter for the OpenAI Agents API (scope per Spike S3)
-4. `acp` adapter: spawn, process group, permission mapping, kill on cancel (per Spike S4). Agents: Claude Code, Codex CLI, Gemini CLI and Devin (local sessions through the Devin CLI first; cloud sessions only if S4 shows they can be gated)
+4. `acp` adapter: spawn, process group, permission mapping, kill on cancel (per Spike S4). **Grok Build first**, on the user's SuperGrok or X Premium+ sign-in, with Corral serving its file I/O and terminal (ADR-017, TP-ACP-08..10). Then Claude Code, Codex CLI, Gemini CLI and Devin (local sessions through the Devin CLI first; cloud sessions only if S4 shows they can be gated)
 5. Custom agent manifests: parser, import flow with permission diff, fuzzing
 6. MCP client in the tool gateway (stdio + streamable HTTP), each MCP tool mapped to an action class
 7. ~~"Linked app" cards for consumer Muse and dots (open-in-app only)~~ Done early (Linked apps, 2026-11-12); the "manual status" from the product brief is still to do

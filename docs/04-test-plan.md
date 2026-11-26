@@ -242,6 +242,9 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-ACP-01..05** ACP: spawn, permission request → checkpoint, deny path, env scrubbing, process-group kill (no orphan processes after cancel)
 - **TP-ACP-06** An ACP agent whose permission mode Corral can't set reports `Partial` gating; a known bypass mode refuses to start
 - **TP-ACP-07** Killing Corral (SIGKILL) leaves no ACP agent processes or their children running
+- **TP-ACP-08** Grok Build (ADR-017, S4): Corral launches the pinned binary as `--no-auto-update --permission-mode ask agent stdio`, with no xAI key in its environment, and advertises file and terminal capabilities; a file write or command the agent sends goes through `ToolGateway` under the agent's policy and sandbox roots
+- **TP-ACP-09** A permission request is answered only with a one-time option, never an "always" one, after Corral's own decision; the write or command that follows must match what was approved (path or exact command), or it asks again
+- **TP-ACP-10** The deploy sheet and the card list what Corral can't see for an ACP agent: its own search and listing, its vendor-side web tools, and any allow rules found in its config
 
 ### Manifests
 - **TP-MAN-01** Unknown keys rejected
@@ -254,6 +257,9 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-SEC-01** After a full eval run, scan the DB, blobs, logs and exported traces for every test key: zero hits
 - **TP-SEC-02** Settings never return more than the last 4 characters of a key
 - **TP-SEC-03** A key is validated as entered (surrounding whitespace trimmed; 8–512 printable ASCII characters, no spaces) and never appears in `Debug` output, error messages or status responses; its bytes are wiped when dropped
+- **TP-SUB-01** Sign in with ChatGPT (ADR-017): the loopback sign-in uses fresh state, nonce and PKCE, rejects a mismatched state, and saves the tokens only if the plan-usage scope was granted; the tokens go only to the Keychain item `corral.openai-plan`
+- **TP-SUB-02** Plan tokens never reach the webview, logs, the store, traces or cassettes (scanned like TP-SEC-01); a refresh happens at call time, and signing out revokes them at OpenAI and deletes the item
+- **TP-SUB-03** A plan request follows OpenAI's plan route (`store: false`, streamed, `input` as an array, no `max_output_tokens`); a usage-limit error stops the run with Manage usage, and the agent shows "Using ChatGPT plan"
 - **TP-IPC-01** Panel window capability set can't call settings or secrets commands
 - **TP-IPC-02** Approve requires the checkpoint's nonce; replaying it fails
 - **TP-IPC-03** CSP blocks remote scripts; agent-produced markdown is sanitized (no raw HTML, no `javascript:` links)
