@@ -19,3 +19,8 @@ change below.
 - `ui/field.tsx`, `ui/input.tsx`, `ui/kbd.tsx`, `src/lib/glaze/portal.ts`: an array element read
   after its length is checked uses `?.`, for TypeScript's `noUncheckedIndexedAccess`, which this
   project turns on. Behaviour is unchanged.
+- `src/lib/glaze/data.ts`: units are read through `unitAt`, and a regex group through `?? ''`, for
+  the same check. The unit lists are never empty, so behaviour is unchanged.
+
+Glaze also needs TypeScript's ES2023 library (`Intl` options), so `tsconfig.json` uses it; the
+window's Safari 18 web view supports ES2023.

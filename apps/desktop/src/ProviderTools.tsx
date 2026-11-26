@@ -1,4 +1,8 @@
 import { useEffect, useId, useState } from "react";
+import { Alert, AlertDescription } from "@/components/glaze/ui/alert";
+import { Card, CardContent } from "@/components/glaze/ui/card";
+import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/glaze/ui/field";
+import { Switch } from "@/components/glaze/ui/switch";
 import { errorText } from "./keys";
 import {
   dollars,
@@ -71,7 +75,7 @@ export function ProviderTools({
   const problem = view?.problem ?? null;
   const choices = view?.choices.filter((c) => agent === undefined || c.agent === agent) ?? [];
   const intro = (
-    <p className="key-status">
+    <p className="type-body-sm text-text-2">
       Tools that run on a provider's servers instead of in Corral. Each is off until you turn it
       on, and your next task uses your choice.
     </p>
@@ -79,48 +83,59 @@ export function ProviderTools({
   const list = view && (
     <>
       {agent !== undefined && choices.length === 0 && (
-        <p className="tool-terms">No provider tools for {agentName ?? agent} yet.</p>
+        <p className="type-body-sm text-text-2">No provider tools for {agentName ?? agent} yet.</p>
       )}
       {choices.length > 0 && (
-        <ul className="tool-list">
+        <div className="flex flex-col gap-3">
           {choices.map((choice) => (
-            <li key={`${choice.agent}-${choice.tool}`}>
-              <label className="tool-switch">
-                <input
-                  type="checkbox"
-                  checked={choice.on}
-                  disabled={busy}
-                  onChange={() => void toggle(choice)}
-                />
-                {sentence(choice)}
-              </label>
-              <p className="tool-terms">{terms(choice)}</p>
-            </li>
+            <Field key={`${choice.agent}-${choice.tool}`} orientation="horizontal">
+              <Switch
+                checked={choice.on}
+                disabled={busy}
+                onCheckedChange={() => void toggle(choice)}
+              />
+              <FieldContent>
+                <FieldLabel>{sentence(choice)}</FieldLabel>
+                <FieldDescription>{terms(choice)}</FieldDescription>
+              </FieldContent>
+            </Field>
           ))}
-        </ul>
+        </div>
       )}
     </>
   );
   const alert = (error ?? problem) && (
-    <p className="key-error" role="alert">
-      {error ?? problem}
-    </p>
+    <Alert status="fail">
+      <AlertDescription>{error ?? problem}</AlertDescription>
+    </Alert>
   );
   if (agent !== undefined) {
     return (
-      <div className="agent-tools" aria-labelledby={headingId}>
-        <h3 id={headingId}>Provider tools</h3>
-        {intro}
+      <div className="flex flex-col gap-3" role="group" aria-labelledby={headingId}>
+        <div className="flex flex-col gap-1">
+          <h3 id={headingId} className="type-heading-sm">
+            Provider tools
+          </h3>
+          {intro}
+        </div>
         {list}
         {alert}
       </div>
     );
   }
   return (
-    <section className="key-form" aria-labelledby={headingId}>
-      <h2 id={headingId}>Provider tools</h2>
-      {intro}
-      {list}
+    <section aria-labelledby={headingId} className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <h2 id={headingId} className="type-heading">
+          Provider tools
+        </h2>
+        {intro}
+      </div>
+      {view && (
+        <Card>
+          <CardContent>{list}</CardContent>
+        </Card>
+      )}
       {alert}
     </section>
   );

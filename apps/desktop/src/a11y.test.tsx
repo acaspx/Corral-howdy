@@ -66,9 +66,16 @@ describe("accessibility", () => {
   it("TP-A11Y-05 Tab reaches every control in the window, in order", async () => {
     try {
       await MainWindow.run();
+      // What a keyboard user meets: native controls and controls by role (Glaze's switches and
+      // checkboxes), not the hidden inputs that mirror them for forms (aria-hidden).
       const controls = Array.from(
-        document.querySelectorAll<HTMLElement>("button, input, select, textarea, a[href]"),
-      ).filter((el) => !el.matches(":disabled"));
+        document.querySelectorAll<HTMLElement>(
+          'button, input, select, textarea, a[href], [role="switch"], [role="checkbox"], [role="radio"]',
+        ),
+      ).filter(
+        (el) =>
+          !el.matches(":disabled, [aria-disabled='true']") && !el.closest("[aria-hidden='true']"),
+      );
       expect(controls.length).toBeGreaterThan(20);
       for (const el of controls) {
         expect(el.tabIndex, el.outerHTML.slice(0, 80)).toBeGreaterThanOrEqual(0);

@@ -37,7 +37,7 @@ async function renderTools(api: ProviderToolsApi) {
 describe("ProviderTools", () => {
   it("TP-PROV-11 shows Claude's search, off, with where it runs and what it costs", async () => {
     const section = await renderTools(fakeApi(view(false)));
-    const box = within(section).getByRole("checkbox", { name: "Claude can search the web" });
+    const box = within(section).getByRole("switch", { name: "Claude can search the web" });
     expect(box).not.toBeChecked();
     expect(section).toHaveTextContent("Runs on Anthropic's servers");
     expect(section).toHaveTextContent("$0.01 a search, at most 5 a turn");
@@ -48,7 +48,7 @@ describe("ProviderTools", () => {
   it("TP-PROV-11 turning it on asks the core and shows what the core says", async () => {
     const api = fakeApi(view(false));
     const section = await renderTools(api);
-    const box = within(section).getByRole("checkbox", { name: "Claude can search the web" });
+    const box = within(section).getByRole("switch", { name: "Claude can search the web" });
     await act(async () => {
       fireEvent.click(box);
     });
@@ -68,7 +68,7 @@ describe("ProviderTools", () => {
       }),
     });
     const section = await renderTools(api);
-    const box = within(section).getByRole("checkbox", { name: "Claude can search the web" });
+    const box = within(section).getByRole("switch", { name: "Claude can search the web" });
     await act(async () => {
       fireEvent.click(box);
     });
@@ -93,6 +93,6 @@ describe("ProviderTools", () => {
       }),
     );
     expect(within(section).getByRole("alert")).toHaveTextContent("Couldn't load provider tools: no core");
-    expect(within(section).queryByRole("checkbox")).toBeNull();
+    expect(within(section).queryByRole("switch")).toBeNull();
   });
 });

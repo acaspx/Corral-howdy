@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint . && pnpm run lint:glaze",
-    "lint:glaze": "eslint -c glaze.eslint.config.mjs src/App.tsx src/KeyIntake.tsx src/lib src/components",
+    "lint:glaze": "eslint -c glaze.eslint.config.mjs src/App.tsx src/KeyIntake.tsx src/AgentEditor.tsx src/ProviderTools.tsx src/lib src/components",
     "test": "vitest run",
     "tauri": "tauri",
     "storybook": "storybook dev -p 6006",
