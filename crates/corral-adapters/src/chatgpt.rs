@@ -802,6 +802,11 @@ impl ChatGptPlan {
         }
     }
 
+    /// The account signed in now, if any.
+    pub fn signed_in(&self) -> Result<Option<PlanAccount>, SecretError> {
+        Ok(self.store.get_plan()?.as_ref().map(PlanAccount::of))
+    }
+
     /// The account signed in now, or the last one whose tokens were cleared.
     pub fn account(&self) -> Result<Option<PlanAccount>, SecretError> {
         if let Some(c) = self.store.get_plan()? {

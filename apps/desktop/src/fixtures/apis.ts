@@ -16,6 +16,7 @@ import type {
   RunListItem,
   RunTrace,
 } from "../bindings";
+import type { ChatGptApi, ChatGptStatus } from "../chatgptApi";
 import type { CorralSettingsApi } from "../corralSettingsApi";
 import type { KeyApi } from "../keys";
 import type { PolicyApi } from "../policyApi";
@@ -319,6 +320,32 @@ export function tracesApi(
       toOpen = null;
       return run;
     },
+    ...over,
+  };
+}
+
+// ---- ChatGPT plan ---------------------------------------------------------------------------
+
+export const planSignedOut: ChatGptStatus = { signedIn: false, email: null, showWelcome: false };
+export const planSignedIn: ChatGptStatus = {
+  signedIn: true,
+  email: "anton@example.test",
+  showWelcome: false,
+};
+
+/** The ChatGPT plan's sign-in, starting at `status`; signing in succeeds as `after`. */
+export function planApi(
+  status: ChatGptStatus = planSignedOut,
+  over: Partial<ChatGptApi> = {},
+  after: ChatGptStatus = { ...planSignedIn, showWelcome: true },
+): ChatGptApi {
+  return {
+    status: async () => status,
+    signIn: async () => after,
+    cancel: async () => {},
+    signOut: async () => ({ revoked: true, status: planSignedOut }),
+    welcomed: async () => planSignedIn,
+    manageUsage: async () => {},
     ...over,
   };
 }

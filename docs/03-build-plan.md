@@ -177,7 +177,7 @@ Progress: the nightly live smoke is wired (2026-11-19: `.github/workflows/live-s
 **Exit:** E2E journeys J1–J6 and J9–J11 (test plan §6) green; TP-SHAPE-*, TP-RANK-*, TP-USAGE-*, TP-GLASS-*, TP-PLACE-*, TP-HOVER-*, TP-TRACE-*, TP-LOGO-* green; axe zero serious violations; performance budgets met (corral summon p95 < 150 ms, event→UI p95 < 100 ms, idle corral 0 frames, morph < 2 ms GPU).
 
 ## M5: More adapters (~3 weeks; issues parallelize well)
-0. **ChatGPT plan usage** (ADR-017): Sign in with ChatGPT's open-source flow in the shell (loopback, PKCE), the tokens in the Keychain, the Responses client on the plan's route, "Using ChatGPT plan" and Manage usage in the window (TP-SUB-01..03). Fully gated: the agent loop is Corral's. Core ✅ 2026-11-25 (sign-in, tokens, route, errors); the shell's loopback sign-in and the window next
+0. **ChatGPT plan usage** (ADR-017): Sign in with ChatGPT's open-source flow in the shell (loopback, PKCE), the tokens in the Keychain, the Responses client on the plan's route, "Using ChatGPT plan" and Manage usage in the window (TP-SUB-01..03). Fully gated: the agent loop is Corral's. Core ✅ 2026-11-25 (sign-in, tokens, route, errors, #136); the shell's loopback sign-in and the window's ChatGPT plan section ✅ 2026-11-25 (TP-SUB-04, 05); GPT agents on the plan (models, the agent editor, the driver) next
 1. `anthropic_messages` client + native agents on Claude models (client ✅ SK-7; tools through the shared agent loop ✅ 2026-11-19, pulled forward, TP-TOOL-16..18)
 2. Meta Model API (Muse Spark) through the OpenAI-compatible client (config + cassettes)
 3. `managed` adapter for the OpenAI Agents API (scope per Spike S3)

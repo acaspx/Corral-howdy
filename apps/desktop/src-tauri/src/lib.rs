@@ -24,6 +24,7 @@ pub mod agent_policies;
 pub mod agent_settings;
 pub mod agent_tools;
 pub mod bindings;
+pub mod chatgpt_signin;
 pub mod corral_order;
 pub mod corral_settings;
 pub mod keys;
@@ -86,6 +87,24 @@ pub(crate) fn show_main_window(app: &AppHandle) {
     }
 }
 
+/// The ChatGPT plan: tokens in the login Keychain on macOS (in memory elsewhere; Corral only
+/// ships on macOS), reaching OpenAI over HTTPS.
+fn chatgpt_plan() -> Result<corral_adapters::chatgpt::ChatGptPlan, String> {
+    #[cfg(target_os = "macos")]
+    let store: std::sync::Arc<dyn corral_secrets::PlanStore> =
+        std::sync::Arc::new(corral_secrets::KeychainStore::corral());
+    #[cfg(not(target_os = "macos"))]
+    let store: std::sync::Arc<dyn corral_secrets::PlanStore> =
+        std::sync::Arc::new(corral_secrets::MemoryPlanStore::default());
+    let http = corral_adapters::transport::ReqwestTransport::new()
+        .map_err(|e| format!("no HTTPS client for ChatGPT: {e}"))?;
+    Ok(corral_adapters::chatgpt::ChatGptPlan::new(
+        store,
+        std::sync::Arc::new(http),
+        std::sync::Arc::new(corral_core::clock::SystemClock),
+    ))
+}
+
 /// Builds and runs the app.
 pub fn run() {
     let app = tauri::Builder::default()
@@ -108,6 +127,12 @@ pub fn run() {
             agent_policies::save_agent_policy,
             agent_editor::agent_editor,
             agent_editor::save_agent,
+            chatgpt_signin::chatgpt_status,
+            chatgpt_signin::chatgpt_sign_in,
+            chatgpt_signin::chatgpt_cancel_sign_in,
+            chatgpt_signin::chatgpt_sign_out,
+            chatgpt_signin::chatgpt_welcomed,
+            chatgpt_signin::open_manage_usage,
         ])
         .setup(|app| {
             let show = MenuItem::with_id(app, MENU_SHOW, "Show Corral", true, None::<&str>)?;
@@ -167,6 +192,13 @@ pub fn run() {
             app.manage(std::sync::Arc::new(
                 corral_settings::CorralSettings::default(),
             ));
+            // The ChatGPT plan's sign-in (ADR-017): its tokens in the Keychain, its host ID and
+            // account file in the app's data folder.
+            app.manage(std::sync::Arc::new(chatgpt_signin::ChatGptSignIn::new(
+                std::sync::Arc::new(chatgpt_plan()?),
+                chatgpt_signin::SignInFiles::new(data.join("chatgpt")),
+                std::sync::Arc::new(chatgpt_signin::SystemBrowser),
+            )));
 
             // The corral, wired to the core: Grok's drop deploys through the supervisor, and every
             // logged event updates the drops and their cards (SK-6).

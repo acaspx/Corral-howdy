@@ -9,6 +9,7 @@ use crate::agent_policies::{
     AgentPolicyEdit, AgentPolicyView, PolicyClassView, PolicyRuleChange, RuleChoice, RuleOrigin,
     TimeoutChoice,
 };
+use crate::chatgpt_signin::{ChatGptSignedOut, ChatGptStatus};
 use crate::corral_order::{CorralAgentChoice, CorralSettingsView};
 use crate::keys::Connected;
 use crate::provider_tools::{ProviderToolChoice, ProviderToolsView};
@@ -48,6 +49,8 @@ pub fn typescript() -> String {
         AgentEditorView::decl(&cfg),
         ModelView::decl(&cfg),
         AgentEdit::decl(&cfg),
+        ChatGptStatus::decl(&cfg),
+        ChatGptSignedOut::decl(&cfg),
     ];
     let mut out = String::from(
         "// Generated from the Rust types by apps/desktop/src-tauri/src/bindings.rs (TP-IPC-06).\n\

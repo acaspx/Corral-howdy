@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-chatgpt-welcomed"
+description = "Enables the chatgpt_welcomed command without any pre-configured scope."
+commands.allow = ["chatgpt_welcomed"]
+
+[[permission]]
+identifier = "deny-chatgpt-welcomed"
+description = "Denies the chatgpt_welcomed command without any pre-configured scope."
+commands.deny = ["chatgpt_welcomed"]
