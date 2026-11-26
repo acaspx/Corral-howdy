@@ -1,4 +1,16 @@
 import { useEffect, useId, useState } from "react";
+import { Alert, AlertDescription } from "@/components/glaze/ui/alert";
+import { Card, CardContent } from "@/components/glaze/ui/card";
+import { Checkbox } from "@/components/glaze/ui/checkbox";
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from "@/components/glaze/ui/field";
+import { Switch } from "@/components/glaze/ui/switch";
 import {
   corralSettingsApi,
   type CorralAgentChoice,
@@ -17,7 +29,6 @@ export function CorralSettings({ api = corralSettingsApi }: { api?: CorralSettin
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const headingId = useId();
-  const hintId = useId();
 
   useEffect(() => {
     let live = true;
@@ -52,57 +63,65 @@ export function CorralSettings({ api = corralSettingsApi }: { api?: CorralSettin
   const shownCount = view?.agents.filter((a) => a.shown).length ?? 0;
   const full = view !== null && shownCount >= view.maxShown;
   return (
-    <section className="key-form" aria-labelledby={headingId}>
-      <h2 id={headingId}>Corral</h2>
-      <p className="key-status">
-        The corral shows up to {view?.maxShown ?? 8} of your agents, most used first. Agents you
-        don't show stay connected.
-      </p>
-      {view?.needsChoice && (
-        <p className="key-status" role="status">
-          Your corral holds up to {view.maxShown}. Choose which agents show.
+    <section aria-labelledby={headingId} className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <h2 id={headingId} className="type-heading">
+          Corral
+        </h2>
+        <p className="type-body-sm text-text-2">
+          The corral shows up to {view?.maxShown ?? 8} of your agents, most used first. Agents you
+          don't show stay connected.
         </p>
+      </div>
+      {view?.needsChoice && (
+        <Alert status="warn" role="status">
+          <AlertDescription>
+            Your corral holds up to {view.maxShown}. Choose which agents show.
+          </AlertDescription>
+        </Alert>
       )}
       {view && (
-        <>
-          <ul className="tool-list" aria-label="Agents in the corral">
-            {view.agents.map((agent) => (
-              <li key={agent.id}>
-                <label className="tool-switch">
-                  <input
-                    type="checkbox"
-                    checked={agent.shown}
-                    disabled={busy || (!agent.shown && full)}
-                    onChange={() => toggle(view, agent)}
-                  />
-                  {agent.name}
-                </label>
-              </li>
-            ))}
-          </ul>
-          <p className="tool-terms">
-            {shownCount} of {view.maxShown} shown
-          </p>
-          <label className="tool-switch">
-            <input
-              type="checkbox"
-              checked={view.keepFixed}
-              disabled={busy}
-              aria-describedby={hintId}
-              onChange={() => void change(() => api.keepFixed(!view.keepFixed))}
-            />
-            Keep order fixed
-          </label>
-          <p className="tool-terms" id={hintId}>
-            The drops stay where they are. Deploys still count, so turning this off puts the most
-            used first again.
-          </p>
-        </>
+        <Card>
+          <CardContent className="gap-4">
+            <FieldSet>
+              <FieldLegend variant="label">Agents in the corral</FieldLegend>
+              <div className="flex flex-col gap-2">
+                {view.agents.map((agent) => (
+                  <Field key={agent.id} orientation="horizontal">
+                    <Checkbox
+                      checked={agent.shown}
+                      disabled={busy || (!agent.shown && full)}
+                      onCheckedChange={() => toggle(view, agent)}
+                    />
+                    <FieldLabel>{agent.name}</FieldLabel>
+                  </Field>
+                ))}
+              </div>
+              <FieldDescription>
+                {shownCount} of {view.maxShown} shown
+              </FieldDescription>
+            </FieldSet>
+            <Field orientation="horizontal">
+              <Switch
+                checked={view.keepFixed}
+                disabled={busy}
+                onCheckedChange={() => void change(() => api.keepFixed(!view.keepFixed))}
+              />
+              <FieldContent>
+                <FieldLabel>Keep order fixed</FieldLabel>
+                <FieldDescription>
+                  The drops stay where they are. Deploys still count, so turning this off puts the
+                  most used first again.
+                </FieldDescription>
+              </FieldContent>
+            </Field>
+          </CardContent>
+        </Card>
       )}
       {error && (
-        <p className="key-error" role="alert">
-          {error}
-        </p>
+        <Alert status="fail">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
     </section>
   );
