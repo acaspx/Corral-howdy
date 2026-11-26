@@ -27,10 +27,14 @@
 //!   unavailable attempt isn't billed.
 //! - **Stop** (TP-ADP-03): the whole request runs inside a `select!` on the cancel token, so
 //!   Stop drops the connection at once.
+//! - **On a ChatGPT plan** ([`Route::ChatGptPlan`], ADR-017, TP-SUB-03): the same protocol with
+//!   OpenAI's plan rules. `input` is always an array, `max_output_tokens` isn't sent (the route
+//!   refuses it), nothing costs dollars, and errors are read by their plan codes
+//!   ([`crate::chatgpt::plan_failure`]): a usage limit stops the run with Manage usage.
 
 use crate::agent::ToolProtocol;
 use crate::sse::SseEvent;
-use crate::stream::{Protocol, StreamDecoder, StreamDriver, clean};
+use crate::stream::{ErrorAction, Protocol, StreamDecoder, StreamDriver, clean};
 use crate::transport::KeyHeader;
 use corral_core::budget::{Price, RequestEstimate, input_token_bound};
 use corral_core::event::{
@@ -59,6 +63,18 @@ pub struct ResponsesConfig {
     pub max_attempts: u32,
     /// Fail the run if the stream sends nothing for this long.
     pub idle_timeout: Duration,
+    /// How the request is paid for.
+    pub route: Route,
+}
+
+/// How a Responses request is paid for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Route {
+    /// With the provider's API key, billed per token.
+    #[default]
+    ApiKey,
+    /// On the user's ChatGPT plan, through Sign in with ChatGPT (ADR-017).
+    ChatGptPlan,
 }
 
 impl ResponsesConfig {
@@ -76,6 +92,23 @@ impl ResponsesConfig {
                 .with_long_prompt(200_000, 4_000_000, 12_000_000),
             max_attempts: 3,
             idle_timeout: Duration::from_secs(300),
+            route: Route::ApiKey,
+        }
+    }
+
+    /// OpenAI's API on the user's ChatGPT plan (ADR-017): no price, since the plan's usage is
+    /// what's spent, and OpenAI's plan route. The token comes from the plan's sign-in
+    /// ([`crate::chatgpt::ChatGptPlan`]).
+    pub fn chatgpt_plan(model: impl Into<String>) -> Self {
+        Self {
+            provider: Provider::OpenAi,
+            base_url: "https://api.openai.com/v1".into(),
+            model: model.into(),
+            max_output_tokens: 16_384,
+            price: Price::per_million_tokens(0, 0),
+            max_attempts: 3,
+            idle_timeout: Duration::from_secs(300),
+            route: Route::ChatGptPlan,
         }
     }
 
@@ -92,13 +125,32 @@ impl ResponsesConfig {
 
     /// The request body with the output limit the budget meter allowed.
     pub fn request_body_limited(&self, prompt: &str, max_output_tokens: u32) -> Value {
-        json!({
+        let body = json!({
             "model": self.model,
             "input": prompt,
             "stream": true,
             "store": false,
             "max_output_tokens": max_output_tokens,
-        })
+        });
+        self.routed(body)
+    }
+
+    /// The body as the route wants it: on a ChatGPT plan, `input` as an array and no
+    /// `max_output_tokens`.
+    fn routed(&self, mut body: Value) -> Value {
+        match self.route {
+            Route::ApiKey => body,
+            Route::ChatGptPlan => {
+                if let Some(fields) = body.as_object_mut() {
+                    fields.remove("max_output_tokens");
+                    if let Some(Value::String(prompt)) = fields.get("input") {
+                        let input = json!([{"role": "user", "content": prompt}]);
+                        fields.insert("input".into(), input);
+                    }
+                }
+                body
+            }
+        }
     }
 
     /// The most this request could cost, for the budget meter.
@@ -228,7 +280,7 @@ impl ResponsesConfig {
             body["tool_choice"] = json!("auto");
             body["parallel_tool_calls"] = json!(false);
         }
-        body
+        self.routed(body)
     }
 
     /// The most one turn could cost: the conversation and the tools' descriptions count as input.
@@ -292,6 +344,24 @@ impl Protocol for ResponsesConfig {
 
     fn decoder(&self) -> ResponseDecoder {
         ResponseDecoder::default()
+    }
+
+    fn reads_errors(&self) -> bool {
+        self.route == Route::ChatGptPlan
+    }
+
+    fn classify_error(&self, status: u16, body: &[u8]) -> Option<ErrorAction> {
+        match self.route {
+            Route::ApiKey => None,
+            Route::ChatGptPlan => {
+                let failure = crate::chatgpt::plan_failure(status, body);
+                Some(if failure.retry() {
+                    ErrorAction::Retry
+                } else {
+                    ErrorAction::Stop(failure.message())
+                })
+            }
+        }
     }
 }
 

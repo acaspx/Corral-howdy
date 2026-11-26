@@ -9,15 +9,20 @@
 //!   billed.
 //! - **A rejected key** (401, 403) isn't retried, and the provider's message isn't passed on: some
 //!   repeat part of the key.
+//! - **Keys come from a [`KeySource`]**, asked once per request: the stored API keys
+//!   ([`StreamDriver::new`]) or a sign-in that renews its token at call time, such as a ChatGPT
+//!   plan ([`crate::chatgpt::ChatGptPlan`], ADR-017).
+//! - **A protocol can read its own errors** ([`Protocol::classify_error`]): the ChatGPT plan's
+//!   route says by code whether to retry, and a usage limit stops at once.
 
 use crate::sse::{SseEvent, SseParser};
-use crate::transport::{KeyHeader, PostRequest, Transport};
+use crate::transport::{BoxFuture, KeyHeader, PostRequest, Transport};
 use corral_core::budget::{BudgetError, RequestEstimate};
 use corral_core::event::{EventBody, FailureReason, ModelRequest, RunFailed};
 use corral_core::supervisor::{
     CancelToken, EventSink, RunDriver, RunFuture, RunRequest, SupervisorError,
 };
-use corral_secrets::{KeyError, Provider, SecretStore, resolve};
+use corral_secrets::{KeyError, Provider, Secret, SecretStore, resolve};
 use futures_util::StreamExt;
 use serde_json::Value;
 use std::sync::Arc;
@@ -48,6 +53,61 @@ pub trait Protocol: Send + Sync + 'static {
     fn idle_timeout(&self) -> Duration;
     /// A fresh decoder for one response.
     fn decoder(&self) -> Self::Decoder;
+    /// What to do with an error reply, read by the protocol itself; `None` leaves it to the
+    /// shared rules above. Only consulted when [`Self::reads_errors`] is true.
+    fn classify_error(&self, _status: u16, _body: &[u8]) -> Option<ErrorAction> {
+        None
+    }
+    /// True when error replies go to [`Self::classify_error`] before the shared rules.
+    fn reads_errors(&self) -> bool {
+        false
+    }
+}
+
+/// A protocol's verdict on an error reply.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ErrorAction {
+    /// Retry it, within [`Protocol::max_attempts`].
+    Retry,
+    /// End the run with this message (a provider failure).
+    Stop(String),
+}
+
+/// Where a request's key comes from, asked once per request.
+pub trait KeySource: Send + Sync + 'static {
+    /// The key or token for `provider`, now.
+    fn key(&self, provider: Provider) -> BoxFuture<'_, Result<Secret, KeyFailure>>;
+}
+
+/// Why a request has no key. Each message is what the card shows; none contains a key.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum KeyFailure {
+    /// Nothing to send with: add a key, or sign in again.
+    #[error("{0}")]
+    Missing(String),
+    /// The key can't be had right now (renewing it failed on the network); try later.
+    #[error("{0}")]
+    Unavailable(String),
+    /// The store failed.
+    #[error("{0}")]
+    Internal(String),
+}
+
+/// The stored API keys, read at call time (TP-SKEL-01).
+struct StoredKeys(Arc<dyn SecretStore>);
+
+impl KeySource for StoredKeys {
+    fn key(&self, provider: Provider) -> BoxFuture<'_, Result<Secret, KeyFailure>> {
+        let result = match resolve(self.0.as_ref(), provider) {
+            Ok(key) => Ok(key),
+            Err(missing @ KeyError::Missing(_)) => Err(KeyFailure::Missing(missing.to_string())),
+            Err(KeyError::Store(e)) => Err(KeyFailure::Internal(format!(
+                "couldn't read the {} key: {e}",
+                provider.display_name()
+            ))),
+        };
+        Box::pin(async move { result })
+    }
 }
 
 /// Turns a provider's stream events into Corral events.
@@ -61,7 +121,7 @@ pub trait StreamDecoder {
 /// A [`RunDriver`] that runs a prompt through a [`Protocol`].
 pub struct StreamDriver<P> {
     transport: Arc<dyn Transport>,
-    keys: Arc<dyn SecretStore>,
+    keys: Arc<dyn KeySource>,
     config: Arc<P>,
 }
 
@@ -78,6 +138,11 @@ impl<P> Clone for StreamDriver<P> {
 impl<P: Protocol> StreamDriver<P> {
     /// A driver that sends through `transport`, reading keys from `keys`.
     pub fn new(transport: Arc<dyn Transport>, keys: Arc<dyn SecretStore>, config: P) -> Self {
+        Self::with_keys(transport, Arc::new(StoredKeys(keys)), config)
+    }
+
+    /// A driver that sends through `transport`, asking `keys` for each request's key.
+    pub fn with_keys(transport: Arc<dyn Transport>, keys: Arc<dyn KeySource>, config: P) -> Self {
         Self {
             transport,
             keys,
@@ -157,16 +222,13 @@ impl<P: Protocol> StreamDriver<P> {
         let config = self.config.as_ref();
         let provider = config.provider();
         let name = provider.display_name();
-        let key = match resolve(self.keys.as_ref(), provider) {
+        let key = match self.keys.key(provider).await {
             Ok(key) => key,
-            Err(missing @ KeyError::Missing(_)) => {
-                return Err(Failure::Emit(FailureReason::Provider, missing.to_string()));
+            Err(KeyFailure::Missing(message) | KeyFailure::Unavailable(message)) => {
+                return Err(Failure::Emit(FailureReason::Provider, message));
             }
-            Err(KeyError::Store(e)) => {
-                return Err(Failure::Emit(
-                    FailureReason::Internal,
-                    format!("couldn't read the {name} key: {e}"),
-                ));
+            Err(KeyFailure::Internal(message)) => {
+                return Err(Failure::Emit(FailureReason::Internal, message));
             }
         };
         let admission = sink
@@ -216,6 +278,36 @@ impl<P: Protocol> StreamDriver<P> {
                     format!("couldn't reach {name}: {e}"),
                 )
             })?;
+            if config.reads_errors() && !(200..=299).contains(&response.status) {
+                let status = response.status;
+                let retry_after = response.retry_after;
+                let body = error_body(response.body).await;
+                match config.classify_error(status, &body) {
+                    Some(ErrorAction::Stop(message)) => {
+                        return Err(Failure::Emit(FailureReason::Provider, message));
+                    }
+                    Some(ErrorAction::Retry) if attempt < config.max_attempts() => {
+                        let backoff = Duration::from_secs(1 << (attempt - 1));
+                        let wait = retry_after.unwrap_or(backoff).min(Duration::from_secs(60));
+                        tokio::time::sleep(wait).await;
+                        continue;
+                    }
+                    Some(ErrorAction::Retry) => {
+                        return Err(Failure::Emit(
+                            FailureReason::Provider,
+                            format!(
+                                "{name} was unavailable {attempt} times in a row. Try again in a minute."
+                            ),
+                        ));
+                    }
+                    None => {
+                        return Err(Failure::Emit(
+                            FailureReason::Provider,
+                            format!("{name} returned HTTP {status}"),
+                        ));
+                    }
+                }
+            }
             match response.status {
                 200..=299 => break response,
                 401 | 403 => {
@@ -311,6 +403,19 @@ fn emit(sink: &EventSink, body: EventBody) -> Result<(), Failure> {
 
 /// `: <message>` from an error body (`{"error": "..."}` or `{"error": {"message": "..."}}`),
 /// cleaned and shortened; empty if there's nothing usable. Reads at most 16 KB.
+/// An error reply's first 16 KiB, for a protocol to read.
+async fn error_body(mut body: crate::transport::ByteStream) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    while let Some(Ok(chunk)) = body.next().await {
+        bytes.extend_from_slice(&chunk);
+        if bytes.len() > 16 * 1024 {
+            bytes.truncate(16 * 1024);
+            break;
+        }
+    }
+    bytes
+}
+
 async fn error_detail(mut body: crate::transport::ByteStream) -> String {
     let mut bytes = Vec::new();
     while let Some(Ok(chunk)) = body.next().await {

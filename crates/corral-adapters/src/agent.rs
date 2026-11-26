@@ -29,7 +29,7 @@
 
 use crate::messages::MessagesConfig;
 use crate::responses::ResponsesConfig;
-use crate::stream::{Failure, Protocol, StreamDecoder, StreamDriver, fail_run};
+use crate::stream::{Failure, KeySource, Protocol, StreamDecoder, StreamDriver, fail_run};
 use crate::transport::Transport;
 use corral_core::budget::RequestEstimate;
 use corral_core::domain::ActionClass;
@@ -178,6 +178,22 @@ impl<P: ToolProtocol> ToolAgent<P> {
         config.keep_provider_tools(&|tool| allows(&tools.policy, tool));
         Self {
             stream: StreamDriver::new(transport, keys, config),
+            tools,
+            max_turns: DEFAULT_MAX_TURNS,
+        }
+    }
+
+    /// An agent like [`Self::new`] whose key for each request comes from `keys`, such as a
+    /// ChatGPT plan's sign-in (ADR-017).
+    pub fn with_keys(
+        transport: Arc<dyn Transport>,
+        keys: Arc<dyn KeySource>,
+        mut config: P,
+        tools: ToolSetup,
+    ) -> Self {
+        config.keep_provider_tools(&|tool| allows(&tools.policy, tool));
+        Self {
+            stream: StreamDriver::with_keys(transport, keys, config),
             tools,
             max_turns: DEFAULT_MAX_TURNS,
         }

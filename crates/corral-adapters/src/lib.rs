@@ -15,6 +15,7 @@
 pub mod agent;
 pub mod cassette;
 pub mod catalog;
+pub mod chatgpt;
 pub mod fake;
 pub mod linked;
 pub mod logos;

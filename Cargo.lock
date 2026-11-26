@@ -454,18 +454,23 @@ checksum = "7f8f80099a98041a3d1622845c271458a2d73e688351bf3cb999266764b81d48"
 name = "corral-adapters"
 version = "0.0.1"
 dependencies = [
+ "base64 0.23.1",
  "bytes",
+ "corral-adapters",
  "corral-core",
  "corral-policy",
  "corral-secrets",
  "corral-tools",
  "futures-util",
  "reqwest",
+ "ring",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
  "tokio",
  "ts-rs",
+ "url",
+ "zeroize",
 ]
 
 [[package]]

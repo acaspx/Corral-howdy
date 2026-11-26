@@ -5,7 +5,9 @@
 //! rebuild changes an ad-hoc signature, and macOS asks once to allow the new build (ADR-001,
 //! "Signing and identity").
 
-use crate::{Provider, Secret, SecretError, SecretStore};
+use crate::{
+    PLAN_ACCOUNT, PLAN_ITEM, PlanCredentials, PlanStore, Provider, Secret, SecretError, SecretStore,
+};
 use security_framework::passwords::{
     delete_generic_password, get_generic_password, set_generic_password,
 };
@@ -62,6 +64,41 @@ impl SecretStore for KeychainStore {
 
     fn delete(&self, provider: Provider) -> Result<(), SecretError> {
         match delete_generic_password(&self.service(provider), ACCOUNT) {
+            Ok(()) => Ok(()),
+            Err(e) if e.code() == ITEM_NOT_FOUND => Ok(()),
+            Err(e) => Err(SecretError::Keychain(e.code())),
+        }
+    }
+}
+
+impl KeychainStore {
+    fn plan_service(&self) -> String {
+        format!("{}.{PLAN_ITEM}", self.prefix)
+    }
+}
+
+/// The ChatGPT plan's record (ADR-017): item `<prefix>.openai-plan`, account `oauth`.
+impl PlanStore for KeychainStore {
+    fn get_plan(&self) -> Result<Option<PlanCredentials>, SecretError> {
+        match get_generic_password(&self.plan_service(), PLAN_ACCOUNT) {
+            Ok(bytes) => {
+                let bytes = Zeroizing::new(bytes);
+                let text = std::str::from_utf8(&bytes).map_err(|_| SecretError::Unreadable)?;
+                PlanCredentials::from_record(text).map(Some)
+            }
+            Err(e) if e.code() == ITEM_NOT_FOUND => Ok(None),
+            Err(e) => Err(SecretError::Keychain(e.code())),
+        }
+    }
+
+    fn set_plan(&self, credentials: &PlanCredentials) -> Result<(), SecretError> {
+        let record = credentials.to_record();
+        set_generic_password(&self.plan_service(), PLAN_ACCOUNT, record.as_bytes())
+            .map_err(|e| SecretError::Keychain(e.code()))
+    }
+
+    fn delete_plan(&self) -> Result<(), SecretError> {
+        match delete_generic_password(&self.plan_service(), PLAN_ACCOUNT) {
             Ok(()) => Ok(()),
             Err(e) if e.code() == ITEM_NOT_FOUND => Ok(()),
             Err(e) => Err(SecretError::Keychain(e.code())),

@@ -1,0 +1,11 @@
+{
+  "description": "The plan's usage limit is reached (429 subscription_sharing_usage_limit_exceeded): not retried.",
+  "responses": [
+    {
+      "status": 429,
+      "body": [
+        "{\"error\": {\"type\": \"invalid_request_error\", \"code\": \"subscription_sharing_usage_limit_exceeded\", \"message\": \"You've reached your ChatGPT plan's usage limit.\", \"param\": null}}"
+      ]
+    }
+  ]
+}

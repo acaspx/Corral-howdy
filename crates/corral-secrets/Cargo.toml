@@ -10,6 +10,8 @@ publish.workspace = true
 
 [dependencies]
 serde.workspace = true
+# The ChatGPT plan's record is stored as one JSON item (ADR-017).
+serde_json.workspace = true
 thiserror.workspace = true
 # Wipes key bytes from memory when they're dropped (docs/01 §11: "zeroized after use").
 zeroize = "1.9"

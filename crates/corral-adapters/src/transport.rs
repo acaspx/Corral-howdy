@@ -167,3 +167,119 @@ impl Transport for ReqwestTransport {
         })
     }
 }
+
+/// A form-encoded body: OAuth's token and revocation requests (ADR-017). Its values can be codes,
+/// verifiers and tokens, so they're wiped when it's dropped and never printed.
+#[derive(Default)]
+pub struct Form(Vec<(&'static str, zeroize::Zeroizing<String>)>);
+
+impl Form {
+    /// An empty form.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The form with `name=value` added.
+    pub fn with(mut self, name: &'static str, value: impl Into<String>) -> Self {
+        self.0.push((name, zeroize::Zeroizing::new(value.into())));
+        self
+    }
+
+    /// The first value for `name`.
+    pub fn get(&self, name: &str) -> Option<&str> {
+        self.0
+            .iter()
+            .find(|(k, _)| *k == name)
+            .map(|(_, v)| v.as_str())
+    }
+
+    /// Every `(name, value)`, in order.
+    pub fn fields(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.0.iter().map(|(k, v)| (*k, v.as_str()))
+    }
+
+    /// `application/x-www-form-urlencoded`. Wiped when dropped.
+    pub fn encode(&self) -> zeroize::Zeroizing<String> {
+        let mut out = url::form_urlencoded::Serializer::new(String::new());
+        for (name, value) in self.fields() {
+            out.append_pair(name, value);
+        }
+        zeroize::Zeroizing::new(out.finish())
+    }
+}
+
+impl std::fmt::Debug for Form {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Form(redacted)")
+    }
+}
+
+/// The biggest OAuth reply read: far past a token response or a key set.
+pub const MAX_FORM_REPLY: usize = 1024 * 1024;
+
+/// Plain requests to an authorization server: form POSTs and GETs, answered with a status and a
+/// whole (bounded) body. Separate from [`Transport`], which streams model replies.
+pub trait FormTransport: Send + Sync + 'static {
+    /// POSTs `form`, form-encoded, to `url`.
+    fn post_form<'a>(
+        &'a self,
+        url: &'a str,
+        form: &'a Form,
+    ) -> BoxFuture<'a, Result<(u16, Vec<u8>), TransportError>>;
+
+    /// GETs `url`.
+    fn get<'a>(&'a self, url: &'a str) -> BoxFuture<'a, Result<(u16, Vec<u8>), TransportError>>;
+}
+
+impl ReqwestTransport {
+    async fn whole(response: reqwest::Response) -> Result<(u16, Vec<u8>), TransportError> {
+        let status = response.status().as_u16();
+        let mut body = Vec::new();
+        let mut stream = response.bytes_stream();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| TransportError::Body(e.without_url().to_string()))?;
+            if body.len() + chunk.len() > MAX_FORM_REPLY {
+                return Err(TransportError::Body("the reply is too large".into()));
+            }
+            body.extend_from_slice(&chunk);
+        }
+        Ok((status, body))
+    }
+}
+
+impl FormTransport for ReqwestTransport {
+    fn post_form<'a>(
+        &'a self,
+        url: &'a str,
+        form: &'a Form,
+    ) -> BoxFuture<'a, Result<(u16, Vec<u8>), TransportError>> {
+        Box::pin(async move {
+            let response = self
+                .client
+                .post(url)
+                .header(
+                    reqwest::header::CONTENT_TYPE,
+                    "application/x-www-form-urlencoded",
+                )
+                .header(reqwest::header::ACCEPT, "application/json")
+                .body(form.encode().as_str().to_owned())
+                .send()
+                .await
+                .map_err(|e| TransportError::Connect(e.without_url().to_string()))?;
+            Self::whole(response).await
+        })
+    }
+
+    fn get<'a>(&'a self, url: &'a str) -> BoxFuture<'a, Result<(u16, Vec<u8>), TransportError>> {
+        Box::pin(async move {
+            let response = self
+                .client
+                .get(url)
+                .header(reqwest::header::ACCEPT, "application/json")
+                .send()
+                .await
+                .map_err(|e| TransportError::Connect(e.without_url().to_string()))?;
+            Self::whole(response).await
+        })
+    }
+}

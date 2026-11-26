@@ -10,6 +10,8 @@
 //! - **Hard to leak by accident.** [`Secret`] has no `Display`, `Serialize` or `Clone`; its `Debug`
 //!   prints nothing of the key; its bytes are wiped when it's dropped; validation errors never
 //!   quote it (TP-SEC-03).
+//! - **A ChatGPT plan's tokens** (ADR-017) are kept the same way, in their own item
+//!   (`corral.openai-plan`), as one [`PlanCredentials`] record ([`PlanStore`]).
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -19,8 +21,10 @@ use zeroize::Zeroizing;
 
 #[cfg(target_os = "macos")]
 mod keychain;
+mod plan;
 #[cfg(target_os = "macos")]
 pub use keychain::KeychainStore;
+pub use plan::{MemoryPlanStore, PLAN_ACCOUNT, PLAN_ITEM, PlanCredentials, PlanStore};
 
 /// A model provider with its own API key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -123,6 +127,29 @@ impl Secret {
     /// The key, for the one place that sends it: the provider request.
     pub fn expose(&self) -> &str {
         &self.0
+    }
+
+    /// Longest OAuth token accepted ([`Self::token`]): a JWT with its claims, well past any
+    /// real one, still bounded.
+    pub const MAX_TOKEN_LEN: usize = 16 * 1024;
+
+    /// An OAuth token as a provider returned it (ADR-017): like a key, but up to
+    /// [`Self::MAX_TOKEN_LEN`] characters, since access and ID tokens are JWTs. Surrounding
+    /// whitespace is trimmed; the rest must be printable ASCII with no spaces. `raw` is wiped
+    /// either way.
+    pub fn token(raw: impl Into<String>) -> Result<Self, SecretError> {
+        let raw = Zeroizing::new(raw.into());
+        let token = raw.trim();
+        if token.is_empty() {
+            return Err(SecretError::Empty);
+        }
+        if !token.bytes().all(|b| b.is_ascii_graphic()) {
+            return Err(SecretError::InvalidCharacters);
+        }
+        if token.len() > Self::MAX_TOKEN_LEN {
+            return Err(SecretError::TooLong);
+        }
+        Ok(Self(Zeroizing::new(token.to_owned())))
     }
 
     /// The last 4 characters, the most Settings ever shows.
