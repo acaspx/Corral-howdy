@@ -2,7 +2,9 @@
 //!
 //! The list below is the whole grant. The main window may read, identify, connect (check and save) and
 //! remove provider keys, see and switch the provider-side tools the core offers, read runs'
-//! traces, and choose which agents the corral shows and whether its order stays fixed; the tray
+//! traces, choose which agents the corral shows and whether its order stays fixed, and sign in to
+//! a ChatGPT plan (ADR-017: start, cancel, sign out, see the status, and open Manage usage at its
+//! one fixed URL); the tray
 //! and menus are built in Rust, which capabilities don't gate. Adding a
 //! permission means adding it here and in `capabilities/default.json` in the same PR, with the
 //! feature that needs it; both are reviewed by the code owner. Never add a bundle such as
@@ -24,6 +26,12 @@ const MAIN_WINDOW_PERMISSIONS: &[&str] = &[
     "allow-save-agent-policy",
     "allow-agent-editor",
     "allow-save-agent",
+    "allow-chatgpt-status",
+    "allow-chatgpt-sign-in",
+    "allow-chatgpt-cancel-sign-in",
+    "allow-chatgpt-sign-out",
+    "allow-chatgpt-welcomed",
+    "allow-open-manage-usage",
 ];
 
 fn main_window_capability() -> serde_json::Value {

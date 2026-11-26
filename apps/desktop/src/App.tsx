@@ -1,4 +1,6 @@
 import { useId } from "react";
+import { ChatGptPlan } from "./ChatGptPlan";
+import { chatgptApi as defaultPlanApi, type ChatGptApi } from "./chatgptApi";
 import { CorralSettings } from "./CorralSettings";
 import { corralSettingsApi as defaultCorralApi, type CorralSettingsApi } from "./corralSettingsApi";
 import { KeyIntake } from "./KeyIntake";
@@ -23,6 +25,7 @@ export function App({
   corralApi = defaultCorralApi,
   policyApi = defaultPolicyApi,
   agentApi = defaultAgentApi,
+  planApi = defaultPlanApi,
 }: {
   keyApi?: KeyApi;
   toolsApi?: ProviderToolsApi;
@@ -30,6 +33,7 @@ export function App({
   corralApi?: CorralSettingsApi;
   policyApi?: PolicyApi;
   agentApi?: AgentEditorApi;
+  planApi?: ChatGptApi;
 }) {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 py-10">
@@ -40,6 +44,7 @@ export function App({
         </p>
       </header>
       <KeyIntake api={keyApi} />
+      <ChatGptPlan api={planApi} />
       <AgentEditor api={agentApi} toolsApi={toolsApi} />
       <PolicyEditor api={policyApi} />
       <CorralSettings api={corralApi} />

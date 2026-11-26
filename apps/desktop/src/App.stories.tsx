@@ -4,6 +4,8 @@ import {
   agentApi,
   corralApi,
   keyApi,
+  planApi,
+  planSignedIn,
   policyApi,
   toolsApi,
   toolsView,
@@ -29,6 +31,7 @@ export const MainWindow: Story = {
     corralApi: corralApi(),
     policyApi: policyApi(),
     agentApi: agentApi(),
+    planApi: planApi(planSignedIn),
   },
 };
 
@@ -41,6 +44,7 @@ export const FreshInstall: Story = {
     corralApi: corralApi(),
     policyApi: policyApi(),
     agentApi: agentApi(),
+    planApi: planApi(),
   },
 };
 

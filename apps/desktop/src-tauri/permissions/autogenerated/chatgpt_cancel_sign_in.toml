@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-chatgpt-cancel-sign-in"
+description = "Enables the chatgpt_cancel_sign_in command without any pre-configured scope."
+commands.allow = ["chatgpt_cancel_sign_in"]
+
+[[permission]]
+identifier = "deny-chatgpt-cancel-sign-in"
+description = "Denies the chatgpt_cancel_sign_in command without any pre-configured scope."
+commands.deny = ["chatgpt_cancel_sign_in"]

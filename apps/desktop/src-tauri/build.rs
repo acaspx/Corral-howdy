@@ -20,6 +20,12 @@ const COMMANDS: &[&str] = &[
     "save_agent_policy",
     "agent_editor",
     "save_agent",
+    "chatgpt_status",
+    "chatgpt_sign_in",
+    "chatgpt_cancel_sign_in",
+    "chatgpt_sign_out",
+    "chatgpt_welcomed",
+    "open_manage_usage",
 ];
 
 fn main() {

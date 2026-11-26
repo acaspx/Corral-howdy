@@ -41,6 +41,8 @@ thiserror = { workspace = true }
 getrandom = "0.4"
 # The main window's types, generated from these (ADR-001, TP-IPC-06).
 ts-rs = "12.0.1"
+# The ChatGPT sign-in's loopback callback on 127.0.0.1 (ADR-017).
+tokio = { version = "1", features = ["net", "io-util", "time", "sync", "macros"] }
 
 # The workspace lints, except `unsafe_code` is `deny` instead of `forbid`, so the one FFI module
 # (`src/native.rs`) can allow it. ADR-001 is the ADR that allows it.
@@ -58,4 +60,6 @@ todo = "warn"
 serde_json = { workspace = true }
 # Async tests for the key check (tests/connect.rs), and the stories' runs on a paused clock
 # (tests/story_fixtures.rs).
-tokio = { version = "1", features = ["macros", "rt", "time", "test-util"] }
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "time", "test-util", "net", "io-util"] }
+# The sign-in tests fix the nonce, so the core's pre-signed ID tokens check out (TP-SUB-04).
+corral-adapters = { path = "../../../crates/corral-adapters", features = ["ts", "test-support"] }

@@ -389,3 +389,27 @@ model: string | null,
  * Its own monthly cap; `null` is the default.
  */
 monthlyCapMicroUsd: number | null, };
+
+export type ChatGptStatus = {
+/**
+ * Signed in now.
+ */
+signedIn: boolean,
+/**
+ * The account's email, while signed in.
+ */
+email: string | null,
+/**
+ * Show the one-time welcome (after the first sign-in, until Got it).
+ */
+showWelcome: boolean, };
+
+export type ChatGptSignedOut = {
+/**
+ * False when ChatGPT didn't confirm the revocation; the tokens are gone from this Mac anyway.
+ */
+revoked: boolean,
+/**
+ * The status after.
+ */
+status: ChatGptStatus, };
