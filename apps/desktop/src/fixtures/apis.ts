@@ -177,9 +177,8 @@ export function policyView(over: Partial<AgentPolicyView> = {}): AgentPolicyView
       cls({
         class: "provider_tools",
         title: "A tool on the provider's servers",
-        rule: "allow",
+        rule: "deny",
         default: "deny",
-        origin: "fixed",
         editable: false,
       }),
       cls({
