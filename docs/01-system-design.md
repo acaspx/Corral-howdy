@@ -136,9 +136,9 @@ pub trait AgentAdapter: Send + Sync {
 
 | Adapter | Who runs the agent loop | Used for | Checkpoint mechanism |
 |---|---|---|---|
-| `native` (**primary**) | Corral | xAI Grok (Responses API), OpenAI-compatible endpoints, Anthropic Messages, Meta Model API (Muse Spark; it accepts the OpenAI and Anthropic SDK formats) | Full: Corral executes every local tool, so it gates every call |
+| `native` (**primary**) | Corral | xAI Grok (Responses API), OpenAI-compatible endpoints, Anthropic Messages, Meta Model API (Muse Spark; it accepts the OpenAI and Anthropic SDK formats), and OpenAI models on a ChatGPT Plus or Pro plan through Sign in with ChatGPT (ADR-017) | Full: Corral executes every local tool, so it gates every call |
 | `managed` | Vendor | OpenAI Agents API | Function tools return to Corral (`requires_action`) and are fully gated. Sessions default to environment `none`, so every side effect is a Corral function tool. Hosted sandboxes and the hosted browser are opt-in, with partial gating (Spike S3) |
-| `acp` | The CLI agent | Claude Code, Codex CLI, Gemini CLI, Devin CLI (local Devin sessions), any ACP agent | ACP permission requests are mapped to Corral checkpoints. Corral is the ACP *client*. Gating is `Partial` unless Corral sets the agent's permission mode for the session, because a CLI agent's own settings can pre-approve tools (T22) |
+| `acp` | The CLI agent | Grok Build on a SuperGrok or X Premium+ subscription first (ADR-017, Spike S4), then Claude Code, Codex CLI, Gemini CLI, Devin CLI (local Devin sessions), any ACP agent | ACP permission requests are mapped to Corral checkpoints. Corral is the ACP *client*, and serves the agent's file I/O and terminal when the agent accepts them, so those go through `ToolGateway` (S4). Gating is `Partial` unless Corral sets the agent's permission mode for the session, because a CLI agent's own settings can pre-approve tools (T22) |
 | `a2a` (v1.1) | Remote agent | Agents exposing A2A v1.0 Agent Cards | A2A `input-required` task state → checkpoint |
 | `custom` | Corral (compiles to `native`) | User manifests | Same as native |
 | `fake` | Test script | Tests and evals | Scripted |
@@ -320,7 +320,7 @@ Push-to-talk → on-device transcription → text in the prompt bar (editable be
 
 ## 11. Secrets
 
-API keys go in the macOS Keychain (one item per provider, access-controlled to the signed app; `corral-secrets`, items `corral.<provider>`, account `api-key`). They are never written to SQLite, logs, traces, manifests or sync. They're fetched just in time per request and zeroized after use. Settings show only the last 4 characters: the webview sends a key in through a command it must be granted, and gets back only a status (TP-SETUP-01). Keys come in through one field for any provider: the core suggests the provider from the key's prefix and the user can change it (TP-SETUP-05). Then the core checks the key by asking that provider for its model list, which spends no tokens (TP-SETUP-02). A refused key, or one that couldn't be checked because the provider was unreachable, is never stored; a provider with no known check yet (the Meta Model API) is stored and marked unchecked. ACP CLI agents receive keys through env vars only if the user maps them, and the mapping is shown in the agent's permission summary.
+API keys go in the macOS Keychain (one item per provider, access-controlled to the signed app; `corral-secrets`, items `corral.<provider>`, account `api-key`). A subscription signed in through the vendor's own OAuth (ChatGPT, ADR-017) keeps its access and refresh tokens the same way, in `corral.openai-plan`, account `oauth`, refreshed at call time and revoked on sign-out. A hosted agent's own login (Grok Build's `~/.grok/auth.json`) is never read. They are never written to SQLite, logs, traces, manifests or sync. They're fetched just in time per request and zeroized after use. Settings show only the last 4 characters: the webview sends a key in through a command it must be granted, and gets back only a status (TP-SETUP-01). Keys come in through one field for any provider: the core suggests the provider from the key's prefix and the user can change it (TP-SETUP-05). Then the core checks the key by asking that provider for its model list, which spends no tokens (TP-SETUP-02). A refused key, or one that couldn't be checked because the provider was unreachable, is never stored; a provider with no known check yet (the Meta Model API) is stored and marked unchecked. ACP CLI agents receive keys through env vars only if the user maps them, and the mapping is shown in the agent's permission summary.
 
 ## 12. Optional sync (v1.1, ADR-006)
 
@@ -356,7 +356,7 @@ corral/
 | 002 | Event-sourced, hash-chained run log; all views are projections | Proposed |
 | 003 | Policy in Rust core, pure and deny-by-default; adapters can't bypass the gate | Proposed |
 | 004 | Native API runner is the primary adapter | Proposed |
-| 005 | No unofficial wrappers for consumer agents (Muse, dots); "linked app" until official APIs exist | **Accepted** 2026-11-12 (owner decision): linked drops for consumer Muse and your dot, open-in-app only (07 §8.2.1) |
+| 005 | No unofficial wrappers for consumer agents (Muse, dots); "linked app" until official APIs exist | **Accepted** 2026-11-12 (owner decision): linked drops for consumer Muse and your dot, open-in-app only (07 §8.2.1). Amended by 017 |
 | 006 | Local-first; opt-in E2E-encrypted event replication for sync | Proposed |
 | 007 | Trace export uses a pinned version of the OTel GenAI conventions | Proposed |
 | 008 | Voice cannot approve high/critical checkpoints | Proposed |
@@ -367,6 +367,8 @@ corral/
 | 013 | Corral owns tool execution: MCP through Corral's own client, vendor-executed side-effecting tools off by default, adapters report a gating level, never vendor auto-approval (Spike S3) | Proposed |
 | 014 | Working agents stay in the corral. Hover cards (paper) carry progress and checkpoint buttons; a trace tree of translucent stacked cards shows running tasks. Replaces pinch-off activity cards. Agent logos are user-assigned; no third-party marks ship in the repo | **Accepted** 2026-11-07 |
 | 015 | Provider logos are fetched at runtime: when a provider's key is connected, Corral downloads that provider's own icon from one fixed HTTPS URL on its own site and shows it in the drop. Still no third-party marks in the repo. Fetched logos are untrusted input (T19): redirects only to the provider's HTTPS hosts, PNG or ICO by header, ≤ 1 MB and ≤ 1024 px, saved under fixed names in Corral's folder, decoded by ImageIO as a ≤ 256 px thumbnail. A provider without a working source (OpenAI today) keeps its monogram. Amends ADR-014's user-assigned logos; user-assigned logos (07 §8.1) still come later and take precedence | **Accepted** 2026-11-12 ([adr/015-provider-logos.md](adr/015-provider-logos.md)) |
+| 016 | The main window is built with Glaze, design.how's design system; the corral stays native | **Accepted** 2026-11-25 (owner decision), [adr/016-glaze.md](adr/016-glaze.md) |
+| 017 | Subscriptions through each vendor's own door: ChatGPT Plus or Pro through Sign in with ChatGPT (native, fully gated), SuperGrok through xAI's Grok Build over ACP (partly gated); Claude, Muse and dots stay key-only or linked | **Proposed** 2026-11-25, [adr/017-subscriptions.md](adr/017-subscriptions.md); amends 005 |
 
 Each ADR becomes `docs/adr/NNN-title.md` when accepted.
 

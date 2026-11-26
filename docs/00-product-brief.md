@@ -1,10 +1,10 @@
 # Corral: Product Brief
 
-Status: Draft v0.1 · Owner: Anton Castro · Last updated: 2026-11-07
+Status: Draft v0.2 · Owner: Anton Castro · Last updated: 2026-11-25 (subscriptions, ADR-017)
 
 ## One line
 
-Corral is a macOS desktop harness where you keep all your AI agents in one place: a liquid-glass corral at the bottom of your screen, whose shape shows how many agents are home. From there you deploy them on tasks by text or voice, watch them work live, approve or deny their risky actions, inspect their traces, and send them back to the corral when they're done.
+Corral is a macOS desktop harness where you keep all your AI agents, and the subscriptions they run on, in one place: a liquid-glass corral at the bottom of your screen, whose shape shows how many agents are home. From there you deploy them on tasks by text or voice, watch them work live, approve or deny their risky actions, inspect their traces, and send them back to the corral when they're done.
 
 ## Problem
 
@@ -14,7 +14,7 @@ People who use several agents (Grok, Meta's Muse, OpenAI's dots, Claude Code, th
 
 | Release | User | What they need |
 |---|---|---|
-| v1 (developers first) | Developers and technical power users on **macOS 26 or later** who already hold API keys and run CLI agents | Bring your own keys (BYOK), config files, traces, safe defaults, installs from GitHub/Homebrew |
+| v1 (developers first) | Developers and technical power users on **macOS 26 or later** who already hold API keys or subscriptions and run CLI agents | Bring your own keys (BYOK) or sign in with a subscription where the vendor allows it, config files, traces, safe defaults, installs from GitHub/Homebrew |
 | v2 (consumers next) | Non-technical people with agent subscriptions | Signed DMG, guided onboarding, no terminal, plain-language checkpoints |
 
 ## Core jobs
@@ -28,15 +28,23 @@ People who use several agents (Grok, Meta's Muse, OpenAI's dots, Claude Code, th
 
 ## What "agents like Grok, Muse, Dot" means in practice (Nov 2026)
 
-This drives the adapter design, so it is spelled out here (sources in the system design):
+This drives the adapter design, so it is spelled out here (sources in the system design and ADR-017). Corral connects each vendor with an API key, or with your subscription where the vendor offers an official way in:
 
-- **Grok (xAI):** The public API is OpenAI-compatible, with a Responses API and server-side tools such as web search and code execution. Corral can run Grok agents directly with the user's xAI key.
+| Vendor | With an API key | With your subscription |
+|---|---|---|
+| xAI Grok | ✅ native agents | ✅ SuperGrok or X Premium+: Corral hosts xAI's Grok Build agent, which signs in by itself (partly gated) |
+| OpenAI | ✅ native agents, Agents API | ✅ ChatGPT Plus or Pro, through Sign in with ChatGPT (fully gated) |
+| Anthropic Claude | ✅ native agents | ❌ Anthropic keeps subscriptions to its own apps |
+| Meta Muse | ✅ Muse Spark agents | ❌ no official way to drive consumer Muse: a linked app |
+| OpenAI dots | – | ❌ no dots API: a linked app |
+
+- **Grok (xAI):** The public API is OpenAI-compatible, with a Responses API and server-side tools such as web search and code execution. Corral can run Grok agents directly with the user's xAI key. A SuperGrok or X Premium+ subscriber can instead run **Grok Build**, xAI's own agent, which Corral hosts over ACP; it signs in with the user's xAI account, and Corral never sees the login.
 - **Muse (Meta):** Muse is a consumer agent that runs on its own Meta-hosted VM, with Meta's own approval layer. No official API lets a third party drive it. Developers *can* reach the same model family (Muse Spark) through the Meta Model API and Muse Code, so Corral can run **Muse Spark-powered agents** but cannot drive a user's consumer Muse.
-- **Dots (OpenAI):** Dots live inside ChatGPT and have no dots API endpoint. The developer path is OpenAI's Agents API (public beta). Corral can run **Agents API agents** but cannot drive a user's consumer dot.
+- **Dots (OpenAI):** Dots live inside ChatGPT and have no dots API endpoint. The developer path is OpenAI's Agents API (public beta). Corral can run **Agents API agents** but cannot drive a user's consumer dot. What a ChatGPT Plus or Pro plan *can* power is Corral's own agents on OpenAI's models, through **Sign in with ChatGPT**: the requests count against the plan, and every tool call still goes through Corral's gate.
 - **CLI agents** (Claude Code, Codex CLI, Gemini CLI, Cognition's Devin CLI, and others) speak the Agent Client Protocol (ACP) over stdio. Corral can host them as a client.
 - **Custom agents:** the user defines a persona, model, tools and permissions in a manifest, and Corral runs it.
 
-Product rule: **Corral never automates a consumer agent through unofficial wrappers, scraped sessions or shared passwords.** When Meta or OpenAI publish an official control API, it becomes another adapter. Until then, consumer Muse and dots appear as "linked apps" (an open-in-app shortcut plus a manual status), clearly marked as not managed. Linked drops shipped on 2026-11-12, turned on from the corral's right-click menu; the manual status comes later.
+Product rule: **Corral never automates a consumer agent through unofficial wrappers, scraped sessions, shared passwords or another app's tokens.** A subscription is used only through the vendor's own door (ADR-017). When Meta or OpenAI publish an official control API, it becomes another adapter. Until then, consumer Muse and dots appear as "linked apps" (an open-in-app shortcut plus a manual status), clearly marked as not managed. Linked drops shipped on 2026-11-12, turned on from the corral's right-click menu; the manual status comes later.
 
 ## Principles
 
@@ -85,4 +93,4 @@ Out of v1 (planned later):
 2. **Shell tool in v1:** offer a sandboxed shell tool to native agents, or leave shell work to ACP CLI agents, which bring their own? Recommendation: CLI agents only in v1.
 3. **Telemetry:** none by default. Is opt-in crash reporting acceptable?
 4. **Name collision check** on "Corral" for the bundle ID, Homebrew cask and trademark.
-5. **Consumer agent APIs:** who watches for official Muse and dots APIs, and how often?
+5. **Consumer agent APIs:** who watches for official Muse and dots APIs, and how often? ADR-017 says: whenever a vendor announces one, and at least every quarter.

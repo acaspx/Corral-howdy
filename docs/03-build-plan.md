@@ -49,15 +49,15 @@ Goal: add an xAI key, click Grok's drop, ask a question, watch the ring turn and
 2. **M2:** tools, the policy engine and checkpoints; approvals appear in the hover card
 3. **Rest of M3:** Grok's tools through the gate, nightly live smoke
 4. **M4:** the full corral UI: setup flow, prompt bar, trace tree, Compare
-5. **M5:** Claude Code, Devin and other CLI agents over ACP, Claude and Muse Spark APIs, OpenAI Agents
+5. **M5:** your subscriptions first (ADR-017: ChatGPT Plus or Pro through Sign in with ChatGPT, SuperGrok through Grok Build over ACP), then Claude Code, Devin and other CLI agents over ACP, Claude and Muse Spark APIs, OpenAI Agents
 
 ### Alongside
 | Work | Issue | When |
 |---|---|---|
 | **S5** Glass on real hardware, with the playground: screenshots at 0–8 agents over light, dark and busy wallpapers; TP-GLASS-05 in Activity Monitor | #7 | During SK-1 |
 | **S6** Hover card, trace tree, logos in SwiftUI | #12 | Before SK-6 |
-| **S2** UI test harness | #4 | Before M4 |
-| **S4** ACP client | #6 | Before M5 |
+| **S2** UI test harness ✅ (2026-11-25, [spikes/S2-ui-test-harness.md](spikes/S2-ui-test-harness.md)) | #4 | Before M4 |
+| **S4** ACP client. Grok Build ✅ findings v1 (2026-11-25, [spikes/S4-acp-grok-build.md](spikes/S4-acp-grok-build.md)); the toy run and the other CLIs to come | #6 | Before M5 |
 | Design to spec: setup flow, prompt bar, done card, Compare into docs/07 and docs/01 (TP-SETUP-01..04, TP-HOVER-10, TP-COMPARE-01..03, J12). Prompt bar ✅ (2026-11-20, 07 §6.1, TP-BAR-01..07) | Design issue | Before M4 |
 
 ### Not now
@@ -83,7 +83,7 @@ The core (M1–M2) is built and proven **with a fake agent before any real provi
 | ID | Question | Output |
 |---|---|---|
 | S1 | Can a Tauri 2 app embed a Swift package (swift-rs) for a non-activating NSPanel, actionable notifications and Touch ID, and ship a WidgetKit extension in the same signed bundle? Should the core run in-process or as a separate helper process, so a UI crash can't stop running agents (security model T26)? | Working toy app + ADR-001 confirmed or amended + process-model decision. **Do this spike first:** all of M4 depends on it. **Done 2026-11-10:** bridge, notifications and Touch ID proven on a Mac; findings in [adr/001-stack.md](adr/001-stack.md); code on `spike/s1-bridge` |
-| S2 | UI end-to-end testing on macOS: what's the most reliable way to drive the real app in CI (WebDriver support, accessibility-API scripting, or Playwright against the frontend with a mocked IPC bridge)? | Test harness decision recorded in the test plan |
+| S2 | UI end-to-end testing on macOS: what's the most reliable way to drive the real app in CI (WebDriver support, accessibility-API scripting, or Playwright against the frontend with a mocked IPC bridge)? | ✅ Findings 2026-11-25: [spikes/S2-ui-test-harness.md](spikes/S2-ui-test-harness.md): journey transcripts every PR, a native smoke nightly; recorded in the test plan §1 |
 | S3 | OpenAI Agents API: does it expose per-tool approval hooks or only up-front tool restriction? Same question for the Meta Model API's agent features and xAI server-side tools | ✅ Findings 2026-11-07: [spikes/S3-provider-approval-hooks.md](spikes/S3-provider-approval-hooks.md), ADR-013. Cassettes pending keys |
 | S5 | Liquid-glass corral on macOS 26: ~~compile `CorralGlass.metal` + `CorralGlassView`~~ (done 2026-11-07: builds and TP-SHAPE/TP-RANK pass in CI on `macos-26`); pick how system glass and the Metal pass combine (plan A: shader over glass layer, B: merged glass shapes in a `GlassEffectContainer` + Metal highlights, C: wallpaper fallback); tune tokens against the reference image; measure GPU frame time; check that polar morphs read well during usage reorders | Signed-off render at n = 0–8, token file, ADR-009/010 confirmed |
 | S4 | ACP client in Rust: drive Claude Code, Codex CLI, Gemini CLI and the Devin CLI through the Rust ACP crate; map their permission requests to checkpoints. For Devin also find out: which actions ask (Cognition documents shell commands; file edits?), whether Corral can set its permission mode, how its spend is reported (it bills in ACUs, not tokens) for the budget meter, and whether cloud Devin sessions (ACP over WebSocket, on Cognition's machines) ask before each action or only report `blocked` | Toy client + list of permission request shapes + a Devin note: gating level for local and cloud sessions, and how its spend maps to the budget |
@@ -177,10 +177,11 @@ Progress: the nightly live smoke is wired (2026-11-19: `.github/workflows/live-s
 **Exit:** E2E journeys J1–J6 and J9–J11 (test plan §6) green; TP-SHAPE-*, TP-RANK-*, TP-USAGE-*, TP-GLASS-*, TP-PLACE-*, TP-HOVER-*, TP-TRACE-*, TP-LOGO-* green; axe zero serious violations; performance budgets met (corral summon p95 < 150 ms, event→UI p95 < 100 ms, idle corral 0 frames, morph < 2 ms GPU).
 
 ## M5: More adapters (~3 weeks; issues parallelize well)
+0. **ChatGPT plan usage** (ADR-017): Sign in with ChatGPT's open-source flow in the shell (loopback, PKCE), the tokens in the Keychain, the Responses client on the plan's route, "Using ChatGPT plan" and Manage usage in the window (TP-SUB-01..03). Fully gated: the agent loop is Corral's
 1. `anthropic_messages` client + native agents on Claude models (client ✅ SK-7; tools through the shared agent loop ✅ 2026-11-19, pulled forward, TP-TOOL-16..18)
 2. Meta Model API (Muse Spark) through the OpenAI-compatible client (config + cassettes)
 3. `managed` adapter for the OpenAI Agents API (scope per Spike S3)
-4. `acp` adapter: spawn, process group, permission mapping, kill on cancel (per Spike S4). Agents: Claude Code, Codex CLI, Gemini CLI and Devin (local sessions through the Devin CLI first; cloud sessions only if S4 shows they can be gated)
+4. `acp` adapter: spawn, process group, permission mapping, kill on cancel (per Spike S4). **Grok Build first**, on the user's SuperGrok or X Premium+ sign-in, with Corral serving its file I/O and terminal (ADR-017, TP-ACP-08..10). Then Claude Code, Codex CLI, Gemini CLI and Devin (local sessions through the Devin CLI first; cloud sessions only if S4 shows they can be gated)
 5. Custom agent manifests: parser, import flow with permission diff, fuzzing
 6. MCP client in the tool gateway (stdio + streamable HTTP), each MCP tool mapped to an action class
 7. ~~"Linked app" cards for consumer Muse and dots (open-in-app only)~~ Done early (Linked apps, 2026-11-12); the "manual status" from the product brief is still to do
