@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { CorralSettings } from "./CorralSettings";
 import { corralSettingsApi as defaultCorralApi, type CorralSettingsApi } from "./corralSettingsApi";
 import { KeyIntake } from "./KeyIntake";
@@ -11,14 +12,10 @@ import { TraceViewer } from "./TraceViewer";
 import { tracesApi as defaultTracesApi, type TracesApi } from "./tracesApi";
 
 /**
- * The main window: Corral's deep-work surface (traces, agent and policy editors, spend, settings).
- * The corral, hover cards and trace tree are native Swift (docs/07-brand-and-corral-surface.md).
- * The API keys, agents (with their provider tools), the corral's settings, policies and traces are real; the other sections arrive in M4.
+ * The main window: Corral's deep-work surface (traces, agent and policy editors, spend, settings),
+ * built with Glaze (ADR-016). The corral, hover cards and trace tree are native Swift
+ * (docs/07-brand-and-corral-surface.md). Spend arrives in M4.
  */
-const sections = [
-  { title: "Spend", body: "What each agent has cost, against its limits." },
-] as const;
-
 export function App({
   keyApi = defaultKeyApi,
   toolsApi = defaultToolsApi,
@@ -35,28 +32,36 @@ export function App({
   agentApi?: AgentEditorApi;
 }) {
   return (
-    <main className="shell">
-      <header>
-        <h1>Corral</h1>
-        <p className="lede">Your agents live in the corral at the bottom of your screen. This window is for the details.</p>
+    <main className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 py-10">
+      <header className="flex flex-col gap-1">
+        <h1 className="type-title">Corral</h1>
+        <p className="type-body text-text-2">
+          Your agents live in the corral at the bottom of your screen. This window is for the details.
+        </p>
       </header>
-      <ul className="sections" aria-label="Main window sections">
-        {sections.map((s) => (
-          <li key={s.title}>
-            <h2>{s.title}</h2>
-            <p>{s.body}</p>
-          </li>
-        ))}
-      </ul>
       <KeyIntake api={keyApi} />
       <AgentEditor api={agentApi} toolsApi={toolsApi} />
       <PolicyEditor api={policyApi} />
       <CorralSettings api={corralApi} />
       <TraceViewer api={tracesApi} />
-      <p className="status" role="status">
+      <Spend />
+      <p className="type-caption text-text-2" role="status">
         Walking skeleton: connect a key and its agent joins the corral; Grok and Claude take tasks
         today. Right-click the corral to place it, add linked apps, or stop all agents.
       </p>
     </main>
+  );
+}
+
+/** Spend arrives in M4: what each agent has cost, against its limits. */
+function Spend() {
+  const headingId = useId();
+  return (
+    <section aria-labelledby={headingId} className="flex flex-col gap-1">
+      <h2 id={headingId} className="type-heading">
+        Spend
+      </h2>
+      <p className="type-body-sm text-text-2">What each agent has cost, against its limits.</p>
+    </section>
   );
 }

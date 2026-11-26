@@ -1,4 +1,18 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
+import { Alert, AlertDescription } from "@/components/glaze/ui/alert";
+import { Button } from "@/components/glaze/ui/button";
+import { Card, CardContent } from "@/components/glaze/ui/card";
+import { Field, FieldLabel } from "@/components/glaze/ui/field";
+import { Input } from "@/components/glaze/ui/input";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from "@/components/glaze/ui/item";
+import { NativeSelect } from "@/components/glaze/ui/select";
 import {
   PROVIDERS,
   errorText,
@@ -23,8 +37,6 @@ export function KeyIntake({ api = keyApi }: { api?: KeyApi }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const fieldId = useId();
-  const pickerId = useId();
   const headingId = useId();
 
   useEffect(() => {
@@ -107,70 +119,95 @@ export function KeyIntake({ api = keyApi }: { api?: KeyApi }) {
         : "Which provider is this key for?";
 
   return (
-    <section className="key-form" aria-labelledby={headingId}>
-      <h2 id={headingId}>API keys</h2>
-      <p className="key-status">{hint}</p>
-      <form onSubmit={connect}>
-        <label htmlFor={fieldId}>API key</label>
-        <input
-          id={fieldId}
-          type="password"
-          autoComplete="off"
-          spellCheck={false}
-          value={draft}
-          onChange={(e) => void typed(e.target.value)}
-          disabled={busy}
-        />
-        <label htmlFor={pickerId}>Provider</label>
-        <select
-          id={pickerId}
-          value={provider}
-          onChange={(e) => setProvider(e.target.value as Provider | "")}
-          disabled={busy || draft.trim() === ""}
-        >
-          <option value="">Choose…</option>
-          {PROVIDERS.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-        <button type="submit" disabled={busy || draft.trim() === "" || provider === ""}>
-          {busy ? "Checking…" : "Connect"}
-        </button>
-      </form>
-      {statuses === null ? null : connected.length === 0 ? (
-        <p className="key-empty">No providers connected yet.</p>
-      ) : (
-        <ul className="key-list" aria-label="Connected providers">
-          {connected.map((s) => (
-            <li key={s.provider}>
-              <span className="key-name">{providerName(s.provider)}</span>
-              <span className="key-detail">
-                ends in {s.last4 ?? "····"} ·{" "}
-                {s.provider === "meta" ? "not checked yet" : `checked with ${providerName(s.provider)}`}
-              </span>
-              <button
-                type="button"
-                onClick={() => void remove(s.provider)}
+    <section aria-labelledby={headingId} className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <h2 id={headingId} className="type-heading">
+          API keys
+        </h2>
+        <p className="type-body-sm text-text-2">{hint}</p>
+      </div>
+      <Card>
+        <CardContent>
+          <form onSubmit={connect} className="flex flex-wrap items-end gap-3">
+            <Field className="min-w-0 flex-1 basis-64">
+              <FieldLabel>API key</FieldLabel>
+              <Input
+                mode="password"
+                autoComplete="off"
+                value={draft}
+                onChange={(e) => void typed(e.target.value)}
                 disabled={busy}
-                aria-label={`Remove ${providerName(s.provider)} key`}
+              />
+            </Field>
+            <Field className="w-40">
+              <FieldLabel>Provider</FieldLabel>
+              <NativeSelect
+                value={provider}
+                onChange={(e) => setProvider(e.target.value as Provider | "")}
+                disabled={busy || draft.trim() === ""}
               >
-                Remove
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+                <option value="">Choose a provider</option>
+                {PROVIDERS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </NativeSelect>
+            </Field>
+            <Button
+              type="submit"
+              pending={busy}
+              pendingLabel="Checking"
+              disabled={!busy && (draft.trim() === "" || provider === "")}
+            >
+              Connect
+            </Button>
+          </form>
+        </CardContent>
+        {statuses === null ? null : connected.length === 0 ? (
+          <CardContent flush>
+            <p className="p-3 type-body-sm text-text-2">No providers connected yet.</p>
+          </CardContent>
+        ) : (
+          <CardContent flush>
+            <ItemGroup variant="plain" aria-label="Connected providers">
+              {connected.map((s) => (
+                <Item key={s.provider}>
+                  <ItemContent>
+                    <ItemTitle>{providerName(s.provider)}</ItemTitle>
+                    <ItemDescription>
+                      ends in {s.last4 ?? "····"} ·{" "}
+                      {s.provider === "meta"
+                        ? "not checked yet"
+                        : `checked with ${providerName(s.provider)}`}
+                    </ItemDescription>
+                  </ItemContent>
+                  <ItemActions>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => void remove(s.provider)}
+                      disabled={busy}
+                      aria-label={`Remove ${providerName(s.provider)} key`}
+                    >
+                      Remove
+                    </Button>
+                  </ItemActions>
+                </Item>
+              ))}
+            </ItemGroup>
+          </CardContent>
+        )}
+      </Card>
       {notice && (
-        <p className="key-notice" role="status">
-          {notice}
-        </p>
+        <Alert status="ok">
+          <AlertDescription>{notice}</AlertDescription>
+        </Alert>
       )}
       {error && (
-        <p className="key-error" role="alert">
-          {error}
-        </p>
+        <Alert status="fail">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
     </section>
   );
