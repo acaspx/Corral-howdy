@@ -1,0 +1,589 @@
+{
+  "journey": "J9",
+  "steps": [
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "gpt",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          }
+        ],
+        "shape": "triangle"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "The corral opens with Grok, GPT and Claude"
+    },
+    {
+      "expect": {
+        "columns": [
+          "grok"
+        ],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "working"
+          },
+          {
+            "id": "gpt",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          }
+        ],
+        "shape": "triangle"
+      },
+      "gesture": {
+        "agent": "grok",
+        "kind": "task",
+        "text": "Summarize my inbox"
+      },
+      "intent": {
+        "intent": {
+          "id": "grok",
+          "kind": "deployTask",
+          "prompt": "Summarize my inbox"
+        },
+        "v": 1
+      },
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "prompt": "Summarize my inbox",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "queued"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Summarize my inbox",
+                "promptTruncated": false,
+                "status": "queued"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "prompt": "Summarize my inbox",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Summarize my inbox",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        }
+      ],
+      "say": "Give Grok a task in its card: still a triangle, its ring turns, its column rises"
+    },
+    {
+      "expect": {
+        "columns": [
+          "grok"
+        ],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "working"
+          },
+          {
+            "id": "gpt",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          },
+          {
+            "id": "muse-spark",
+            "status": "available"
+          }
+        ],
+        "shape": "square"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "grok",
+              "prompt": "Summarize my inbox",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Summarize my inbox",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        }
+      ],
+      "say": "Connect a Meta key: Muse Spark joins and the corral becomes a square"
+    },
+    {
+      "expect": {
+        "columns": [
+          "grok"
+        ],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "working"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          },
+          {
+            "id": "muse-spark",
+            "status": "available"
+          }
+        ],
+        "shape": "triangle"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "grok",
+              "prompt": "Summarize my inbox",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Summarize my inbox",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        }
+      ],
+      "say": "Sign out of ChatGPT: GPT leaves and the corral is a triangle again"
+    },
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "done"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          },
+          {
+            "id": "muse-spark",
+            "status": "available"
+          }
+        ],
+        "shape": "triangle"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answer": "Three emails need you today: the lease renewal, Sam's itinerary and a refund.",
+              "answerTruncated": false,
+              "elapsedMs": 40000,
+              "id": "grok",
+              "prompt": "Summarize my inbox",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Summarize my inbox",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answer": "Three emails need you today: the lease renewal, Sam's itinerary and a refund.",
+              "answerTruncated": false,
+              "elapsedMs": 40000,
+              "id": "grok",
+              "prompt": "Summarize my inbox",
+              "promptTruncated": false,
+              "spend": "$0.0020",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Summarize my inbox",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "done"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answer": "Three emails need you today: the lease renewal, Sam's itinerary and a refund.",
+              "answerTruncated": false,
+              "elapsedMs": 40000,
+              "id": "grok",
+              "prompt": "Summarize my inbox",
+              "promptTruncated": false,
+              "spend": "$0.0020",
+              "status": "done"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "Grok finishes: its drop shows it's done, and its column folds away"
+    },
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          },
+          {
+            "id": "muse-spark",
+            "status": "available"
+          }
+        ],
+        "shape": "triangle"
+      },
+      "gesture": {
+        "agent": "grok",
+        "button": "sendBack",
+        "kind": "press"
+      },
+      "intent": {
+        "intent": {
+          "id": "grok",
+          "kind": "sendBack"
+        },
+        "v": 1
+      },
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "Send Grok back from its card: still a triangle, and Grok is ready for a task"
+    }
+  ],
+  "title": "Corral morph"
+}
