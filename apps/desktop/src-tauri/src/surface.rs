@@ -608,8 +608,8 @@ fn grok_agent(
 }
 
 /// GPT on the ChatGPT plan (TP-SUB-07), with its file tools, or with none without its folder or
-/// a usable policy. Each run uses the plan's first listed model; choosing one comes with the
-/// agent editor's plan models.
+/// a usable policy. Each run uses the model saved in the agent editor while the plan lists it,
+/// else the plan's first (TP-SUB-08).
 fn gpt_agent(
     app: &AppHandle,
     desk: &Arc<CheckpointDesk>,
@@ -617,6 +617,17 @@ fn gpt_agent(
     plan: Arc<ChatGptPlan>,
 ) -> Arc<dyn RunDriver> {
     let keys: Arc<dyn KeySource> = plan.clone();
+    let gpt = agent_for(Provider::OpenAi);
+    let preferred = match app.state::<AgentSettings>().plan_model(&gpt.id) {
+        Ok(model) => model,
+        Err(reason) => {
+            eprintln!(
+                "corral: {}'s model can't be used, so it runs on the plan's first: {reason}",
+                gpt.name
+            );
+            None
+        }
+    };
     let agent = match agent_file_tools(app, desk, Provider::OpenAi) {
         Ok(tools) => {
             let build: PlanBuild = Arc::new(move |config: ResponsesConfig| {
@@ -629,7 +640,7 @@ fn gpt_agent(
                 Arc::new(agent) as Arc<dyn RunDriver>
             });
             // The tool loop stops at safe points, so its cards offer Pause.
-            PlanAgent::new(plan, None, build, true)
+            PlanAgent::new(plan, preferred, build, true)
         }
         Err(reason) => {
             eprintln!("corral: GPT has no tools: {reason}");
@@ -637,7 +648,7 @@ fn gpt_agent(
                 let driver = ResponsesDriver::with_keys(transport.clone(), keys.clone(), config);
                 Arc::new(driver) as Arc<dyn RunDriver>
             });
-            PlanAgent::new(plan, None, build, false)
+            PlanAgent::new(plan, preferred, build, false)
         }
     };
     Arc::new(agent)

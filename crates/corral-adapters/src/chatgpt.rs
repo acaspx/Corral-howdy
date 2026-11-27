@@ -801,14 +801,24 @@ pub struct PlanModel {
     pub display_name: String,
 }
 
+/// True for a model slug Corral sends and saves: 1 to 128 ASCII letters, digits, `-`, `.`, `_`
+/// or `:`. The plan's list is the only source of slugs; this keeps an odd one out of a settings
+/// file and a request.
+pub fn is_plan_slug(text: &str) -> bool {
+    (1..=MAX_MODEL_TEXT).contains(&text.len())
+        && text
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b':'))
+}
+
 /// The model list wasn't one Corral can read.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("ChatGPT sent a model list Corral couldn't read")]
 pub struct BadModelList;
 
 /// The models in a `GET /v1/models` reply that are listed for choosing (`visibility: list`), in
-/// the server's order, which is also the plan's default first. Entries without a slug are
-/// skipped; one without a display name shows its slug.
+/// the server's order, which is also the plan's default first. Entries without a plain slug
+/// ([`is_plan_slug`]) are skipped; one without a display name shows its slug.
 pub fn listed_models(body: &[u8]) -> Result<Vec<PlanModel>, BadModelList> {
     let reply = serde_json::from_slice::<Value>(body).map_err(|_| BadModelList)?;
     let entries = reply
@@ -832,7 +842,12 @@ pub fn listed_models(body: &[u8]) -> Result<Vec<PlanModel>, BadModelList> {
         if entry.get("visibility").and_then(Value::as_str) != Some("list") {
             continue;
         }
-        let Some(slug) = text(entry, "slug") else {
+        let Some(slug) = entry
+            .get("slug")
+            .and_then(Value::as_str)
+            .filter(|slug| is_plan_slug(slug))
+            .map(str::to_owned)
+        else {
             continue;
         };
         if models.iter().any(|m| m.slug == slug) {

@@ -360,7 +360,12 @@ spentMicroUsd: number | null,
 /**
  * Why its saved settings or name can't be used, in plain words.
  */
-problem: string | null, };
+problem: string | null,
+/**
+ * Set for an agent that runs on the user's ChatGPT plan (GPT): its models are the plan's,
+ * and it has no dollar cap or spend to show.
+ */
+chatgptPlan?: PlanState, };
 
 export type ModelView = {
 /**
@@ -375,6 +380,12 @@ name: string,
  * Its list price, in words.
  */
 price: string, };
+
+export type PlanState = { "state": "signedOut" } | { "state": "signedIn" } | { "state": "unavailable",
+/**
+ * Why, in plain words.
+ */
+message: string, };
 
 export type AgentEdit = {
 /**

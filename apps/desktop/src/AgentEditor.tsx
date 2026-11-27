@@ -26,10 +26,24 @@ function draftOf(view: AgentEditorView): Draft {
   return { name: view.name, model: view.model, cap: capText(view.monthlyCapMicroUsd) };
 }
 
+/** What an agent on the ChatGPT plan says when it has no models to choose from (TP-SUB-08). */
+function planNote(view: AgentEditorView): string {
+  switch (view.chatgptPlan?.state) {
+    case "signedOut":
+      return `${view.name} runs on your ChatGPT plan. Continue with ChatGPT above to choose its model.`;
+    case "unavailable":
+      return view.chatgptPlan.message;
+    case "signedIn":
+    case undefined:
+      return "Your ChatGPT plan offers no models right now.";
+  }
+}
+
 /**
  * The agent editor (TP-AED-09): for each agent, its name (its folder follows), its model from
  * the priced table, its own monthly cap and what it spent this month, and the provider tools it
- * can be given. The core checks and keeps a save; it applies without a restart.
+ * can be given. GPT's models are its ChatGPT plan's, and it has no dollar cap (TP-SUB-08). The
+ * core checks and keeps a save; it applies without a restart.
  */
 export function AgentEditor({
   api = agentEditorApi,
@@ -153,7 +167,9 @@ export function AgentEditor({
                   was.
                 </FieldDescription>
               </Field>
-              {view.models.length > 0 ? (
+              {view.chatgptPlan && view.models.length === 0 ? (
+                <p className="type-body-sm text-text-2">{planNote(view)}</p>
+              ) : view.models.length > 0 ? (
                 <Field>
                   <FieldLabel>Model</FieldLabel>
                   <NativeSelect
@@ -174,24 +190,30 @@ export function AgentEditor({
               ) : (
                 <p className="type-body-sm text-text-2">Corral can't run {view.name} yet.</p>
               )}
-              <Field>
-                <FieldLabel>Monthly cap, in dollars</FieldLabel>
-                <Input
-                  inputMode="decimal"
-                  value={draft.cap}
-                  placeholder={capText(view.defaultCapMicroUsd)}
-                  autoComplete="off"
-                  disabled={busy}
-                  onChange={(e) => edit({ cap: e.target.value })}
-                />
-                <FieldDescription>
-                  Empty is the default, {dollars(view.defaultCapMicroUsd)}. At most{" "}
-                  {dollars(view.maxCapMicroUsd)}.
-                </FieldDescription>
-              </Field>
+              {view.chatgptPlan ? (
+                <p className="type-body-sm text-text-2">
+                  No dollar cap: {view.name}'s tasks count against your plan's usage.
+                </p>
+              ) : (
+                <Field>
+                  <FieldLabel>Monthly cap, in dollars</FieldLabel>
+                  <Input
+                    inputMode="decimal"
+                    value={draft.cap}
+                    placeholder={capText(view.defaultCapMicroUsd)}
+                    autoComplete="off"
+                    disabled={busy}
+                    onChange={(e) => edit({ cap: e.target.value })}
+                  />
+                  <FieldDescription>
+                    Empty is the default, {dollars(view.defaultCapMicroUsd)}. At most{" "}
+                    {dollars(view.maxCapMicroUsd)}.
+                  </FieldDescription>
+                </Field>
+              )}
             </CardContent>
             <CardFooter>
-              {view.spentMicroUsd !== null && (
+              {view.spentMicroUsd !== null && !view.chatgptPlan && (
                 <CardMeta>Spent {dollars(view.spentMicroUsd)} this month.</CardMeta>
               )}
               <Button type="submit" size="sm" pending={busy} pendingLabel="Saving">

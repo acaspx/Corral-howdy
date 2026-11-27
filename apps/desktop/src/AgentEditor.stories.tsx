@@ -1,7 +1,15 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 import { AgentEditor } from "./AgentEditor";
-import { agentApi, agentView, gptView, never, toolsApi, toolsView } from "./fixtures/apis";
+import {
+  agentApi,
+  agentView,
+  gptOnPlanView,
+  gptView,
+  never,
+  toolsApi,
+  toolsView,
+} from "./fixtures/apis";
 
 const meta = {
   title: "Main window/Agents",
@@ -36,6 +44,32 @@ export const Renamed: Story = {
 
 /** An agent Corral can't run yet: no model to pick. */
 export const CantRunYet: Story = { args: { api: agentApi([gptView()]) } };
+
+/** GPT on the ChatGPT plan: the plan's models with no prices, and no dollar cap or spend. */
+export const GptOnPlan: Story = { args: { api: agentApi([gptOnPlanView()]) } };
+
+/** GPT with no ChatGPT account signed in: it says how to choose a model. */
+export const GptSignedOut: Story = {
+  args: {
+    api: agentApi([gptOnPlanView({ models: [], model: null, chatgptPlan: { state: "signedOut" } })]),
+  },
+};
+
+/** The plan couldn't be asked for its models: the reason is shown. */
+export const GptPlanUnavailable: Story = {
+  args: {
+    api: agentApi([
+      gptOnPlanView({
+        models: [],
+        model: null,
+        chatgptPlan: {
+          state: "unavailable",
+          message: "Couldn't reach ChatGPT for your plan's models. Try again in a minute.",
+        },
+      }),
+    ]),
+  },
+};
 
 /** The saved settings can't be used: the agent can't spend until they're saved again. */
 export const BrokenSettings: Story = {

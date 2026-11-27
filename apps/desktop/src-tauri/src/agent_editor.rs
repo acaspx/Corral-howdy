@@ -8,12 +8,18 @@
 //! - **One write**, then applied without a restart: the cap from the agent's next request, the
 //!   name on its card at once (the corral is told), and the model and folder from its next task
 //!   (the agent's version, which its driver is rebuilt on).
+//! - **GPT's models are its ChatGPT plan's** (TP-SUB-08): listed in the plan's order with no
+//!   price, the saved one shown while the plan lists it, and a save must pick one it lists.
 //! - **A folder is never shared.** A rename whose folder already exists is refused unless it's
 //!   the agent's own (its catalog name's), so an agent never starts in another agent's old files.
 
 use crate::agent_names::AgentNames;
 use crate::agent_settings::{AgentSettings, AgentSetup};
-use corral_adapters::catalog::{ModelChoice, agent_for, model_choice, models, provider_of};
+use crate::chatgpt_signin::{ChatGptSignIn, plan_models};
+use corral_adapters::catalog::{
+    ModelChoice, agent_for, model_choice, models, provider_of, runs_on_chatgpt_plan,
+};
+use corral_adapters::chatgpt::PlanModel;
 use corral_core::agent_name::AgentName;
 use corral_core::budget::{LedgerConfig, Price, SpendLedger, usd};
 use corral_core::clock::Clock;
@@ -36,6 +42,36 @@ pub struct ModelView {
     /// Its list price, in words.
     pub price: String,
 }
+
+/// What the ChatGPT plan offers the editor (TP-SUB-08): fetched by the commands, passed in, so
+/// the editor's checks stay pure.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PlanModels {
+    /// No ChatGPT account is signed in.
+    SignedOut,
+    /// The plan's models, in its order.
+    Listed(Vec<PlanModel>),
+    /// The plan couldn't be asked, and why.
+    Unavailable(String),
+}
+
+/// An agent on the ChatGPT plan, as the editor shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase", tag = "state")]
+pub enum PlanState {
+    /// Sign in with ChatGPT to choose its model.
+    SignedOut,
+    /// Its models are the plan's.
+    SignedIn,
+    /// The plan couldn't be asked.
+    Unavailable {
+        /// Why, in plain words.
+        message: String,
+    },
+}
+
+/// What a model on the plan shows where a price would be: it spends no dollars.
+pub const ON_PLAN: &str = "Uses your ChatGPT plan";
 
 /// One agent, as the editor shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
@@ -67,6 +103,11 @@ pub struct AgentEditorView {
     pub spent_micro_usd: Option<u64>,
     /// Why its saved settings or name can't be used, in plain words.
     pub problem: Option<String>,
+    /// Set for an agent that runs on the user's ChatGPT plan (GPT): its models are the plan's,
+    /// and it has no dollar cap or spend to show.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub chatgpt_plan: Option<PlanState>,
 }
 
 /// The editor's form.
@@ -129,17 +170,33 @@ impl AgentEditor {
         versions.get(agent).copied().unwrap_or(0)
     }
 
-    /// Every catalog agent.
+    /// Every catalog agent, with no ChatGPT account signed in.
     pub fn views(&self) -> Vec<AgentEditorView> {
+        self.views_on_plan(&PlanModels::SignedOut)
+    }
+
+    /// Every catalog agent, GPT with what the plan offers.
+    pub fn views_on_plan(&self, plan: &PlanModels) -> Vec<AgentEditorView> {
         Provider::ALL
             .into_iter()
-            .map(|provider| self.view(provider))
+            .map(|provider| self.view(provider, plan))
             .collect()
     }
 
-    /// Checks `edit` for `agent` whole, then saves and applies it. A refused save changes
-    /// nothing.
+    /// Checks `edit` for `agent` whole, then saves and applies it, with no ChatGPT account
+    /// signed in. A refused save changes nothing.
     pub fn save(&self, agent: &str, edit: AgentEdit) -> Result<AgentEditorView, String> {
+        self.save_on_plan(agent, edit, &PlanModels::SignedOut)
+    }
+
+    /// [`Self::save`], with what the ChatGPT plan offers: GPT's model must be one the plan
+    /// lists (TP-SUB-08).
+    pub fn save_on_plan(
+        &self,
+        agent: &str,
+        edit: AgentEdit,
+        plan: &PlanModels,
+    ) -> Result<AgentEditorView, String> {
         let id = AgentId::from(agent);
         let Some(provider) = provider_of(&id) else {
             return Err(format!("{agent:?} isn't one of Corral's agents."));
@@ -159,8 +216,14 @@ impl AgentEditor {
         if let Some(name) = &name {
             self.folder_is_free(&id, name)?;
         }
+        let on_plan = runs_on_chatgpt_plan(provider);
+        let plan_model = match edit.model.as_deref() {
+            Some(model) if on_plan => Some(listed(&catalog.name, plan, model)?),
+            None | Some(_) => None,
+        };
         let model = match edit.model.as_deref() {
             None => models(provider).first(),
+            Some(_) if on_plan => None,
             Some(model) => Some(offered(provider, model)?),
         };
         let all_agents = self.ledger_config().global_month_cap_micro_usd;
@@ -177,7 +240,12 @@ impl AgentEditor {
             model,
             monthly_cap_micro_usd: edit.monthly_cap_micro_usd,
         };
-        self.settings.save_all(&id, &setup, name.as_ref())?;
+        if on_plan {
+            self.settings
+                .save_all_on_plan(&id, &setup, plan_model, name.as_ref())?;
+        } else {
+            self.settings.save_all(&id, &setup, name.as_ref())?;
+        }
         if let Err(e) = self.names.set(&id, name) {
             // Checked above under the same lock, so this can't happen; the file holds it for
             // the next launch either way.
@@ -193,7 +261,7 @@ impl AgentEditor {
         if let Some(hook) = self.on_change.get() {
             hook();
         }
-        Ok(self.view(provider))
+        Ok(self.view(provider, plan))
     }
 
     /// Refuses `name` for `agent` if its folder is there and isn't the agent's own: it may hold
@@ -227,7 +295,7 @@ impl AgentEditor {
             .map_or_else(LedgerConfig::default, |(ledger, _)| ledger.config())
     }
 
-    fn view(&self, provider: Provider) -> AgentEditorView {
+    fn view(&self, provider: Provider, plan: &PlanModels) -> AgentEditorView {
         let card = self.names.card(provider);
         let catalog = agent_for(provider);
         let config = self.ledger_config();
@@ -246,13 +314,40 @@ impl AgentEditor {
             ),
         };
         let name_problem = self.settings.name(&card.id).err();
+        let (offered, model, chatgpt_plan) = if runs_on_chatgpt_plan(provider) {
+            let (offered, state) = match plan {
+                PlanModels::SignedOut => (Vec::new(), PlanState::SignedOut),
+                PlanModels::Listed(listed) => (
+                    listed.iter().map(plan_model_view).collect(),
+                    PlanState::SignedIn,
+                ),
+                PlanModels::Unavailable(message) => (
+                    Vec::new(),
+                    PlanState::Unavailable {
+                        message: message.clone(),
+                    },
+                ),
+            };
+            // The saved model while the plan lists it, else the plan's first, as a run uses.
+            let saved = self.settings.plan_model(&card.id).ok().flatten();
+            let model = saved
+                .filter(|slug| offered.iter().any(|m: &ModelView| m.id == *slug))
+                .or_else(|| offered.first().map(|m| m.id.clone()));
+            (offered, model, Some(state))
+        } else {
+            (
+                models(provider).iter().map(model_view).collect(),
+                setup.model.map(|m| m.id.to_owned()),
+                None,
+            )
+        };
         AgentEditorView {
             agent: card.id.as_str().to_owned(),
             name: card.name.clone(),
             catalog_name: catalog.name,
             folder: format!("~/Corral/{}", card.name),
-            models: models(provider).iter().map(model_view).collect(),
-            model: setup.model.map(|m| m.id.to_owned()),
+            models: offered,
+            model,
             monthly_cap_micro_usd: setup.monthly_cap_micro_usd,
             default_cap_micro_usd: config.agent_month_cap_micro_usd,
             max_cap_micro_usd: config.global_month_cap_micro_usd,
@@ -261,6 +356,7 @@ impl AgentEditor {
                 .get()
                 .map(|(ledger, clock)| ledger.spent(&card.id, clock.now_ms())),
             problem: setup_problem.or(name_problem),
+            chatgpt_plan,
         }
     }
 }
@@ -273,6 +369,31 @@ fn offered(provider: Provider, id: &str) -> Result<&'static ModelChoice, String>
             agent_for(provider).name
         )
     })
+}
+
+/// `slug` as one of the models `plan` lists for `agent_name`, or why not.
+fn listed<'a>(agent_name: &str, plan: &PlanModels, slug: &'a str) -> Result<&'a str, String> {
+    match plan {
+        PlanModels::Listed(models) if models.iter().any(|m| m.slug == slug) => Ok(slug),
+        PlanModels::Listed(_) => Err(format!(
+            "{slug:?} isn't a model your ChatGPT plan lists for {agent_name}."
+        )),
+        PlanModels::SignedOut => Err(format!(
+            "{slug:?} isn't a model Corral offers for {agent_name} without a ChatGPT plan. \
+             Continue with ChatGPT above, then choose one of its models."
+        )),
+        PlanModels::Unavailable(why) => Err(format!(
+            "Couldn't check {slug:?} against your ChatGPT plan: {why}"
+        )),
+    }
+}
+
+fn plan_model_view(model: &PlanModel) -> ModelView {
+    ModelView {
+        id: model.slug.clone(),
+        name: model.display_name.clone(),
+        price: ON_PLAN.to_owned(),
+    }
 }
 
 fn model_view(model: &ModelChoice) -> ModelView {
@@ -314,18 +435,31 @@ fn thousands(n: u64) -> String {
     out
 }
 
-/// Every agent, for the main window.
+/// Every agent, for the main window; GPT with the models the ChatGPT plan lists (TP-SUB-08).
+/// Async: asking the plan can take a moment.
 #[tauri::command]
-pub fn agent_editor(editor: State<'_, Arc<AgentEditor>>) -> Vec<AgentEditorView> {
-    editor.views()
+pub async fn agent_editor(
+    editor: State<'_, Arc<AgentEditor>>,
+    signin: State<'_, Arc<ChatGptSignIn>>,
+) -> Result<Vec<AgentEditorView>, String> {
+    let plan = plan_models(signin.plan()).await;
+    Ok(editor.views_on_plan(&plan))
 }
 
-/// Saves one agent; it applies without a restart.
+/// Saves one agent; it applies without a restart. GPT's model is checked against what the
+/// plan lists now (kept per account, so this rarely asks again).
 #[tauri::command]
-pub fn save_agent(
+pub async fn save_agent(
     editor: State<'_, Arc<AgentEditor>>,
+    signin: State<'_, Arc<ChatGptSignIn>>,
     agent: String,
     edit: AgentEdit,
 ) -> Result<AgentEditorView, String> {
-    editor.save(&agent, edit)
+    let on_plan = provider_of(&AgentId::from(agent.as_str())).is_some_and(runs_on_chatgpt_plan);
+    let plan = if on_plan {
+        plan_models(signin.plan()).await
+    } else {
+        PlanModels::SignedOut
+    };
+    editor.save_on_plan(&agent, edit, &plan)
 }

@@ -477,6 +477,19 @@ pub fn plan_signed_in(plan: &ChatGptPlan) -> bool {
     }
 }
 
+/// What the plan offers the agent editor now (TP-SUB-08): nothing while signed out, its models,
+/// or why it couldn't be asked.
+pub async fn plan_models(plan: &ChatGptPlan) -> crate::agent_editor::PlanModels {
+    use crate::agent_editor::PlanModels;
+    if !plan_signed_in(plan) {
+        return PlanModels::SignedOut;
+    }
+    match plan.models().await {
+        Ok(models) => PlanModels::Listed(models),
+        Err(e) => PlanModels::Unavailable(e.to_string()),
+    }
+}
+
 /// GPT's drop follows the plan: it joins the corral on sign-in and leaves on sign-out.
 fn corral_follows_plan(app: &AppHandle) {
     match app.try_state::<crate::keys::Keys>() {
