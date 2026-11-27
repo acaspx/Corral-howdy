@@ -486,8 +486,8 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 ## 6. End-to-end journeys
 - **J0** Walking skeleton: add an xAI key → click Grok's drop → type a question → Deploy → the ring turns and the hover card shows elapsed time and spend → the result card shows the answer → Send back (cassette in CI, live once by the owner with a $0.25 cap)
 - **J1** First launch → add xAI key → create agent (with a logo) → deploy → watch its trace column and hover card → completed → send back
-- **J2** Deploy three agents at once (⌘-click three drops, then "Deploy to 3" in the prompt bar); all three trace columns update independently
-- **J3** Checkpoint: approve, deny with note, edit args, allow-for-run
+- **J2** Deploy three agents at once (⌘-click three drops, then "Deploy to 3" in the prompt bar); all three trace columns update independently. Transcript: `native/CorralNative/Fixtures/journeys/J2.json`
+- **J3** Checkpoint: approve, deny with note, edit args, allow-for-run. Transcript: `native/CorralNative/Fixtures/journeys/J3.json`
 - **J4** Open trace from a task card (or Trace › in the hover card); filter to tool calls; copy JSON
 - **J5** Budget soft limit → checkpoint → raise limit → continue
 - **J6** Recall-all from the hotkey during 5 active runs
@@ -495,7 +495,7 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **J8** Import a manifest from file → permission diff → accept → deploy
 - **J9** Corral morph: start with 3 agents (triangle) → deploy one (the shape stays a triangle, its ring turns, its column rises) → add an agent (square) → remove one (triangle) → the working one finishes (its column folds away) → send it back (still a triangle; it's ready for a task). Transcript: `native/CorralNative/Fixtures/journeys/J9.json`, played by `apps/desktop/src-tauri/tests/journeys.rs` and replayed by `CorralJourneyTests.swift` (Spike S2)
 - **J10** Usage order + shown set: deploy the rank-4 agent repeatedly until it outranks #1 → with the corral idle, it glides to top-left → add a 9th agent → chooser appears → uncheck one → the corral stays an octagon with the chosen 8
-- **J11** Hover approval: an agent hits a `comms.send` checkpoint → its drop pulses and its wire turns maroon → hover → the card shows the exact destination and message → Deny with a note → the agent continues → next checkpoint → Approve → the column advances
+- **J11** Hover approval: an agent hits a `comms.send` checkpoint → its drop pulses and its wire turns maroon → hover → the card shows the exact destination and message → Deny with a note → the agent continues → next checkpoint → Approve → the column advances. Transcript: `native/CorralNative/Fixtures/journeys/J11.json`
 - **J12** Same task, three agents: deploy one prompt to three agents → "3 results ready · Compare" → continue with one → the other two fold back into the corral and their results are in History
 
 ## 7. Performance budgets
