@@ -3,9 +3,9 @@
 //! The core decides everything the corral shows and does (AGENTS.md rule 3); this module only
 //! relays:
 //! - **Out to Swift:** [`CorralFeed::watch`] wraps the event log, so every event the log accepts
-//!   updates the corral view and the run cards ([`CorralTracker`], [`RunCards`]). Each change, and
-//!   a tick once a second while a card's clock is moving, sends the roster with its cards to
-//!   Swift on the main thread.
+//!   updates what the corral shows ([`CorralState`]: the drops, their order and the run cards).
+//!   Each change, and a tick once a second while a card's clock is moving, sends the roster with
+//!   its cards to Swift on the main thread.
 //! - **In from Swift:** a task typed into a drop, Stop, Send back and Retry go to
 //!   [`CorralControls`], which decides. Other intents are reported until their milestones.
 //!
@@ -29,13 +29,14 @@ use crate::agent_editor::AgentEditor;
 use crate::agent_names::AgentNames;
 use crate::agent_policies::PolicyEditor;
 use crate::agent_settings::{AgentSettings, messages_config, responses_config, seed_caps};
-use crate::agent_tools::{allowing_provider_tools, file_tools_under, random_id};
+use crate::agent_tools::{allowing_provider_tools, file_tools_under};
 use crate::bridge::{
     AuthOutcome, BridgeError, Intent, NotificationRequest, PromptBarSnapshot, RosterSnapshot,
 };
 use crate::chatgpt_signin::{ChatGptSignIn, plan_signed_in, with_plan};
 use crate::corral_order::{CorralOrder, CorralSettingsView};
 use crate::corral_settings::{CorralControl, CorralSettings};
+use crate::corral_state::{CorralState, save_order};
 use crate::keys::Keys;
 use crate::linked::LinkedStore;
 use crate::logos::{LogoStore, fetch_missing};
@@ -56,16 +57,15 @@ use corral_adapters::responses::{ResponsesConfig, ResponsesDriver};
 use corral_adapters::stream::KeySource;
 use corral_adapters::transport::{ReqwestTransport, Transport};
 use corral_core::budget::{BudgetConfig, SpendLedger};
-use corral_core::checkpoint_note::{NoteAnswer, NoteClick, NoteDesk, NoteTrouble, Notice};
+use corral_core::checkpoint_note::{NoteAnswer, NoteClick, NoteTrouble, Notice};
 use corral_core::clock::{Clock, SystemClock};
 use corral_core::controls::{ControlError, CorralControls};
-use corral_core::corral_view::{AgentCard, CorralTracker, DropState};
-use corral_core::event::{Event, EventBody};
+use corral_core::corral_view::AgentCard;
+use corral_core::event::Event;
 use corral_core::ids::{AgentId, CheckpointId};
 use corral_core::prompt_bar;
-use corral_core::run_card::{EditError, RunCard, RunCards};
+use corral_core::run_card::{EditError, RunCard};
 use corral_core::supervisor::{EventLog, RunDriver, Supervisor, SupervisorConfig, WatchedLog};
-use corral_core::trace_tree::trace_tree;
 use corral_core::usage_rank::{Deploy, WINDOW_MS};
 use corral_policy::{Approval, Scope};
 use corral_secrets::{Provider, SecretStore};
@@ -390,27 +390,14 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
     let connected = connected(keys.as_ref(), &plan);
     let clock: Arc<dyn Clock> = Arc::new(SystemClock);
     // The usage order, as saved; the log's deploys seed it once the store is open.
-    let mut order = CorralOrder::open(data_dir.as_ref().map(|d| d.join("corral-order.json")));
+    let order = CorralOrder::open(data_dir.as_ref().map(|d| d.join("corral-order.json")));
     if let Some(problem) = order.problem() {
         eprintln!("corral: {problem}");
     }
     let names = app.state::<AgentNames>().inner().clone();
     let all_cards = names.rename(corral_agents(&connected, &linked));
-    let placed = order.place(all_cards.clone(), clock.now_ms());
-    if placed.choose_shown {
-        eprintln!("corral: the corral holds up to 8 agents; a new one is hidden until you choose");
-    }
-    save_order(&mut order);
     let feed = Arc::new(CorralFeed {
-        views: Mutex::new(Views {
-            corral: CorralTracker::new(placed.cards),
-            order,
-            all_cards,
-            cards: RunCards::default(),
-            logos: HashMap::new(),
-            linked,
-            notes: NoteDesk::default(),
-        }),
+        views: Mutex::new(CorralState::open(order, all_cards, linked, clock.now_ms())),
         app: app.clone(),
         clock: Arc::clone(&clock),
     });
@@ -764,24 +751,9 @@ fn id_source() -> Arc<dyn Fn() -> String + Send + Sync> {
     Arc::new(move || format!("{started:x}-{}", next.fetch_add(1, Ordering::Relaxed)))
 }
 
-struct Views {
-    corral: CorralTracker,
-    /// The corral's usage order and shown set (TP-USAGE-06..09).
-    order: CorralOrder,
-    /// Every agent, before the order picks and sorts the shown ones.
-    all_cards: Vec<AgentCard>,
-    cards: RunCards,
-    /// Logo paths by agent.
-    logos: HashMap<AgentId, String>,
-    /// Which linked apps show, for the right-click menu.
-    linked: LinkedSettings,
-    /// The checkpoint notifications that are out (TP-CHK-22).
-    notes: NoteDesk,
-}
-
 /// Keeps the corral in step with the event log.
 pub struct CorralFeed {
-    views: Mutex<Views>,
+    views: Mutex<CorralState>,
     app: AppHandle,
     clock: Arc<dyn Clock>,
 }
@@ -850,19 +822,9 @@ impl CorralFeed {
             eprintln!("corral: the corral view is poisoned; the corral stops updating");
             return;
         };
-        views.all_cards = cards.clone();
-        let placed = views.order.place(cards, self.clock.now_ms());
-        if placed.choose_shown {
-            eprintln!(
-                "corral: the corral holds up to 8 agents; a new one is hidden until you choose"
-            );
-        }
-        save_order(&mut views.order);
-        let drops_changed = views.corral.set_agents(placed.cards);
-        let links_changed = views.linked != linked;
-        views.linked = linked;
-        if drops_changed || links_changed {
-            self.send(self.snapshot(&views));
+        let now = self.clock.now_ms();
+        if views.set_agents(cards, linked, now) {
+            self.send(views.snapshot(now));
         }
     }
 
@@ -874,14 +836,8 @@ impl CorralFeed {
             return;
         };
         let now = self.clock.now_ms();
-        if !views.order.seed(deploys, now) {
-            return;
-        }
-        save_order(&mut views.order);
-        let cards = views.all_cards.clone();
-        let placed = views.order.place(cards, now);
-        if views.corral.set_agents(placed.cards) {
-            self.send(self.snapshot(&views));
+        if views.seed_usage(deploys, now) {
+            self.send(views.snapshot(now));
         }
     }
 
@@ -892,9 +848,9 @@ impl CorralFeed {
             eprintln!("corral: the corral view is poisoned; the corral stops updating");
             return;
         };
-        views.order.set_corral_idle(idle);
-        if settle(&mut views, self.clock.now_ms()) {
-            self.send(self.snapshot(&views));
+        let now = self.clock.now_ms();
+        if views.corral_idle(idle, now) {
+            self.send(views.snapshot(now));
         }
     }
 
@@ -904,9 +860,8 @@ impl CorralFeed {
             eprintln!("corral: the corral view is poisoned; the corral stops updating");
             return;
         };
-        if views.logos.get(&agent) != Some(&path) {
-            views.logos.insert(agent, path);
-            self.send(self.snapshot(&views));
+        if views.set_logo(agent, path) {
+            self.send(views.snapshot(self.clock.now_ms()));
         }
     }
 
@@ -916,24 +871,7 @@ impl CorralFeed {
             .views
             .lock()
             .map_err(|_| native::NativeError::Poisoned)?;
-        native::set_roster(&self.snapshot(&views))
-    }
-
-    fn snapshot(&self, views: &Views) -> RosterSnapshot {
-        let agents: Vec<AgentId> = views.all_cards.iter().map(|card| card.id.clone()).collect();
-        RosterSnapshot::with_cards(&views.corral.view(), &views.cards, self.clock.now_ms())
-            .with_plans(&views.cards)
-            .with_queue(&views.cards)
-            .with_trace(&trace_tree(&views.cards, &agents))
-            .with_column_names(|id| {
-                views
-                    .all_cards
-                    .iter()
-                    .find(|card| &card.id == id)
-                    .map(|card| card.name.clone())
-            })
-            .with_logos(|id| views.logos.get(id).cloned())
-            .with_linked(&views.linked)
+        native::set_roster(&views.snapshot(self.clock.now_ms()))
     }
 
     /// Updates the views and, when a drop or a card changed, sends the new roster to Swift. The
@@ -944,57 +882,14 @@ impl CorralFeed {
             eprintln!("corral: the corral view is poisoned; the corral stops updating");
             return;
         };
-        // Deploys count toward the usage order at once; a new order waits for the corral to be
-        // idle (TP-USAGE-07).
-        if let EventBody::RunQueued(queued) = &event.body {
-            views.order.deployed(queued.agent_id.clone(), event.ts);
+        let now = self.clock.now_ms();
+        let (changed, posts) = views.observe(event, now);
+        if changed {
+            self.send(views.snapshot(now));
         }
-        if let EventBody::RunCompleted(_) | EventBody::RunFailed(_) | EventBody::RunCancelled(_) =
-            &event.body
-        {
-            views.order.run_ended(event.ts);
-        }
-        // The supervisor already validated the event; a refusal here means the views diverged.
-        let drop_changed = views.corral.observe(event).unwrap_or_else(|e| {
-            eprintln!("corral: the corral view refused {:?}: {e}", event.kind());
-            false
-        });
-        let card_changed = views.cards.observe(event).unwrap_or_else(|e| {
-            eprintln!("corral: the run cards refused {:?}: {e}", event.kind());
-            false
-        });
-        // A run ending or a checkpoint answered can leave the corral idle with an order waiting.
-        let order_changed = match &event.body {
-            EventBody::RunCompleted(_)
-            | EventBody::RunFailed(_)
-            | EventBody::RunCancelled(_)
-            | EventBody::CheckpointResolved(_) => settle(&mut views, self.clock.now_ms()),
-            EventBody::RunQueued(_)
-            | EventBody::RunStarted(_)
-            | EventBody::PlanUpdated(_)
-            | EventBody::ModelRequest(_)
-            | EventBody::ModelDelta(_)
-            | EventBody::ModelResponse(_)
-            | EventBody::ToolRequested(_)
-            | EventBody::PolicyDecided(_)
-            | EventBody::CheckpointOpened(_)
-            | EventBody::ToolStarted(_)
-            | EventBody::ToolResult(_)
-            | EventBody::UsageReported(_)
-            | EventBody::BudgetWarned(_)
-            | EventBody::RunPaused(_)
-            | EventBody::RunResumed(_)
-            | EventBody::SessionClosed(_) => false,
-        };
-        if drop_changed || card_changed || order_changed {
-            self.send(self.snapshot(&views));
-        }
-        if card_changed {
-            let posts = notices(&mut views);
-            drop(views);
-            for notice in posts {
-                self.notify(&notice);
-            }
+        drop(views);
+        for notice in posts {
+            self.notify(&notice);
         }
     }
 
@@ -1032,7 +927,7 @@ impl CorralFeed {
             return;
         };
         if views.cards.ask_pause(agent, asked) {
-            self.send(self.snapshot(&views));
+            self.send(views.snapshot(self.clock.now_ms()));
         }
     }
 
@@ -1066,7 +961,7 @@ impl CorralFeed {
                     let Some(feed) = feed.upgrade() else { return };
                     let Ok(views) = feed.views.lock() else { return };
                     if views.cards.is_ticking() {
-                        feed.send(feed.snapshot(&views));
+                        feed.send(views.snapshot(feed.clock.now_ms()));
                     }
                 }
             });
@@ -1165,7 +1060,7 @@ impl CorralControl for CorralFeed {
         let cards = views.all_cards.clone();
         let placed = views.order.place(cards, self.clock.now_ms());
         if views.corral.set_agents(placed.cards) {
-            self.send(self.snapshot(&views));
+            self.send(views.snapshot(self.clock.now_ms()));
         }
         Ok(views.order.settings(&views.all_cards))
     }
@@ -1336,50 +1231,6 @@ fn on_intent(slot: &OnceLock<Corral>, result: Result<Intent, BridgeError>) {
         Intent::OpenAgent(_) | Intent::Deploy(_) | Intent::SummonPromptBar => {
             eprintln!("corral: intent {intent:?} (handled in a later milestone)");
         }
-    }
-}
-
-/// The notifications to post for checkpoints that started waiting, each with a random nonce, and
-/// the names the drops show.
-fn notices(views: &mut Views) -> Vec<Notice> {
-    let names: HashMap<AgentId, String> = views
-        .corral
-        .view()
-        .drops
-        .into_iter()
-        .map(|drop| (drop.agent.id, drop.agent.name))
-        .collect();
-    let name = |agent: &AgentId| {
-        names
-            .get(agent)
-            .cloned()
-            .unwrap_or_else(|| agent.to_string())
-    };
-    views.notes.observe(&views.cards, &name, &mut random_id)
-}
-
-/// Publishes a waiting usage order if the corral is idle and no drop waits on the user
-/// (TP-USAGE-12), and re-places the drops. Returns whether the corral changed.
-fn settle(views: &mut Views, now_ms: u64) -> bool {
-    let waiting = views
-        .corral
-        .view()
-        .drops
-        .iter()
-        .any(|drop| drop.state == DropState::NeedsYou);
-    if !views.order.settle(waiting) {
-        return false;
-    }
-    save_order(&mut views.order);
-    let cards = views.all_cards.clone();
-    let placed = views.order.place(cards, now_ms);
-    views.corral.set_agents(placed.cards)
-}
-
-/// Saves the corral's order. A failure is logged; the corral keeps working unsaved.
-fn save_order(order: &mut CorralOrder) {
-    if let Err(e) = order.save() {
-        eprintln!("corral: {e}");
     }
 }
 
