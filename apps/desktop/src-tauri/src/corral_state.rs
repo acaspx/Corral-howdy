@@ -7,17 +7,20 @@
 //! the end-to-end journeys (`tests/journeys.rs`, Spike S2) drive the same state without the
 //! native layer, so a journey's transcript is what the app sends.
 
-use crate::bridge::RosterSnapshot;
+use crate::bridge::{PromptBarSnapshot, RosterSnapshot};
 use crate::corral_order::CorralOrder;
+use crate::prompt_bar_feed;
 use corral_adapters::linked::LinkedSettings;
 use corral_core::checkpoint_note::{NoteDesk, Notice};
 use corral_core::corral_view::{AgentCard, CorralTracker, DropState};
 use corral_core::event::{Event, EventBody};
-use corral_core::ids::AgentId;
-use corral_core::run_card::RunCards;
+use corral_core::ids::{AgentId, CheckpointId};
+use corral_core::prompt_bar::BarAgent;
+use corral_core::run_card::{EditError, RunCards};
 use corral_core::trace_tree::trace_tree;
 use corral_core::usage_rank::Deploy;
-use std::collections::HashMap;
+use serde_json::Value;
+use std::collections::{BTreeMap, HashMap};
 
 /// Makes each checkpoint notification's single-use nonce.
 pub type Nonces = Box<dyn FnMut() -> String + Send>;
@@ -191,6 +194,37 @@ impl CorralState {
             })
             .with_logos(|id| self.logos.get(id).cloned())
             .with_linked(&self.linked)
+    }
+
+    /// Whether `checkpoint` waits on `agent`'s card, as the user stepped to it: the only one an
+    /// answer from that card may be for (TP-HOVER-06, TP-CHK-19).
+    pub fn waits_on(&self, agent: &AgentId, checkpoint: &CheckpointId) -> bool {
+        self.cards.waits_on(agent, checkpoint)
+    }
+
+    /// The arguments an edit sheet's `changes` make for `checkpoint` on `agent`'s card, checked
+    /// by the core (TP-CHK-15).
+    pub fn edited_args(
+        &self,
+        agent: &AgentId,
+        checkpoint: &CheckpointId,
+        changes: &BTreeMap<String, String>,
+    ) -> Result<Value, EditError> {
+        self.cards.edited_args(agent, checkpoint, changes)
+    }
+
+    /// Every agent the prompt bar knows, in the corral's order, with what each card says now
+    /// (TP-BAR-08).
+    pub fn bar_agents(&self, now_ms: u64) -> Vec<BarAgent> {
+        let settings = self.order.settings(&self.all_cards);
+        prompt_bar_feed::bar_agents(&settings, |id| {
+            self.cards.card(id, now_ms).map(|c| c.status)
+        })
+    }
+
+    /// The prompt bar's answer, with each suggestion's logo.
+    pub fn with_bar_logos(&self, answer: PromptBarSnapshot) -> PromptBarSnapshot {
+        answer.with_logos(|id| self.logos.get(id).cloned())
     }
 
     /// Publishes a waiting usage order if the corral is idle and no drop waits on the user
