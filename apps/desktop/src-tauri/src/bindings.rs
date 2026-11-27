@@ -4,7 +4,7 @@
 //! the core can't drift. The `invoke` wrappers stay small and hand-written next to the components
 //! (`keys.ts`, `providerToolsApi.ts`), typed with these.
 
-use crate::agent_editor::{AgentEdit, AgentEditorView, ModelView};
+use crate::agent_editor::{AgentEdit, AgentEditorView, ModelView, PlanState};
 use crate::agent_policies::{
     AgentPolicyEdit, AgentPolicyView, PolicyClassView, PolicyRuleChange, RuleChoice, RuleOrigin,
     TimeoutChoice,
@@ -48,6 +48,7 @@ pub fn typescript() -> String {
         TimeoutChoice::decl(&cfg),
         AgentEditorView::decl(&cfg),
         ModelView::decl(&cfg),
+        PlanState::decl(&cfg),
         AgentEdit::decl(&cfg),
         ChatGptStatus::decl(&cfg),
         ChatGptSignedOut::decl(&cfg),

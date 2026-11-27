@@ -10,10 +10,16 @@
 //!   [`MAX_SETTINGS_FILE_BYTES`], not the format, an unknown key, a model Corral doesn't offer that
 //!   agent) is an error naming the file, never the defaults. At launch that agent's monthly cap
 //!   is then $0 ([`seed_caps`]), so a broken file never quietly raises a cap the user lowered.
+//! - **GPT's model is its ChatGPT plan's** (TP-SUB-08): the plan's slug, kept as text and only
+//!   checked to be a plain one ([`AgentSettings::plan_model`]), since the plan's list is fetched
+//!   at run time.
 //! - **Plain names only.** An agent ID that isn't letters, digits, `-` and `_` is refused, so a
 //!   path never leaves the folder.
 
-use corral_adapters::catalog::{ModelChoice, agent_for, model_choice, models, provider_of};
+use corral_adapters::catalog::{
+    ModelChoice, agent_for, model_choice, models, provider_of, runs_on_chatgpt_plan,
+};
+use corral_adapters::chatgpt::is_plan_slug;
 use corral_adapters::messages::MessagesConfig;
 use corral_adapters::responses::ResponsesConfig;
 use corral_core::agent_name::AgentName;
@@ -69,16 +75,36 @@ impl AgentSettings {
         let Some(file) = file else {
             return Ok(defaults(agent));
         };
+        let fail = |why: String| format!("{}: {why}", path.display());
         let model = match file.model {
             None => defaults(agent).model,
-            Some(id) => {
-                Some(offered(agent, &id).map_err(|why| format!("{}: {why}", path.display()))?)
+            // Its model is the plan's, kept as text (`plan_model`), not one of the priced table's.
+            Some(id) if on_plan(agent) => {
+                plan_slug(agent, &id).map_err(fail)?;
+                None
             }
+            Some(id) => Some(offered(agent, &id).map_err(fail)?),
         };
         Ok(AgentSetup {
             model,
             monthly_cap_micro_usd: file.monthly_cap_micro_usd,
         })
+    }
+
+    /// The model `agent` asked for on the ChatGPT plan (TP-SUB-08), if one was saved; `None` is
+    /// the plan's first. Only an agent that runs on the plan has one: anything else is an error
+    /// naming the file, as is a model that isn't a plain slug.
+    pub fn plan_model(&self, agent: &AgentId) -> Result<Option<String>, String> {
+        let (path, file) = self.read(agent)?;
+        let fail = |why: String| format!("{}: {why}", path.display());
+        if !on_plan(agent) {
+            return Err(fail(format!("{agent} doesn't run on a ChatGPT plan")));
+        }
+        let Some(model) = file.and_then(|f| f.model) else {
+            return Ok(None);
+        };
+        plan_slug(agent, &model).map_err(fail)?;
+        Ok(Some(model))
     }
 
     /// `agent`'s saved name (TP-ANM-02), if it was renamed. An error says which file can't be
@@ -97,15 +123,21 @@ impl AgentSettings {
     /// Saves `agent`'s model and cap, keeping its saved name: a temporary file, then a rename.
     /// A file that can't be read is replaced.
     pub fn save(&self, agent: &AgentId, setup: &AgentSetup) -> Result<(), String> {
-        let name = match self.read(agent) {
-            Ok((_, Some(file))) => file.name,
-            Ok((_, None)) | Err(_) => None,
+        let (name, kept) = match self.read(agent) {
+            Ok((_, Some(file))) => (file.name, file.model),
+            Ok((_, None)) | Err(_) => (None, None),
+        };
+        // An agent on the plan keeps its plan model, which `setup` can't hold.
+        let plan_model = if on_plan(agent) {
+            kept.filter(|m| is_plan_slug(m))
+        } else {
+            None
         };
         self.write(
             agent,
             &SetupFile {
                 name,
-                model: setup.model.map(|m| m.id.to_owned()),
+                model: setup.model.map(|m| m.id.to_owned()).or(plan_model),
                 monthly_cap_micro_usd: setup.monthly_cap_micro_usd,
             },
         )
@@ -142,6 +174,35 @@ impl AgentSettings {
             &SetupFile {
                 name: name.map(|n| n.as_str().to_owned()),
                 model: setup.model.map(|m| m.id.to_owned()),
+                monthly_cap_micro_usd: setup.monthly_cap_micro_usd,
+            },
+        )
+    }
+
+    /// [`Self::save_all`] for an agent on the ChatGPT plan (TP-SUB-08): its name, its cap and the
+    /// plan model it asked for (`None` for the plan's first), in one write. A model that isn't a
+    /// plain slug is refused, and so is an agent that doesn't run on the plan.
+    pub fn save_all_on_plan(
+        &self,
+        agent: &AgentId,
+        setup: &AgentSetup,
+        plan_model: Option<&str>,
+        name: Option<&AgentName>,
+    ) -> Result<(), String> {
+        if !on_plan(agent) {
+            return Err(format!("{agent} doesn't run on a ChatGPT plan"));
+        }
+        if let Some(model) = plan_model {
+            plan_slug(agent, model)?;
+        }
+        if let Some(name) = name {
+            not_anothers(agent, name)?;
+        }
+        self.write(
+            agent,
+            &SetupFile {
+                name: name.map(|n| n.as_str().to_owned()),
+                model: plan_model.map(str::to_owned),
                 monthly_cap_micro_usd: setup.monthly_cap_micro_usd,
             },
         )
@@ -227,6 +288,22 @@ fn defaults(agent: &AgentId) -> AgentSetup {
     AgentSetup {
         model: provider_of(agent).and_then(|p| models(p).first()),
         monthly_cap_micro_usd: None,
+    }
+}
+
+/// True for an agent that runs on the user's ChatGPT plan.
+fn on_plan(agent: &AgentId) -> bool {
+    provider_of(agent).is_some_and(runs_on_chatgpt_plan)
+}
+
+/// `id` as a model the plan could have listed, or why not.
+fn plan_slug(agent: &AgentId, id: &str) -> Result<(), String> {
+    if is_plan_slug(id) {
+        Ok(())
+    } else {
+        Err(format!(
+            "{id:?} isn't a model a ChatGPT plan lists for {agent}"
+        ))
     }
 }
 

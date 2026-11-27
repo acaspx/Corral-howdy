@@ -213,4 +213,71 @@ describe("AgentEditor", () => {
       "Couldn't load the agents: no app data folder",
     );
   });
+
+  // TP-SUB-08: GPT's model on the ChatGPT plan. The core lists the plan's models and keeps the
+  // choice; GPT spends no dollars, so its cap and spend aren't shown.
+  const onPlan = (over: Partial<AgentEditorView> = {}): AgentEditorView => ({
+    ...gpt(),
+    models: [
+      { id: "gpt-alpha", name: "GPT Alpha", price: "Uses your ChatGPT plan" },
+      { id: "gpt-beta", name: "GPT Beta", price: "Uses your ChatGPT plan" },
+    ],
+    model: "gpt-alpha",
+    chatgptPlan: { state: "signedIn" },
+    ...over,
+  });
+
+  it("TP-SUB-08 GPT picks a model from the plan, with no dollar cap", async () => {
+    const api = fakeApi({
+      list: vi.fn(async () => [onPlan()]),
+      save: vi.fn(async () => onPlan({ model: "gpt-beta" })),
+    });
+    const section = await renderEditor(api);
+    const model = within(section).getByRole("combobox", { name: "Model" });
+    expect(within(model).getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "GPT Alpha",
+      "GPT Beta",
+    ]);
+    expect(section).toHaveTextContent("Uses your ChatGPT plan");
+    expect(section).toHaveTextContent("No dollar cap: GPT's tasks count against your plan's usage.");
+    expect(within(section).queryByRole("textbox", { name: /Monthly cap/ })).toBeNull();
+    expect(section).not.toHaveTextContent("this month");
+    fireEvent.change(model, { target: { value: "gpt-beta" } });
+    await act(async () => {
+      fireEvent.click(within(section).getByRole("button", { name: "Save GPT" }));
+    });
+    expect(api.save).toHaveBeenCalledWith("gpt", {
+      name: "GPT",
+      model: "gpt-beta",
+      monthlyCapMicroUsd: null,
+    });
+    expect(within(section).getByRole("combobox", { name: "Model" })).toHaveValue("gpt-beta");
+  });
+
+  it("TP-SUB-08 signed out or unreachable, GPT says what to do", async () => {
+    const section = await renderEditor(
+      fakeApi({ list: vi.fn(async () => [onPlan({ models: [], model: null, chatgptPlan: { state: "signedOut" } })]) }),
+    );
+    expect(section).toHaveTextContent(
+      "GPT runs on your ChatGPT plan. Continue with ChatGPT above to choose its model.",
+    );
+    expect(section).not.toHaveTextContent("Corral can't run GPT yet.");
+    expect(within(section).queryByRole("combobox", { name: "Model" })).toBeNull();
+  });
+
+  it("TP-SUB-08 when the plan can't be asked, says why", async () => {
+    const section = await renderEditor(
+      fakeApi({
+        list: vi.fn(async () => [
+          onPlan({
+            models: [],
+            model: null,
+            chatgptPlan: { state: "unavailable", message: "Couldn't reach ChatGPT." },
+          }),
+        ]),
+      }),
+    );
+    expect(section).toHaveTextContent("Couldn't reach ChatGPT.");
+  });
 });
+

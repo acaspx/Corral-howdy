@@ -275,6 +275,21 @@ export function gptView(): AgentEditorView {
   });
 }
 
+/** GPT on the ChatGPT plan (TP-SUB-08): the plan's models, no prices, no dollar cap. */
+export function gptOnPlanView(over: Partial<AgentEditorView> = {}): AgentEditorView {
+  return {
+    ...gptView(),
+    models: [
+      { id: "gpt-5-5", name: "GPT-5.5", price: "Uses your ChatGPT plan" },
+      { id: "gpt-5-5-thinking", name: "GPT-5.5 Thinking", price: "Uses your ChatGPT plan" },
+      { id: "gpt-5-5-mini", name: "GPT-5.5 mini", price: "Uses your ChatGPT plan" },
+    ],
+    model: "gpt-5-5",
+    chatgptPlan: { state: "signedIn" },
+    ...over,
+  };
+}
+
 export function agentApi(
   views: AgentEditorView[] = [agentView(), gptView()],
   over: Partial<AgentEditorApi> = {},

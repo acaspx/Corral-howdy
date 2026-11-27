@@ -23,7 +23,14 @@ import { errorText } from "./keys";
  * "Manage usage", the one-time welcome). Corral shows no OpenAI logo: the repo carries no
  * third-party marks.
  */
-export function ChatGptPlan({ api = chatgptApi }: { api?: ChatGptApi }) {
+export function ChatGptPlan({
+  api = chatgptApi,
+  onChange,
+}: {
+  api?: ChatGptApi;
+  /** Told after a sign-in or sign-out, so GPT's models in the agent editor follow (TP-SUB-08). */
+  onChange?: () => void;
+}) {
   const [status, setStatus] = useState<ChatGptStatus | null>(null);
   const [waiting, setWaiting] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -50,6 +57,7 @@ export function ChatGptPlan({ api = chatgptApi }: { api?: ChatGptApi }) {
     setUnconfirmed(false);
     try {
       setStatus(await api.signIn());
+      onChange?.();
     } catch (e: unknown) {
       // Cancel is the user's own choice, so it isn't an error.
       if (!cancelled.current) setError(errorText(e));
@@ -74,6 +82,7 @@ export function ChatGptPlan({ api = chatgptApi }: { api?: ChatGptApi }) {
       const out = await api.signOut();
       setStatus(out.status);
       setUnconfirmed(!out.revoked);
+      onChange?.();
     } catch (e: unknown) {
       setError(`Couldn't sign out: ${errorText(e)}`);
     } finally {

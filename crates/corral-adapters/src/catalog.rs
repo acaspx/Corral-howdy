@@ -96,6 +96,15 @@ const ANTHROPIC_MODELS: [ModelChoice; 3] = [
     },
 ];
 
+/// True for a provider whose agent runs on the user's ChatGPT plan rather than a key
+/// (ADR-017): its models come from the plan, and it spends no dollars.
+pub fn runs_on_chatgpt_plan(provider: Provider) -> bool {
+    match provider {
+        Provider::OpenAi => true,
+        Provider::Xai | Provider::Anthropic | Provider::Meta => false,
+    }
+}
+
 /// The models `provider`'s agent can be given, its default first; none for a provider without
 /// a client yet.
 pub fn models(provider: Provider) -> &'static [ModelChoice] {

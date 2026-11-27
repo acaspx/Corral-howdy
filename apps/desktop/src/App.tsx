@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, useState } from "react";
 import { ChatGptPlan } from "./ChatGptPlan";
 import { chatgptApi as defaultPlanApi, type ChatGptApi } from "./chatgptApi";
 import { CorralSettings } from "./CorralSettings";
@@ -35,6 +35,7 @@ export function App({
   agentApi?: AgentEditorApi;
   planApi?: ChatGptApi;
 }) {
+  const [planChanges, setPlanChanges] = useState(0);
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 py-10">
       <header className="flex flex-col gap-1">
@@ -44,8 +45,9 @@ export function App({
         </p>
       </header>
       <KeyIntake api={keyApi} />
-      <ChatGptPlan api={planApi} />
-      <AgentEditor api={agentApi} toolsApi={toolsApi} />
+      <ChatGptPlan api={planApi} onChange={() => setPlanChanges((n) => n + 1)} />
+      {/* After a sign-in or sign-out the agents load again, so GPT's models are the plan's. */}
+      <AgentEditor key={planChanges} api={agentApi} toolsApi={toolsApi} />
       <PolicyEditor api={policyApi} />
       <CorralSettings api={corralApi} />
       <TraceViewer api={tracesApi} />

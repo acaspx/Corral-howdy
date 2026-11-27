@@ -411,3 +411,29 @@ impl KeySource for NoKey {
         Box::pin(async { Err(KeyFailure::Missing("no key".into())) })
     }
 }
+
+#[test]
+fn tp_sub_08_a_plan_model_is_a_plain_slug() {
+    for good in ["gpt-alpha", "gpt-5.5", "o4-mini", "gpt:2026-11", "A_1"] {
+        assert!(chatgpt::is_plan_slug(good), "{good}");
+    }
+    let long = "g".repeat(129);
+    for bad in [
+        "",
+        "gpt alpha",
+        "gpt/../x",
+        "gpt\u{202e}x",
+        "\"gpt\"",
+        long.as_str(),
+    ] {
+        assert!(!chatgpt::is_plan_slug(bad), "{bad:?}");
+    }
+    let odd = br#"{"models":[{"slug":"gpt alpha","visibility":"list"},{"slug":"gpt-beta","visibility":"list"}]}"#;
+    let models = chatgpt::listed_models(odd).expect("a catalog");
+    let slugs: Vec<&str> = models.iter().map(|m| m.slug.as_str()).collect();
+    assert_eq!(
+        slugs,
+        ["gpt-beta"],
+        "a slug that couldn't be saved isn't offered"
+    );
+}

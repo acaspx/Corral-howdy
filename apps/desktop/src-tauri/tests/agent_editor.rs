@@ -407,3 +407,127 @@ fn tp_aed_08_a_save_replaces_settings_that_couldnt_be_used() {
     assert_eq!(r.ledger.agent_cap(&AgentId::from("grok")), 2_000_000);
     assert!(s.settings().load(&AgentId::from("grok")).is_ok());
 }
+
+// ---- TP-SUB-08: GPT's model on the ChatGPT plan ---------------------------------------------
+
+use corral_adapters::chatgpt::PlanModel;
+use corral_desktop_lib::agent_editor::{PlanModels, PlanState};
+
+fn plan_models() -> PlanModels {
+    PlanModels::Listed(vec![
+        PlanModel {
+            slug: "gpt-alpha".into(),
+            display_name: "GPT Alpha".into(),
+        },
+        PlanModel {
+            slug: "gpt-beta".into(),
+            display_name: "GPT Beta".into(),
+        },
+    ])
+}
+
+#[test]
+fn tp_sub_08_gpt_offers_the_plans_models_in_place_of_prices() {
+    let s = Scratch::new();
+    let r = rig(&s);
+    let views = r.editor.views_on_plan(&plan_models());
+    let gpt = view(&views, "gpt");
+    assert_eq!(gpt.chatgpt_plan, Some(PlanState::SignedIn));
+    let ids: Vec<&str> = gpt.models.iter().map(|m| m.id.as_str()).collect();
+    assert_eq!(ids, ["gpt-alpha", "gpt-beta"], "the plan's order");
+    assert_eq!(gpt.models[1].name, "GPT Beta");
+    assert!(
+        gpt.models
+            .iter()
+            .all(|m| m.price == "Uses your ChatGPT plan")
+    );
+    assert_eq!(
+        gpt.model.as_deref(),
+        Some("gpt-alpha"),
+        "the plan's first by default"
+    );
+    assert_eq!(
+        view(&views, "claude").chatgpt_plan,
+        None,
+        "Claude runs on its key"
+    );
+
+    let signed_out = r.editor.views();
+    let gpt = view(&signed_out, "gpt");
+    assert_eq!(gpt.chatgpt_plan, Some(PlanState::SignedOut));
+    assert!(gpt.models.is_empty());
+    let down = r
+        .editor
+        .views_on_plan(&PlanModels::Unavailable("Couldn't reach ChatGPT.".into()));
+    assert_eq!(
+        view(&down, "gpt").chatgpt_plan,
+        Some(PlanState::Unavailable {
+            message: "Couldn't reach ChatGPT.".into()
+        })
+    );
+}
+
+#[test]
+fn tp_sub_08_a_saved_plan_model_shows_while_the_plan_lists_it() {
+    let s = Scratch::new();
+    let r = rig(&s);
+    let kept = r
+        .editor
+        .save_on_plan("gpt", edit(None, Some("gpt-beta"), None), &plan_models())
+        .expect("a listed model");
+    assert_eq!(kept.model.as_deref(), Some("gpt-beta"));
+    assert_eq!(
+        r.editor.version(&AgentId::from("gpt")),
+        1,
+        "its next task uses it"
+    );
+    assert_eq!(
+        s.settings()
+            .plan_model(&AgentId::from("gpt"))
+            .expect("saved")
+            .as_deref(),
+        Some("gpt-beta")
+    );
+    // The plan stops listing it: the editor shows the plan's first, as the run would use.
+    let fewer = PlanModels::Listed(vec![PlanModel {
+        slug: "gpt-alpha".into(),
+        display_name: "GPT Alpha".into(),
+    }]);
+    let views = r.editor.views_on_plan(&fewer);
+    assert_eq!(view(&views, "gpt").model.as_deref(), Some("gpt-alpha"));
+}
+
+#[test]
+fn tp_sub_08_a_model_the_plan_doesnt_list_is_refused_and_nothing_changes() {
+    let s = Scratch::new();
+    let r = rig(&s);
+    for (models, why) in [
+        (plan_models(), "isn't a model your ChatGPT plan lists"),
+        (PlanModels::SignedOut, "Continue with ChatGPT"),
+        (
+            PlanModels::Unavailable("Couldn't reach ChatGPT.".into()),
+            "Couldn't reach ChatGPT.",
+        ),
+    ] {
+        let error = r
+            .editor
+            .save_on_plan("gpt", edit(Some("Ada"), Some("gpt-retired"), None), &models)
+            .expect_err(why);
+        assert!(error.contains(why), "{why}: {error}");
+    }
+    assert!(!s.file("gpt").exists(), "nothing written");
+    assert_eq!(r.editor.version(&AgentId::from("gpt")), 0);
+    // Claude's models stay the priced table's, whatever the plan lists.
+    let error = r
+        .editor
+        .save_on_plan(
+            "claude",
+            edit(None, Some("gpt-alpha"), None),
+            &plan_models(),
+        )
+        .expect_err("not Claude's");
+    assert!(
+        error.contains("isn't a model Corral offers for Claude"),
+        "{error}"
+    );
+}

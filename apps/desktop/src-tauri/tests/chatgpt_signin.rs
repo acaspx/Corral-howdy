@@ -493,3 +493,35 @@ fn tp_sub_07_gpt_joins_the_corral_while_the_plan_is_signed_in() {
         .collect();
     assert_eq!(order, all, "in the catalog's order, like the keys");
 }
+
+#[tokio::test]
+async fn tp_sub_08_the_editor_asks_the_plan_for_its_models() {
+    use corral_desktop_lib::agent_editor::PlanModels;
+    use corral_desktop_lib::chatgpt_signin::plan_models;
+    let store = Arc::new(MemoryPlanStore::default());
+    let plan = ChatGptPlan::new(
+        store.clone(),
+        Scripted::replying(vec![]),
+        Arc::new(ManualClock::at(NOW_MS)),
+    );
+    assert!(matches!(plan_models(&plan).await, PlanModels::SignedOut));
+    store
+        .set_plan(&corral_secrets::PlanCredentials {
+            email: "anton@example.test".into(),
+            subject: "anton".into(),
+            client_id: CLIENT.into(),
+            host_id: "urn:uuid:3f2b8c1e-9d4a-4e7b-8a6f-1c2d3e4f5a6b".into(),
+            id_token: Secret::token(id_tokens::VALID).expect("token"),
+            access_token: Secret::token(ACCESS).expect("token"),
+            refresh_token: Secret::token(REFRESH).expect("token"),
+            expires_at_ms: NOW_MS + 3_600_000,
+            scopes: vec!["chatgpt.tokens.use.direct".into()],
+            saved_at_ms: NOW_MS,
+        })
+        .expect("store");
+    // The scripted OpenAI has no model list, so the plan can't be asked.
+    let PlanModels::Unavailable(message) = plan_models(&plan).await else {
+        panic!("expected unavailable");
+    };
+    assert!(message.contains("Couldn't reach ChatGPT"), "{message}");
+}
