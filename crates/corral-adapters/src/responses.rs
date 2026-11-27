@@ -135,6 +135,14 @@ impl ResponsesConfig {
         self.routed(body)
     }
 
+    /// `decoder`, reading plan codes when the request is on a ChatGPT plan.
+    fn for_route(&self, decoder: ResponseDecoder) -> ResponseDecoder {
+        match self.route {
+            Route::ApiKey => decoder,
+            Route::ChatGptPlan => decoder.on_plan(),
+        }
+    }
+
     /// The body as the route wants it: on a ChatGPT plan, `input` as an array and no
     /// `max_output_tokens`.
     fn routed(&self, mut body: Value) -> Value {
@@ -229,7 +237,7 @@ impl ToolProtocol for ResponsesConfig {
     }
 
     fn tool_decoder(&self) -> ResponseDecoder {
-        ResponseDecoder::offering_tools()
+        self.for_route(ResponseDecoder::offering_tools())
     }
 
     fn take_turn(decoder: &mut ResponseDecoder) -> (String, Vec<FunctionCall>) {
@@ -343,7 +351,7 @@ impl Protocol for ResponsesConfig {
     }
 
     fn decoder(&self) -> ResponseDecoder {
-        ResponseDecoder::default()
+        self.for_route(ResponseDecoder::default())
     }
 
     fn reads_errors(&self) -> bool {
@@ -386,6 +394,8 @@ pub struct ResponseDecoder {
     calls: Vec<FunctionCall>,
     /// The reply's whole text, once the response is over.
     said: String,
+    /// On a ChatGPT plan: a failure mid-stream is read by its plan code, as an error reply is.
+    plan: bool,
 }
 
 impl ResponseDecoder {
@@ -395,6 +405,24 @@ impl ResponseDecoder {
             tools: true,
             ..Self::default()
         }
+    }
+
+    /// This decoder, for a request on a ChatGPT plan: a usage limit or other plan code that
+    /// arrives mid-stream says the same as it would up front (TP-SUB-07).
+    pub fn on_plan(mut self) -> Self {
+        self.plan = true;
+        self
+    }
+
+    /// The plan's message for a mid-stream error object, when this is a plan request and the
+    /// code is one of the plan's.
+    fn plan_message(&self, error: Option<&Value>) -> Option<String> {
+        if !self.plan {
+            return None;
+        }
+        error
+            .and_then(crate::chatgpt::plan_code)
+            .map(|failure| failure.message())
     }
 
     /// The reply's whole text, once the response is over (empty before).
@@ -504,23 +532,29 @@ impl ResponseDecoder {
                 out
             }
             "response.failed" => {
-                let message = data
-                    .get("response")
-                    .and_then(|r| r.get("error"))
-                    .and_then(|e| e.get("message"))
-                    .and_then(Value::as_str)
-                    .map(clean)
-                    .filter(|m| !m.is_empty())
-                    .unwrap_or_else(|| "the provider reported that the response failed".into());
+                let error = data.get("response").and_then(|r| r.get("error"));
+                let message = self.plan_message(error).unwrap_or_else(|| {
+                    error
+                        .and_then(|e| e.get("message"))
+                        .and_then(Value::as_str)
+                        .map(clean)
+                        .filter(|m| !m.is_empty())
+                        .unwrap_or_else(|| "the provider reported that the response failed".into())
+                });
                 self.fail(FailureReason::Provider, message)
             }
             "error" => {
-                let message = data
-                    .get("message")
-                    .and_then(Value::as_str)
-                    .map(clean)
-                    .filter(|m| !m.is_empty())
-                    .unwrap_or_else(|| "the provider reported an error".into());
+                // The code is on the event itself, or in an `error` object inside it.
+                let message = self
+                    .plan_message(Some(&data))
+                    .or_else(|| self.plan_message(data.get("error")))
+                    .unwrap_or_else(|| {
+                        data.get("message")
+                            .and_then(Value::as_str)
+                            .map(clean)
+                            .filter(|m| !m.is_empty())
+                            .unwrap_or_else(|| "the provider reported an error".into())
+                    });
                 self.fail(FailureReason::Provider, message)
             }
             _ => Vec::new(),

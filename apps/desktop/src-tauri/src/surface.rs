@@ -33,6 +33,7 @@ use crate::agent_tools::{allowing_provider_tools, file_tools_under, random_id};
 use crate::bridge::{
     AuthOutcome, BridgeError, Intent, NotificationRequest, PromptBarSnapshot, RosterSnapshot,
 };
+use crate::chatgpt_signin::{ChatGptSignIn, plan_signed_in, with_plan};
 use crate::corral_order::{CorralOrder, CorralSettingsView};
 use crate::corral_settings::{CorralControl, CorralSettings};
 use crate::keys::Keys;
@@ -47,10 +48,12 @@ use corral_adapters::agent::{MessagesAgent, ProviderTool, ResponsesAgent, ToolSe
 use corral_adapters::catalog::{
     AgentRouter, ModelChoice, Rebuilt, Switched, agent_for, agents_for, corral_agents, models,
 };
+use corral_adapters::chatgpt::{ChatGptPlan, PlanAgent, PlanBuild};
 use corral_adapters::linked::{LinkChange, LinkedApp, LinkedSettings};
 use corral_adapters::logos::{LogoId, ReqwestLogoFetcher};
 use corral_adapters::messages::{MessagesConfig, MessagesDriver};
 use corral_adapters::responses::{ResponsesConfig, ResponsesDriver};
+use corral_adapters::stream::KeySource;
 use corral_adapters::transport::{ReqwestTransport, Transport};
 use corral_core::budget::{BudgetConfig, SpendLedger};
 use corral_core::checkpoint_note::{NoteAnswer, NoteClick, NoteDesk, NoteTrouble, Notice};
@@ -86,10 +89,11 @@ pub const GROK_MODEL: &str = corral_adapters::catalog::GROK_MODEL;
 /// The model Claude's drop uses (SK-7): the catalog's, which the nightly live check watches.
 pub const CLAUDE_MODEL: &str = corral_adapters::catalog::CLAUDE_MODEL;
 
-/// The providers with a key in the Keychain. A key that can't be read counts as missing (the
-/// card would fail on it anyway) and is logged.
-fn connected(store: &dyn SecretStore) -> Vec<Provider> {
-    Provider::ALL
+/// The providers whose agents run: those with a key in the Keychain, and OpenAI's while the
+/// ChatGPT plan is signed in (TP-SUB-07). A key that can't be read counts as missing (the card
+/// would fail on it anyway) and is logged.
+fn connected(store: &dyn SecretStore, plan: &ChatGptPlan) -> Vec<Provider> {
+    let keyed = Provider::ALL
         .into_iter()
         .filter(|p| match corral_secrets::status(store, *p) {
             Ok(status) => status.configured,
@@ -98,7 +102,8 @@ fn connected(store: &dyn SecretStore) -> Vec<Provider> {
                 false
             }
         })
-        .collect()
+        .collect();
+    with_plan(keyed, plan_signed_in(plan))
 }
 
 /// The linked apps the user chose, and where the choice is kept.
@@ -125,6 +130,8 @@ pub struct Corral {
     touch_id: Arc<Mutex<TouchIdDesk>>,
     /// The agents' names, for their cards (TP-ANM-03).
     names: AgentNames,
+    /// The ChatGPT plan GPT runs on (ADR-017).
+    plan: Arc<ChatGptPlan>,
 }
 
 impl Corral {
@@ -253,7 +260,7 @@ impl Corral {
     /// provider's agent drops in, and a removed one leaves (TP-VIEW-06). Called after a key or a
     /// linked app changes.
     pub fn refresh(&self, store: &dyn SecretStore) {
-        let connected = connected(store);
+        let connected = connected(store, &self.plan);
         let linked = self.linked_settings();
         if let Some(controls) = &self.controls {
             // Only the agents Corral runs take tasks; a linked drop never does (ADR-005).
@@ -379,7 +386,8 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
     };
 
     let keys = app.state::<Keys>().0.clone();
-    let connected = connected(keys.as_ref());
+    let plan = Arc::clone(app.state::<Arc<ChatGptSignIn>>().plan());
+    let connected = connected(keys.as_ref(), &plan);
     let clock: Arc<dyn Clock> = Arc::new(SystemClock);
     // The usage order, as saved; the log's deploys seed it once the store is open.
     let mut order = CorralOrder::open(data_dir.as_ref().map(|d| d.join("corral-order.json")));
@@ -447,6 +455,7 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
         keys,
         desk,
         touch_id: Arc::new(Mutex::new(TouchIdDesk::default())),
+        plan,
     };
     // The slot is empty: this is its only writer, and `start` runs once.
     if corral_slot.set(corral.clone()).is_err() {
@@ -460,8 +469,8 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
     Ok(corral)
 }
 
-/// The supervisor: each agent's runs go to its provider (Grok and Claude have clients so far),
-/// the event store, the $0.25 cap and the $0.10 soft limit. Tool checkpoints wait on `desk`.
+/// The supervisor: each agent's runs go to its provider (Grok and Claude on their keys, GPT on
+/// the ChatGPT plan), the event store, the $0.25 cap and the $0.10 soft limit. Tool checkpoints wait on `desk`.
 fn supervisor(
     app: &AppHandle,
     feed: &Arc<CorralFeed>,
@@ -531,12 +540,18 @@ fn supervisor(
         move || grok_agent(&app, &desk, transport.clone(), keys.clone())
     });
     let claude = rebuilt_on_save(&editor, &agent_editor, Provider::Anthropic, {
-        let (app, desk) = (app.clone(), Arc::clone(desk));
+        let (app, desk, transport) = (app.clone(), Arc::clone(desk), transport.clone());
         move || claude_with_tools(&app, &desk, transport.clone(), keys.clone())
+    });
+    let gpt = rebuilt_on_save(&editor, &agent_editor, Provider::OpenAi, {
+        let (app, desk) = (app.clone(), Arc::clone(desk));
+        let plan = Arc::clone(app.state::<Arc<ChatGptSignIn>>().plan());
+        move || gpt_agent(&app, &desk, transport.clone(), Arc::clone(&plan))
     });
     let mut drivers: HashMap<AgentId, Arc<dyn RunDriver>> = HashMap::new();
     drivers.insert(agent_for(Provider::Xai).id, grok);
     drivers.insert(agent_for(Provider::Anthropic).id, claude);
+    drivers.insert(agent_for(Provider::OpenAi).id, gpt);
     let driver = AgentRouter::new(drivers);
     let built = Supervisor::with_ledger(
         SupervisorConfig::default(),
@@ -590,6 +605,42 @@ fn grok_agent(
             Arc::new(ResponsesDriver::new(transport, keys, config))
         }
     }
+}
+
+/// GPT on the ChatGPT plan (TP-SUB-07), with its file tools, or with none without its folder or
+/// a usable policy. Each run uses the plan's first listed model; choosing one comes with the
+/// agent editor's plan models.
+fn gpt_agent(
+    app: &AppHandle,
+    desk: &Arc<CheckpointDesk>,
+    transport: Arc<dyn Transport>,
+    plan: Arc<ChatGptPlan>,
+) -> Arc<dyn RunDriver> {
+    let keys: Arc<dyn KeySource> = plan.clone();
+    let agent = match agent_file_tools(app, desk, Provider::OpenAi) {
+        Ok(tools) => {
+            let build: PlanBuild = Arc::new(move |config: ResponsesConfig| {
+                let agent = ResponsesAgent::with_keys(
+                    transport.clone(),
+                    keys.clone(),
+                    config,
+                    tools.clone(),
+                );
+                Arc::new(agent) as Arc<dyn RunDriver>
+            });
+            // The tool loop stops at safe points, so its cards offer Pause.
+            PlanAgent::new(plan, None, build, true)
+        }
+        Err(reason) => {
+            eprintln!("corral: GPT has no tools: {reason}");
+            let build: PlanBuild = Arc::new(move |config: ResponsesConfig| {
+                let driver = ResponsesDriver::with_keys(transport.clone(), keys.clone(), config);
+                Arc::new(driver) as Arc<dyn RunDriver>
+            });
+            PlanAgent::new(plan, None, build, false)
+        }
+    };
+    Arc::new(agent)
 }
 
 /// Claude with its file tools, or with none without its folder or a usable policy.
