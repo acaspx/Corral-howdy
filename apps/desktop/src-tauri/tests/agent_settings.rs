@@ -206,3 +206,89 @@ fn tp_aed_04_the_clients_use_the_chosen_model_at_its_price() {
     );
     assert_eq!(messages_config(&other).price, other.price);
 }
+
+// ---- TP-SUB-08: GPT's model on the ChatGPT plan ---------------------------------------------
+
+#[test]
+fn tp_sub_08_gpts_saved_model_is_its_plan_model() {
+    let s = Scratch::new();
+    let gpt = AgentId::from("gpt");
+    assert_eq!(s.settings().plan_model(&gpt).expect("no file"), None);
+    s.write("gpt", "model = \"gpt-alpha\"\nmonthly_cap_micro_usd = 0\n");
+    let setup = s
+        .settings()
+        .load(&gpt)
+        .expect("a plan model is GPT's to have");
+    assert_eq!(setup.model, None, "not one of the priced table's");
+    assert_eq!(setup.monthly_cap_micro_usd, Some(0));
+    assert_eq!(
+        s.settings().plan_model(&gpt).expect("readable").as_deref(),
+        Some("gpt-alpha")
+    );
+    // A model that couldn't have come from the plan's list fails closed, naming the file.
+    s.write("gpt", "model = \"gpt alpha; rm\"\n");
+    let why = s.settings().load(&gpt).expect_err("not a slug");
+    assert!(why.contains("gpt.toml"), "{why}");
+    assert!(s.settings().plan_model(&gpt).is_err());
+    // Only an agent that runs on the plan has one.
+    s.write("claude", "model = \"gpt-alpha\"\n");
+    assert!(s.settings().load(&claude()).is_err());
+    assert!(s.settings().plan_model(&claude()).is_err());
+}
+
+#[test]
+fn tp_sub_08_saving_a_plan_model_keeps_the_name_and_cap() {
+    let s = Scratch::new();
+    let gpt = AgentId::from("gpt");
+    s.write("gpt", "name = \"Ada\"\nmonthly_cap_micro_usd = 1000000\n");
+    let settings = s.settings();
+    let setup = settings.load(&gpt).expect("defaults");
+    let name = settings.name(&gpt).expect("a name");
+    settings
+        .save_all_on_plan(&gpt, &setup, Some("gpt-beta"), name.as_ref())
+        .expect("saved");
+    assert_eq!(
+        settings.plan_model(&gpt).expect("readable").as_deref(),
+        Some("gpt-beta")
+    );
+    assert_eq!(
+        settings
+            .name(&gpt)
+            .expect("a name")
+            .map(|n| n.as_str().to_owned()),
+        Some("Ada".into())
+    );
+    assert_eq!(
+        settings.load(&gpt).expect("usable").monthly_cap_micro_usd,
+        Some(1_000_000)
+    );
+    // Saving the cap the old way keeps the plan model.
+    settings
+        .save(
+            &gpt,
+            &AgentSetup {
+                model: None,
+                monthly_cap_micro_usd: Some(2_000_000),
+            },
+        )
+        .expect("saved");
+    assert_eq!(
+        settings.plan_model(&gpt).expect("readable").as_deref(),
+        Some("gpt-beta")
+    );
+    // None goes back to the plan's first; a slug that isn't one, or a key-billed agent, is refused.
+    settings
+        .save_all_on_plan(&gpt, &setup, None, None)
+        .expect("saved");
+    assert_eq!(settings.plan_model(&gpt).expect("readable"), None);
+    assert!(
+        settings
+            .save_all_on_plan(&gpt, &setup, Some("a b"), None)
+            .is_err()
+    );
+    assert!(
+        settings
+            .save_all_on_plan(&claude(), &setup, Some("gpt-beta"), None)
+            .is_err()
+    );
+}

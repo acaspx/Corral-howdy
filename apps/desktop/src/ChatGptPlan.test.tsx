@@ -155,3 +155,26 @@ async function renderPlanAgain(api: ChatGptApi) {
   const sections = screen.getAllByRole("region", { name: "ChatGPT plan" });
   return sections[sections.length - 1];
 }
+
+describe("ChatGptPlan and the agent editor", () => {
+  it("TP-SUB-08 tells the window when the sign-in changes, so GPT's models follow", async () => {
+    const onChange = vi.fn();
+    render(<ChatGptPlan api={fakeApi(signedOut)} onChange={onChange} />);
+    await act(async () => {});
+    const section = screen.getByRole("region", { name: "ChatGPT plan" });
+    expect(onChange).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.click(within(section).getByRole("button", { name: "Continue with ChatGPT" }));
+    });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Got it" }));
+    });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      fireEvent.click(within(section).getByRole("button", { name: "Sign out" }));
+    });
+    expect(onChange).toHaveBeenCalledTimes(2);
+  });
+});
+
