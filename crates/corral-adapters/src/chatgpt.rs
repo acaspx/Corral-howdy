@@ -22,11 +22,15 @@
 //! [`plan_failure`]. Nothing here logs or prints a code, verifier or token: they live in
 //! [`Secret`] and [`Form`], whose `Debug` is redacted.
 
-use crate::stream::{KeyFailure, KeySource};
+use crate::responses::ResponsesConfig;
+use crate::stream::{KeyFailure, KeySource, fail_run};
 use crate::transport::{BoxFuture, Form, FormTransport};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64;
 use corral_core::clock::Clock;
+use corral_core::event::FailureReason;
+use corral_core::ids::AgentId;
+use corral_core::supervisor::{CancelToken, EventSink, RunDriver, RunFuture, RunRequest};
 use corral_secrets::{PlanCredentials, PlanStore, Provider, Secret, SecretError};
 use ring::rand::{SecureRandom, SystemRandom};
 use ring::{digest, signature};
@@ -738,31 +742,40 @@ impl PlanFailure {
     }
 }
 
-/// Reads a plan request's error reply.
-pub fn plan_failure(status: u16, body: &[u8]) -> PlanFailure {
-    let reply = serde_json::from_slice::<Value>(body).ok();
-    let error = reply.as_ref().and_then(|v| v.get("error"));
-    let code = error.and_then(|e| e.get("code")).and_then(Value::as_str);
-    match code {
-        Some("subscription_sharing_usage_limit_exceeded") => PlanFailure::UsageLimit,
-        Some("subscription_sharing_user_not_eligible") => PlanFailure::NotEligible,
-        Some("subscription_sharing_unsupported_capability") => {
+/// The plan failure an error object names by its code (`{"code": …, "param": …}`), if it is one
+/// of the plan's. A request's error reply and a stream's `response.failed` both carry one.
+pub fn plan_code(error: &Value) -> Option<PlanFailure> {
+    let code = error.get("code").and_then(Value::as_str)?;
+    Some(match code {
+        "subscription_sharing_usage_limit_exceeded" => PlanFailure::UsageLimit,
+        "subscription_sharing_user_not_eligible" => PlanFailure::NotEligible,
+        "subscription_sharing_unsupported_capability" => {
             let param = error
-                .and_then(|e| e.get("param"))
+                .get("param")
                 .and_then(Value::as_str)
                 .map(crate::stream::clean)
                 .filter(|p| !p.is_empty());
             PlanFailure::Unsupported(param)
         }
-        Some(
-            "subscription_sharing_usage_unavailable" | "subscription_sharing_user_unavailable",
-        ) => PlanFailure::Unavailable,
-        Some("subscription_sharing_route_not_supported") => PlanFailure::Route,
-        Some("subscription_sharing_invalid_user") => PlanFailure::InvalidUser,
-        Some("chatpass_v2_scope_not_authorized" | "chatpass_v2_invalid_authorization_context") => {
+        "subscription_sharing_usage_unavailable" | "subscription_sharing_user_unavailable" => {
+            PlanFailure::Unavailable
+        }
+        "subscription_sharing_route_not_supported" => PlanFailure::Route,
+        "subscription_sharing_invalid_user" => PlanFailure::InvalidUser,
+        "chatpass_v2_scope_not_authorized" | "chatpass_v2_invalid_authorization_context" => {
             PlanFailure::NotAuthorized
         }
-        _ => match status {
+        _ => return None,
+    })
+}
+
+/// Reads a plan request's error reply.
+pub fn plan_failure(status: u16, body: &[u8]) -> PlanFailure {
+    let reply = serde_json::from_slice::<Value>(body).ok();
+    let error = reply.as_ref().and_then(|v| v.get("error"));
+    match error.and_then(plan_code) {
+        Some(failure) => failure,
+        None => match status {
             401 => PlanFailure::InvalidUser,
             403 => PlanFailure::Blocked,
             // A plain rate limit, or the direct route down: back off and retry.
@@ -770,6 +783,68 @@ pub fn plan_failure(status: u16, body: &[u8]) -> PlanFailure {
             other => PlanFailure::Other(other),
         },
     }
+}
+
+/// The plan's model list (OpenAI's "Models and inference" page for plan usage).
+pub const MODELS_URL: &str = "https://api.openai.com/v1/models";
+/// At most this many models are kept from the list.
+const MAX_MODELS: usize = 64;
+/// A slug or name longer than this is cut.
+const MAX_MODEL_TEXT: usize = 128;
+
+/// A model the plan lists for choosing: `slug` is sent, `display_name` is shown.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlanModel {
+    /// What the request's `model` says.
+    pub slug: String,
+    /// What the picker shows.
+    pub display_name: String,
+}
+
+/// The model list wasn't one Corral can read.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("ChatGPT sent a model list Corral couldn't read")]
+pub struct BadModelList;
+
+/// The models in a `GET /v1/models` reply that are listed for choosing (`visibility: list`), in
+/// the server's order, which is also the plan's default first. Entries without a slug are
+/// skipped; one without a display name shows its slug.
+pub fn listed_models(body: &[u8]) -> Result<Vec<PlanModel>, BadModelList> {
+    let reply = serde_json::from_slice::<Value>(body).map_err(|_| BadModelList)?;
+    let entries = reply
+        .get("models")
+        .and_then(Value::as_array)
+        .ok_or(BadModelList)?;
+    let text = |entry: &Value, key: &str| {
+        entry
+            .get(key)
+            .and_then(Value::as_str)
+            .map(|t| {
+                crate::stream::clean(t)
+                    .chars()
+                    .take(MAX_MODEL_TEXT)
+                    .collect::<String>()
+            })
+            .filter(|t| !t.is_empty())
+    };
+    let mut models: Vec<PlanModel> = Vec::new();
+    for entry in entries {
+        if entry.get("visibility").and_then(Value::as_str) != Some("list") {
+            continue;
+        }
+        let Some(slug) = text(entry, "slug") else {
+            continue;
+        };
+        if models.iter().any(|m| m.slug == slug) {
+            continue;
+        }
+        let display_name = text(entry, "display_name").unwrap_or_else(|| slug.clone());
+        models.push(PlanModel { slug, display_name });
+        if models.len() == MAX_MODELS {
+            break;
+        }
+    }
+    Ok(models)
 }
 
 const SIGN_IN: &str = "Continue with ChatGPT in Settings to use your ChatGPT plan.";
@@ -784,6 +859,8 @@ pub struct ChatGptPlan {
     refresh: tokio::sync::Mutex<()>,
     /// The account whose tokens were cleared, so signing in again reuses its client.
     last: Mutex<Option<PlanAccount>>,
+    /// The signed-in account's models, by its subject; fetched again when the account changes.
+    models: Mutex<Option<(String, Vec<PlanModel>)>>,
 }
 
 impl ChatGptPlan {
@@ -799,7 +876,59 @@ impl ChatGptPlan {
             clock,
             refresh: tokio::sync::Mutex::new(()),
             last: Mutex::new(None),
+            models: Mutex::new(None),
         }
+    }
+
+    /// The models the signed-in plan lists, in its order (TP-SUB-06). Fetched with the plan's
+    /// token once per account; a change of account, or an empty list, fetches again.
+    pub async fn models(&self) -> Result<Vec<PlanModel>, KeyFailure> {
+        let subject = match self.store.get_plan() {
+            Ok(Some(c)) => c.subject,
+            Ok(None) => return Err(KeyFailure::Missing(SIGN_IN.into())),
+            Err(e) => {
+                return Err(KeyFailure::Internal(format!(
+                    "couldn't read the ChatGPT sign-in: {e}"
+                )));
+            }
+        };
+        let poisoned = || KeyFailure::Internal("the ChatGPT model list's lock was poisoned".into());
+        if let Some((cached, models)) = self.models.lock().map_err(|_| poisoned())?.as_ref()
+            && *cached == subject
+        {
+            return Ok(models.clone());
+        }
+        let token = self.token().await?;
+        let (status, body) = self
+            .http
+            .get_authorized(MODELS_URL, &token)
+            .await
+            .map_err(|_| {
+                KeyFailure::Unavailable(
+                    "Couldn't reach ChatGPT for your plan's models. Try again in a minute.".into(),
+                )
+            })?;
+        if status != 200 {
+            let failure = plan_failure(status, &body);
+            return Err(match failure {
+                PlanFailure::InvalidUser | PlanFailure::NotAuthorized => {
+                    KeyFailure::Missing(failure.message())
+                }
+                PlanFailure::UsageLimit
+                | PlanFailure::NotEligible
+                | PlanFailure::Unsupported(_)
+                | PlanFailure::Unavailable
+                | PlanFailure::Route
+                | PlanFailure::Blocked
+                | PlanFailure::Other(_) => KeyFailure::Unavailable(failure.message()),
+            });
+        }
+        let models = listed_models(&body).map_err(|e| KeyFailure::Unavailable(e.to_string()))?;
+        // An empty list isn't kept, so the next run asks again.
+        if !models.is_empty() {
+            *self.models.lock().map_err(|_| poisoned())? = Some((subject, models.clone()));
+        }
+        Ok(models)
     }
 
     /// The account signed in now, if any.
@@ -941,5 +1070,81 @@ impl KeySource for ChatGptPlan {
     /// provider is always OpenAI's; the plan has no other.
     fn key(&self, _provider: Provider) -> BoxFuture<'_, Result<Secret, KeyFailure>> {
         Box::pin(self.token())
+    }
+}
+
+/// Builds the driver for one run, given the plan's configuration with the model chosen.
+pub type PlanBuild = Arc<dyn Fn(ResponsesConfig) -> Arc<dyn RunDriver> + Send + Sync>;
+
+/// GPT on the signed-in ChatGPT plan (TP-SUB-07): each run asks the plan for its models, uses
+/// the chosen one while the plan lists it (else the plan's first), and runs through the plan's
+/// route. No sign-in, or no models, fails the run before any request.
+pub struct PlanAgent {
+    plan: Arc<ChatGptPlan>,
+    preferred: Option<String>,
+    build: PlanBuild,
+    pauses: bool,
+}
+
+impl PlanAgent {
+    /// An agent on `plan` that prefers the model `preferred`, builds each run's driver with
+    /// `build`, and offers Pause when that driver stops at safe points (`pauses`).
+    pub fn new(
+        plan: Arc<ChatGptPlan>,
+        preferred: Option<String>,
+        build: PlanBuild,
+        pauses: bool,
+    ) -> Self {
+        Self {
+            plan,
+            preferred,
+            build,
+            pauses,
+        }
+    }
+}
+
+/// The run's model: the preferred one while the plan lists it, else the plan's first.
+fn chosen<'a>(models: &'a [PlanModel], preferred: Option<&str>) -> Option<&'a PlanModel> {
+    preferred
+        .and_then(|slug| models.iter().find(|m| m.slug == slug))
+        .or_else(|| models.first())
+}
+
+impl RunDriver for PlanAgent {
+    fn pauses(&self, _agent: &AgentId) -> bool {
+        self.pauses
+    }
+
+    fn run(&self, request: RunRequest, sink: EventSink, cancel: CancelToken) -> RunFuture {
+        let plan = self.plan.clone();
+        let preferred = self.preferred.clone();
+        let build = self.build.clone();
+        Box::pin(async move {
+            let models = tokio::select! {
+                biased;
+                // The supervisor logs run.cancelled.
+                () = cancel.cancelled() => return,
+                models = plan.models() => models,
+            };
+            let models = match models {
+                Ok(models) => models,
+                Err(KeyFailure::Missing(message) | KeyFailure::Unavailable(message)) => {
+                    return fail_run(&sink, FailureReason::Provider, message);
+                }
+                Err(KeyFailure::Internal(message)) => {
+                    return fail_run(&sink, FailureReason::Internal, message);
+                }
+            };
+            let Some(model) = chosen(&models, preferred.as_deref()) else {
+                return fail_run(
+                    &sink,
+                    FailureReason::Provider,
+                    "Your ChatGPT plan offers no models right now. Try again later.".into(),
+                );
+            };
+            let driver = build(ResponsesConfig::chatgpt_plan(model.slug.clone()));
+            driver.run(request, sink, cancel).await;
+        })
     }
 }

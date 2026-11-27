@@ -1,0 +1,19 @@
+{
+  "description": "The plan's usage limit arrives after the stream opened (response.failed with subscription_sharing_usage_limit_exceeded), as OpenAI's models and inference page says it can.",
+  "responses": [
+    {
+      "status": 200,
+      "body": [
+        "event: response.created",
+        "data: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"resp_plan_0001\",\"object\":\"response\",\"model\":\"gpt-test\",\"status\":\"in_progress\",\"output\":[]}}",
+        "",
+        "event: response.in_progress",
+        "data: {\"type\":\"response.in_progress\",\"sequence_number\":1,\"response\":{\"id\":\"resp_plan_0001\",\"object\":\"response\",\"model\":\"gpt-test\",\"status\":\"in_progress\",\"output\":[]}}",
+        "",
+        "event: response.failed",
+        "data: {\"type\": \"response.failed\", \"response\": {\"id\": \"resp_plan_0002\", \"status\": \"failed\", \"error\": {\"code\": \"subscription_sharing_usage_limit_exceeded\", \"message\": \"You've reached your ChatGPT plan's usage limit.\"}}}",
+        ""
+      ]
+    }
+  ]
+}

@@ -19,13 +19,13 @@
 use corral_adapters::chatgpt::{
     Attempt, CALLBACK_PATH, ChatGptPlan, HostId, MANAGE_USAGE_URL, Returning, SignInError,
 };
-use corral_secrets::Secret;
+use corral_secrets::{Provider, Secret};
 use serde::{Deserialize, Serialize};
 use std::net::Ipv4Addr;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Notify;
@@ -456,6 +456,35 @@ fn not_found_page() -> String {
     )
 }
 
+/// The providers whose agents run: those with a key, plus OpenAI's while a ChatGPT plan is
+/// signed in, since GPT runs on the plan (ADR-017, TP-SUB-07). In the catalog's order, once each.
+pub fn with_plan(connected: Vec<Provider>, signed_in: bool) -> Vec<Provider> {
+    Provider::ALL
+        .into_iter()
+        .filter(|p| connected.contains(p) || (signed_in && *p == Provider::OpenAi))
+        .collect()
+}
+
+/// Whether `plan` is signed in. A sign-in that can't be read counts as signed out (GPT's runs
+/// would fail on it anyway) and is logged.
+pub fn plan_signed_in(plan: &ChatGptPlan) -> bool {
+    match plan.signed_in() {
+        Ok(account) => account.is_some(),
+        Err(e) => {
+            eprintln!("corral: couldn't read the ChatGPT sign-in: {e}");
+            false
+        }
+    }
+}
+
+/// GPT's drop follows the plan: it joins the corral on sign-in and leaves on sign-out.
+fn corral_follows_plan(app: &AppHandle) {
+    match app.try_state::<crate::keys::Keys>() {
+        Some(keys) => crate::keys::corral_follows_keys(app, keys.0.as_ref()),
+        None => eprintln!("corral: no key store, so the corral didn't follow the ChatGPT sign-in"),
+    }
+}
+
 // Async so a Keychain prompt never blocks the main thread.
 
 /// Command: whether a ChatGPT account is signed in.
@@ -467,10 +496,13 @@ pub fn chatgpt_status(signin: State<'_, Arc<ChatGptSignIn>>) -> Result<ChatGptSt
 /// Command: sign in through the browser.
 #[tauri::command]
 pub async fn chatgpt_sign_in(
+    app: AppHandle,
     signin: State<'_, Arc<ChatGptSignIn>>,
 ) -> Result<ChatGptStatus, String> {
     let signin = Arc::clone(signin.inner());
-    signin.sign_in().await
+    let status = signin.sign_in().await?;
+    corral_follows_plan(&app);
+    Ok(status)
 }
 
 /// Command: stop waiting for the browser.
@@ -482,10 +514,14 @@ pub fn chatgpt_cancel_sign_in(signin: State<'_, Arc<ChatGptSignIn>>) {
 /// Command: sign out.
 #[tauri::command]
 pub async fn chatgpt_sign_out(
+    app: AppHandle,
     signin: State<'_, Arc<ChatGptSignIn>>,
 ) -> Result<ChatGptSignedOut, String> {
     let signin = Arc::clone(signin.inner());
-    signin.sign_out().await
+    let out = signin.sign_out().await;
+    // The tokens may be gone even when the sign-out reports a problem, so the corral checks.
+    corral_follows_plan(&app);
+    out
 }
 
 /// Command: the welcome was seen.

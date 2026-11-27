@@ -467,3 +467,29 @@ async fn tp_sub_04_cancelling_ends_a_sign_in_still_waiting() {
     assert!(error.contains("cancelled"), "{error}");
     assert!(store.get_plan().expect("store").is_none());
 }
+
+#[test]
+fn tp_sub_07_gpt_joins_the_corral_while_the_plan_is_signed_in() {
+    use corral_desktop_lib::chatgpt_signin::with_plan;
+    use corral_secrets::Provider;
+    let keyed = vec![Provider::Xai, Provider::Anthropic];
+    let with = with_plan(keyed.clone(), true);
+    assert!(with.contains(&Provider::OpenAi), "GPT runs on the plan");
+    assert_eq!(
+        with.iter().filter(|p| **p == Provider::OpenAi).count(),
+        1,
+        "once, even with an OpenAI key too"
+    );
+    assert_eq!(with_plan(with.clone(), true), with, "no duplicate");
+    assert_eq!(
+        with_plan(keyed.clone(), false),
+        keyed,
+        "signed out: only the keys count"
+    );
+    let order: Vec<Provider> = with_plan(vec![Provider::Meta, Provider::Xai], true);
+    let all: Vec<Provider> = Provider::ALL
+        .into_iter()
+        .filter(|p| order.contains(p))
+        .collect();
+    assert_eq!(order, all, "in the catalog's order, like the keys");
+}

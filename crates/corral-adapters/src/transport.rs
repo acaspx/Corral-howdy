@@ -229,6 +229,20 @@ pub trait FormTransport: Send + Sync + 'static {
 
     /// GETs `url`.
     fn get<'a>(&'a self, url: &'a str) -> BoxFuture<'a, Result<(u16, Vec<u8>), TransportError>>;
+
+    /// GETs `url` with `bearer` as the `Authorization` header. A transport that can't refuses,
+    /// so nothing is sent without the token by mistake.
+    fn get_authorized<'a>(
+        &'a self,
+        url: &'a str,
+        _bearer: &'a Secret,
+    ) -> BoxFuture<'a, Result<(u16, Vec<u8>), TransportError>> {
+        Box::pin(async move {
+            Err(TransportError::Exhausted(format!(
+                "this transport can't send an authorized GET to {url}"
+            )))
+        })
+    }
 }
 
 impl ReqwestTransport {
@@ -276,6 +290,24 @@ impl FormTransport for ReqwestTransport {
                 .client
                 .get(url)
                 .header(reqwest::header::ACCEPT, "application/json")
+                .send()
+                .await
+                .map_err(|e| TransportError::Connect(e.without_url().to_string()))?;
+            Self::whole(response).await
+        })
+    }
+    fn get_authorized<'a>(
+        &'a self,
+        url: &'a str,
+        bearer: &'a Secret,
+    ) -> BoxFuture<'a, Result<(u16, Vec<u8>), TransportError>> {
+        Box::pin(async move {
+            let response = self
+                .client
+                .get(url)
+                .header(reqwest::header::ACCEPT, "application/json")
+                // reqwest marks this header sensitive, as for model requests.
+                .bearer_auth(bearer.expose())
                 .send()
                 .await
                 .map_err(|e| TransportError::Connect(e.without_url().to_string()))?;

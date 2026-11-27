@@ -156,9 +156,9 @@ pub fn remove_provider_key(
     Ok(status)
 }
 
-/// Updates the corral's agents after a key changed (TP-VIEW-06). Without the native corral
+/// Updates the corral's agents after a key or the ChatGPT sign-in changed (TP-VIEW-06). Without the native corral
 /// there's nothing to update.
-fn corral_follows_keys(app: &tauri::AppHandle, store: &dyn SecretStore) {
+pub(crate) fn corral_follows_keys(app: &tauri::AppHandle, store: &dyn SecretStore) {
     #[cfg(all(target_os = "macos", feature = "native"))]
     {
         use tauri::Manager;
