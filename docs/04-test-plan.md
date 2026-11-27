@@ -493,7 +493,7 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **J6** Recall-all from the hotkey during 5 active runs
 - **J7** Voice: push-to-talk → edit transcript → deploy
 - **J8** Import a manifest from file → permission diff → accept → deploy
-- **J9** Corral morph: start with 3 agents (triangle) → deploy one (the shape stays a triangle, its ring turns) → add an agent (square) → remove one (triangle) → send the working one back (still a triangle; its column folds away)
+- **J9** Corral morph: start with 3 agents (triangle) → deploy one (the shape stays a triangle, its ring turns, its column rises) → add an agent (square) → remove one (triangle) → the working one finishes (its column folds away) → send it back (still a triangle; it's ready for a task). Transcript: `native/CorralNative/Fixtures/journeys/J9.json`, played by `apps/desktop/src-tauri/tests/journeys.rs` and replayed by `CorralJourneyTests.swift` (Spike S2)
 - **J10** Usage order + shown set: deploy the rank-4 agent repeatedly until it outranks #1 → with the corral idle, it glides to top-left → add a 9th agent → chooser appears → uncheck one → the corral stays an octagon with the chosen 8
 - **J11** Hover approval: an agent hits a `comms.send` checkpoint → its drop pulses and its wire turns maroon → hover → the card shows the exact destination and message → Deny with a note → the agent continues → next checkpoint → Approve → the column advances
 - **J12** Same task, three agents: deploy one prompt to three agents → "3 results ready · Compare" → continue with one → the other two fold back into the corral and their results are in History
