@@ -8,14 +8,19 @@ import type {
   CorralSettingsView,
   KeyStatus,
   Provider,
+  RunListItem,
+  RunTrace,
 } from "./bindings";
 import { CorralSettings } from "./CorralSettings";
 import type { CorralSettingsApi } from "./corralSettingsApi";
 import { toolsApi } from "./fixtures/apis";
 import { KeyIntake } from "./KeyIntake";
+import { TraceViewer } from "./TraceViewer";
+import type { TracesApi } from "./tracesApi";
 import type { KeyApi } from "./keys";
 import j1Transcript from "../../../native/CorralNative/Fixtures/journeys/J1.json?raw";
 import j10Transcript from "../../../native/CorralNative/Fixtures/journeys/J10.json?raw";
+import j4Transcript from "../../../native/CorralNative/Fixtures/journeys/J4.json?raw";
 
 // End-to-end journeys, main-window side (Spike S2, docs/04-test-plan.md §6). The Rust core plays
 // each journey and records it (apps/desktop/src-tauri/tests/journeys.rs); a step done in the main
@@ -25,10 +30,25 @@ import j10Transcript from "../../../native/CorralNative/Fixtures/journeys/J10.js
 // replayed by CorralJourneyTests.swift, so both halves are checked against one recording.
 
 interface WindowStep {
-  command: string;
-  args: { ids?: string[]; providers?: Provider[]; provider?: Provider; agent?: string; edit?: AgentEdit };
+  command: string | null;
+  args: {
+    ids?: string[];
+    providers?: Provider[];
+    provider?: Provider;
+    agent?: string;
+    edit?: AgentEdit;
+    runId?: string;
+    text?: string;
+  };
   answer: unknown;
-  gesture: { kind: string; name?: string; agent?: string; looksLike?: Provider | null };
+  gesture: {
+    kind: string;
+    name?: string;
+    agent?: string;
+    looksLike?: Provider | null;
+    filter?: string;
+    spans?: string[];
+  };
 }
 
 interface Transcript {
@@ -46,6 +66,13 @@ function windowSteps(raw: string): (WindowStep & { say: string })[] {
 function called(steps: (WindowStep & { say: string })[], command: string) {
   const step = steps.find((s) => s.command === command);
   if (!step) throw new Error(`the journey never calls ${command}`);
+  return step;
+}
+
+/** The step whose gesture is `kind`. */
+function gestured(steps: (WindowStep & { say: string })[], kind: string) {
+  const step = steps.find((s) => s.gesture.kind === kind);
+  if (!step) throw new Error(`the journey has no ${kind} step`);
   return step;
 }
 
@@ -166,6 +193,54 @@ describe("journeys in the main window", () => {
     expect(within(section).getByRole("textbox", { name: "Name" })).toHaveValue(
       (save.answer as AgentEditorView).name,
     );
+  });
+
+  it("J4 the trace viewer opens the run a task card asked for, shows its tool calls and copies it", async () => {
+    const steps = windowSteps(j4Transcript);
+    const asked = called(steps, "take_open_run");
+    const listed = called(steps, "recent_runs").answer as RunListItem[];
+    const opened = called(steps, "run_trace");
+    const copied = called(steps, "clipboard");
+    let pending = asked.answer as string | null;
+    const api: TracesApi = {
+      runs: vi.fn(async () => listed),
+      trace: vi.fn(async () => opened.answer as RunTrace),
+      copy: vi.fn(async () => {}),
+      // The run a click in the corral asked for is taken once.
+      takeOpenRun: vi.fn(async () => {
+        const run = pending;
+        pending = null;
+        return run;
+      }),
+      onOpenRequest: () => () => {},
+    };
+    render(<TraceViewer api={api} />);
+    await act(async () => {});
+    const section = screen.getByRole("region", { name: "Traces" });
+    expect(api.trace).toHaveBeenCalledWith(opened.args.runId);
+    const rows = () =>
+      within(section)
+        .getAllByRole("row")
+        .map((row) => row.getAttribute("data-span"))
+        .filter((id): id is string => id !== null);
+    const spans = (opened.answer as RunTrace).view.spans.map((span) => span.id);
+    expect(rows()).toEqual(spans);
+
+    const show = gestured(steps, "show");
+    await act(async () => {
+      fireEvent.click(
+        within(within(section).getByRole("radiogroup", { name: "Show" })).getByRole("radio", {
+          name: show.gesture.filter,
+        }),
+      );
+    });
+    expect(rows(), show.say).toEqual(show.gesture.spans);
+
+    await act(async () => {
+      fireEvent.click(within(section).getByRole("button", { name: "Copy as JSON" }));
+    });
+    expect(api.copy, copied.say).toHaveBeenCalledWith(copied.args.text);
+    expect(within(section).getByRole("status")).toHaveTextContent("Copied the run's events as JSON.");
   });
 });
 

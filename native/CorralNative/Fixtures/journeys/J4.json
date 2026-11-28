@@ -1,0 +1,635 @@
+{
+  "journey": "J4",
+  "steps": [
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "claude",
+            "status": "available"
+          }
+        ],
+        "shape": "circle"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "The corral opens with Claude"
+    },
+    {
+      "expect": {
+        "columnStatus": {
+          "claude": "working"
+        },
+        "columns": [
+          "claude"
+        ],
+        "drops": [
+          {
+            "id": "claude",
+            "status": "working"
+          }
+        ],
+        "shape": "circle"
+      },
+      "gesture": {
+        "agent": "claude",
+        "kind": "task",
+        "text": "Find my notes on the trip"
+      },
+      "intent": {
+        "intent": {
+          "id": "claude",
+          "kind": "deployTask",
+          "prompt": "Find my notes on the trip"
+        },
+        "v": 1
+      },
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "claude",
+              "prompt": "Find my notes on the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "queued"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Find my notes on the trip",
+                "promptTruncated": false,
+                "status": "queued"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "claude",
+              "prompt": "Find my notes on the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Find my notes on the trip",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "claude",
+              "plan": {
+                "now": "fs.read",
+                "segments": [
+                  "current"
+                ],
+                "step": 1,
+                "total": 1
+              },
+              "prompt": "Find my notes on the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Find my notes on the trip",
+                "promptTruncated": false,
+                "status": "working",
+                "subtask": {
+                  "step": 1,
+                  "title": "fs.read",
+                  "total": 1
+                }
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "claude",
+              "plan": {
+                "segments": [
+                  "done"
+                ],
+                "total": 1
+              },
+              "prompt": "Find my notes on the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Find my notes on the trip",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "claude",
+              "plan": {
+                "now": "fs.read",
+                "segments": [
+                  "done",
+                  "current"
+                ],
+                "step": 2,
+                "total": 2
+              },
+              "prompt": "Find my notes on the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Find my notes on the trip",
+                "promptTruncated": false,
+                "status": "working",
+                "subtask": {
+                  "step": 2,
+                  "title": "fs.read",
+                  "total": 2
+                }
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "claude",
+              "plan": {
+                "segments": [
+                  "done",
+                  "done"
+                ],
+                "total": 2
+              },
+              "prompt": "Find my notes on the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Find my notes on the trip",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        }
+      ],
+      "say": "Give Claude a task: it reads two files and keeps working, its column up"
+    },
+    {
+      "expect": {
+        "columnStatus": {
+          "claude": "working"
+        },
+        "columns": [
+          "claude"
+        ],
+        "drops": [
+          {
+            "id": "claude",
+            "status": "working"
+          }
+        ],
+        "shape": "circle"
+      },
+      "gesture": {
+        "agent": "claude",
+        "kind": "openTraceCard"
+      },
+      "intent": {
+        "intent": {
+          "id": "claude",
+          "kind": "openTrace"
+        },
+        "v": 1
+      },
+      "rosters": [],
+      "say": "Click Claude's task card in the trace tree: the main window comes forward"
+    },
+    {
+      "expect": {
+        "columnStatus": {
+          "claude": "working"
+        },
+        "columns": [
+          "claude"
+        ],
+        "drops": [
+          {
+            "id": "claude",
+            "status": "working"
+          }
+        ],
+        "shape": "circle"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [],
+      "say": "The trace viewer takes the run the card asked for, once",
+      "window": {
+        "answer": "run-j-2",
+        "args": {},
+        "command": "take_open_run",
+        "gesture": {
+          "kind": "viewerOpens"
+        }
+      }
+    },
+    {
+      "expect": {
+        "columnStatus": {
+          "claude": "working"
+        },
+        "columns": [
+          "claude"
+        ],
+        "drops": [
+          {
+            "id": "claude",
+            "status": "working"
+          }
+        ],
+        "shape": "circle"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [],
+      "say": "It lists the newest runs, Claude's first and still running",
+      "window": {
+        "answer": [
+          {
+            "agentName": "Claude",
+            "costMicroUsd": 0,
+            "endedMs": null,
+            "outcome": "running",
+            "prompt": "Find my notes on the trip",
+            "queuedMs": 1796144400000,
+            "runId": "run-j-2"
+          }
+        ],
+        "args": {},
+        "command": "recent_runs",
+        "gesture": {
+          "kind": "viewerOpens"
+        }
+      }
+    },
+    {
+      "expect": {
+        "columnStatus": {
+          "claude": "working"
+        },
+        "columns": [
+          "claude"
+        ],
+        "drops": [
+          {
+            "id": "claude",
+            "status": "working"
+          }
+        ],
+        "shape": "circle"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [],
+      "say": "It opens Claude's run: its model call and its two reads",
+      "window": {
+        "answer": {
+          "json": "[\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 1,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"run.queued\",\n    \"payload\": {\n      \"agent_id\": \"claude\",\n      \"session_id\": \"session-j-1\",\n      \"prompt\": \"Find my notes on the trip\"\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 2,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"run.started\",\n    \"payload\": {\n      \"adapter\": \"driver\"\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 3,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"model.request\",\n    \"payload\": {\n      \"provider\": \"fake\",\n      \"model\": \"fake-1\"\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 4,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"model.delta\",\n    \"payload\": {\n      \"text\": \"Looking for the trip notes.\"\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 5,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"tool.requested\",\n    \"payload\": {\n      \"tool_call_id\": \"j4-1\",\n      \"tool\": \"fs.read\",\n      \"action_class\": \"read.local\",\n      \"args\": {\n        \"path\": \"trip.md\"\n      }\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 6,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"policy.decided\",\n    \"payload\": {\n      \"tool_call_id\": \"j4-1\",\n      \"decision\": {\n        \"outcome\": \"allow\"\n      }\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 7,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"tool.started\",\n    \"payload\": {\n      \"tool_call_id\": \"j4-1\"\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 8,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"tool.result\",\n    \"payload\": {\n      \"tool_call_id\": \"j4-1\",\n      \"ok\": true,\n      \"output\": \"Lisbon, Dec 12 to 19. Budget: $2,400.\"\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 9,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"model.delta\",\n    \"payload\": {\n      \"text\": \" Found the dates. Checking the budget.\"\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 10,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"tool.requested\",\n    \"payload\": {\n      \"tool_call_id\": \"j4-2\",\n      \"tool\": \"fs.read\",\n      \"action_class\": \"read.local\",\n      \"args\": {\n        \"path\": \"budget.md\"\n      }\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 11,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"policy.decided\",\n    \"payload\": {\n      \"tool_call_id\": \"j4-2\",\n      \"decision\": {\n        \"outcome\": \"allow\"\n      }\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 12,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"tool.started\",\n    \"payload\": {\n      \"tool_call_id\": \"j4-2\"\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 13,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"tool.result\",\n    \"payload\": {\n      \"tool_call_id\": \"j4-2\",\n      \"ok\": true,\n      \"output\": \"Lisbon, Dec 12 to 19. Budget: $2,400.\"\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 14,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"model.delta\",\n    \"payload\": {\n      \"text\": \" Writing it up.\"\n    }\n  }\n]",
+          "view": {
+            "endMs": null,
+            "runId": "run-j-2",
+            "spans": [
+              {
+                "attributes": [
+                  {
+                    "key": "prompt",
+                    "value": "Find my notes on the trip"
+                  },
+                  {
+                    "key": "adapter",
+                    "value": "driver"
+                  }
+                ],
+                "endMs": null,
+                "id": "run",
+                "kind": "run",
+                "name": "invoke_agent claude",
+                "parent": null,
+                "startMs": 1796144400000,
+                "status": "running"
+              },
+              {
+                "attributes": [
+                  {
+                    "key": "provider",
+                    "value": "fake"
+                  },
+                  {
+                    "key": "model",
+                    "value": "fake-1"
+                  }
+                ],
+                "endMs": null,
+                "id": "model-1",
+                "kind": "model",
+                "name": "chat fake-1",
+                "parent": "run",
+                "startMs": 1796144400000,
+                "status": "running"
+              },
+              {
+                "attributes": [
+                  {
+                    "key": "class",
+                    "value": "read.local"
+                  },
+                  {
+                    "key": "arguments",
+                    "value": "{\"path\":\"trip.md\"}"
+                  },
+                  {
+                    "key": "decision",
+                    "value": "allow"
+                  },
+                  {
+                    "key": "result",
+                    "value": "\"Lisbon, Dec 12 to 19. Budget: $2,400.\""
+                  }
+                ],
+                "endMs": 1796144400000,
+                "id": "tool-j4-1",
+                "kind": "tool",
+                "name": "execute_tool fs.read",
+                "parent": "run",
+                "startMs": 1796144400000,
+                "status": "ok"
+              },
+              {
+                "attributes": [
+                  {
+                    "key": "class",
+                    "value": "read.local"
+                  },
+                  {
+                    "key": "arguments",
+                    "value": "{\"path\":\"budget.md\"}"
+                  },
+                  {
+                    "key": "decision",
+                    "value": "allow"
+                  },
+                  {
+                    "key": "result",
+                    "value": "\"Lisbon, Dec 12 to 19. Budget: $2,400.\""
+                  }
+                ],
+                "endMs": 1796144400000,
+                "id": "tool-j4-2",
+                "kind": "tool",
+                "name": "execute_tool fs.read",
+                "parent": "run",
+                "startMs": 1796144400000,
+                "status": "ok"
+              }
+            ],
+            "startMs": 1796144400000
+          }
+        },
+        "args": {
+          "runId": "run-j-2"
+        },
+        "command": "run_trace",
+        "gesture": {
+          "kind": "viewerOpens"
+        }
+      }
+    },
+    {
+      "expect": {
+        "columnStatus": {
+          "claude": "working"
+        },
+        "columns": [
+          "claude"
+        ],
+        "drops": [
+          {
+            "id": "claude",
+            "status": "working"
+          }
+        ],
+        "shape": "circle"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [],
+      "say": "Show Tool calls: the run and its two reads",
+      "window": {
+        "command": null,
+        "gesture": {
+          "filter": "Tool calls",
+          "kind": "show",
+          "spans": [
+            "run",
+            "tool-j4-1",
+            "tool-j4-2"
+          ]
+        }
+      }
+    },
+    {
+      "expect": {
+        "columnStatus": {
+          "claude": "working"
+        },
+        "columns": [
+          "claude"
+        ],
+        "drops": [
+          {
+            "id": "claude",
+            "status": "working"
+          }
+        ],
+        "shape": "circle"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [],
+      "say": "Copy as JSON: the run's events go to the clipboard",
+      "window": {
+        "args": {
+          "text": "[\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 1,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"run.queued\",\n    \"payload\": {\n      \"agent_id\": \"claude\",\n      \"session_id\": \"session-j-1\",\n      \"prompt\": \"Find my notes on the trip\"\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 2,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"run.started\",\n    \"payload\": {\n      \"adapter\": \"driver\"\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 3,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"model.request\",\n    \"payload\": {\n      \"provider\": \"fake\",\n      \"model\": \"fake-1\"\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 4,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"model.delta\",\n    \"payload\": {\n      \"text\": \"Looking for the trip notes.\"\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 5,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"tool.requested\",\n    \"payload\": {\n      \"tool_call_id\": \"j4-1\",\n      \"tool\": \"fs.read\",\n      \"action_class\": \"read.local\",\n      \"args\": {\n        \"path\": \"trip.md\"\n      }\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 6,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"policy.decided\",\n    \"payload\": {\n      \"tool_call_id\": \"j4-1\",\n      \"decision\": {\n        \"outcome\": \"allow\"\n      }\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 7,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"tool.started\",\n    \"payload\": {\n      \"tool_call_id\": \"j4-1\"\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 8,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"tool.result\",\n    \"payload\": {\n      \"tool_call_id\": \"j4-1\",\n      \"ok\": true,\n      \"output\": \"Lisbon, Dec 12 to 19. Budget: $2,400.\"\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 9,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"model.delta\",\n    \"payload\": {\n      \"text\": \" Found the dates. Checking the budget.\"\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 10,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"tool.requested\",\n    \"payload\": {\n      \"tool_call_id\": \"j4-2\",\n      \"tool\": \"fs.read\",\n      \"action_class\": \"read.local\",\n      \"args\": {\n        \"path\": \"budget.md\"\n      }\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 11,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"policy.decided\",\n    \"payload\": {\n      \"tool_call_id\": \"j4-2\",\n      \"decision\": {\n        \"outcome\": \"allow\"\n      }\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 12,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"tool.started\",\n    \"payload\": {\n      \"tool_call_id\": \"j4-2\"\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 13,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"tool.result\",\n    \"payload\": {\n      \"tool_call_id\": \"j4-2\",\n      \"ok\": true,\n      \"output\": \"Lisbon, Dec 12 to 19. Budget: $2,400.\"\n    }\n  },\n  {\n    \"run_id\": \"run-j-2\",\n    \"seq\": 14,\n    \"ts\": 1796144400000,\n    \"span_id\": \"run-j-2:invoke_agent\",\n    \"kind\": \"model.delta\",\n    \"payload\": {\n      \"text\": \" Writing it up.\"\n    }\n  }\n]"
+        },
+        "command": "clipboard",
+        "gesture": {
+          "kind": "copyJson"
+        }
+      }
+    }
+  ],
+  "title": "Trace viewer"
+}
