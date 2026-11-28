@@ -36,7 +36,7 @@ use crate::bridge::{
 use crate::chatgpt_signin::{ChatGptSignIn, plan_signed_in, with_plan};
 use crate::corral_order::{CorralOrder, CorralSettingsView};
 use crate::corral_settings::{CorralControl, CorralSettings};
-use crate::corral_state::{CorralState, save_order};
+use crate::corral_state::CorralState;
 use crate::keys::Keys;
 use crate::linked::LinkedStore;
 use crate::logos::{LogoStore, fetch_missing};
@@ -1047,27 +1047,21 @@ impl CorralFeed {
 impl CorralControl for CorralFeed {
     fn settings(&self) -> Result<CorralSettingsView, String> {
         let views = self.views.lock().map_err(|_| POISONED.to_owned())?;
-        Ok(views.order.settings(&views.all_cards))
+        Ok(views.settings())
     }
 
     fn choose_shown(&self, ids: Vec<String>) -> Result<CorralSettingsView, String> {
         let mut views = self.views.lock().map_err(|_| POISONED.to_owned())?;
-        let picks: Vec<AgentId> = ids.iter().map(|id| AgentId::from(id.as_str())).collect();
-        views.order.choose_shown(&picks)?;
-        save_order(&mut views.order);
-        let cards = views.all_cards.clone();
-        let placed = views.order.place(cards, self.clock.now_ms());
-        if views.corral.set_agents(placed.cards) {
-            self.send(views.snapshot(self.clock.now_ms()));
+        let now = self.clock.now_ms();
+        if views.choose_shown(&ids, now)? {
+            self.send(views.snapshot(now));
         }
-        Ok(views.order.settings(&views.all_cards))
+        Ok(views.settings())
     }
 
     fn keep_order_fixed(&self, keep: bool) -> Result<CorralSettingsView, String> {
         let mut views = self.views.lock().map_err(|_| POISONED.to_owned())?;
-        views.order.set_keep_fixed(keep);
-        save_order(&mut views.order);
-        Ok(views.order.settings(&views.all_cards))
+        Ok(views.keep_order_fixed(keep))
     }
 }
 

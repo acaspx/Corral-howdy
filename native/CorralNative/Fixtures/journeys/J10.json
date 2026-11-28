@@ -1,0 +1,1953 @@
+{
+  "journey": "J10",
+  "steps": [
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          },
+          {
+            "id": "scout",
+            "status": "available"
+          },
+          {
+            "id": "gpt",
+            "status": "available"
+          },
+          {
+            "id": "atlas",
+            "status": "available"
+          },
+          {
+            "id": "nova",
+            "status": "available"
+          },
+          {
+            "id": "muse-spark",
+            "status": "available"
+          },
+          {
+            "id": "echo",
+            "status": "available"
+          }
+        ],
+        "shape": "octagon"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            },
+            {
+              "id": "atlas",
+              "monogram": "A",
+              "name": "Atlas",
+              "status": "available"
+            },
+            {
+              "id": "nova",
+              "monogram": "N",
+              "name": "Nova",
+              "status": "available"
+            },
+            {
+              "id": "echo",
+              "monogram": "E",
+              "name": "Echo",
+              "status": "available"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "atlas",
+              "monogram": "A",
+              "name": "Atlas",
+              "status": "available"
+            },
+            {
+              "id": "nova",
+              "monogram": "N",
+              "name": "Nova",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "echo",
+              "monogram": "E",
+              "name": "Echo",
+              "status": "available"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "The corral opens with eight agents, most used first: GPT is fourth"
+    },
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          },
+          {
+            "id": "scout",
+            "status": "available"
+          },
+          {
+            "id": "gpt",
+            "status": "available"
+          },
+          {
+            "id": "atlas",
+            "status": "available"
+          },
+          {
+            "id": "nova",
+            "status": "available"
+          },
+          {
+            "id": "muse-spark",
+            "status": "available"
+          },
+          {
+            "id": "echo",
+            "status": "available"
+          }
+        ],
+        "shape": "octagon"
+      },
+      "gesture": {
+        "agent": "gpt",
+        "kind": "pointAt"
+      },
+      "intent": {
+        "intent": {
+          "idle": false,
+          "kind": "corralIdle"
+        },
+        "v": 1
+      },
+      "rosters": [],
+      "say": "Point at GPT: its card opens, and the corral isn't idle"
+    },
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          },
+          {
+            "id": "scout",
+            "status": "available"
+          },
+          {
+            "id": "gpt",
+            "status": "done"
+          },
+          {
+            "id": "atlas",
+            "status": "available"
+          },
+          {
+            "id": "nova",
+            "status": "available"
+          },
+          {
+            "id": "muse-spark",
+            "status": "available"
+          },
+          {
+            "id": "echo",
+            "status": "available"
+          }
+        ],
+        "shape": "octagon"
+      },
+      "gesture": {
+        "agent": "gpt",
+        "kind": "task",
+        "text": "Check the forecast"
+      },
+      "intent": {
+        "intent": {
+          "id": "gpt",
+          "kind": "deployTask",
+          "prompt": "Check the forecast"
+        },
+        "v": 1
+      },
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "atlas",
+              "monogram": "A",
+              "name": "Atlas",
+              "status": "available"
+            },
+            {
+              "id": "nova",
+              "monogram": "N",
+              "name": "Nova",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "echo",
+              "monogram": "E",
+              "name": "Echo",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Check the forecast",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "queued"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Check the forecast",
+                "promptTruncated": false,
+                "status": "queued"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "atlas",
+              "monogram": "A",
+              "name": "Atlas",
+              "status": "available"
+            },
+            {
+              "id": "nova",
+              "monogram": "N",
+              "name": "Nova",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "echo",
+              "monogram": "E",
+              "name": "Echo",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Check the forecast",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Check the forecast",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "atlas",
+              "monogram": "A",
+              "name": "Atlas",
+              "status": "available"
+            },
+            {
+              "id": "nova",
+              "monogram": "N",
+              "name": "Nova",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "echo",
+              "monogram": "E",
+              "name": "Echo",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answer": "Sunny, 18°C.",
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Check the forecast",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Check the forecast",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "done"
+            },
+            {
+              "id": "atlas",
+              "monogram": "A",
+              "name": "Atlas",
+              "status": "available"
+            },
+            {
+              "id": "nova",
+              "monogram": "N",
+              "name": "Nova",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "echo",
+              "monogram": "E",
+              "name": "Echo",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answer": "Sunny, 18°C.",
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Check the forecast",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "done"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "Give GPT a task from its card: it runs and finishes, and the order stays"
+    },
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          },
+          {
+            "id": "scout",
+            "status": "available"
+          },
+          {
+            "id": "gpt",
+            "status": "done"
+          },
+          {
+            "id": "atlas",
+            "status": "available"
+          },
+          {
+            "id": "nova",
+            "status": "available"
+          },
+          {
+            "id": "muse-spark",
+            "status": "available"
+          },
+          {
+            "id": "echo",
+            "status": "available"
+          }
+        ],
+        "shape": "octagon"
+      },
+      "gesture": {
+        "agent": "gpt",
+        "kind": "task",
+        "text": "Check the forecast"
+      },
+      "intent": {
+        "intent": {
+          "id": "gpt",
+          "kind": "deployTask",
+          "prompt": "Check the forecast"
+        },
+        "v": 1
+      },
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "atlas",
+              "monogram": "A",
+              "name": "Atlas",
+              "status": "available"
+            },
+            {
+              "id": "nova",
+              "monogram": "N",
+              "name": "Nova",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "echo",
+              "monogram": "E",
+              "name": "Echo",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Check the forecast",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "queued"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Check the forecast",
+                "promptTruncated": false,
+                "status": "queued"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "atlas",
+              "monogram": "A",
+              "name": "Atlas",
+              "status": "available"
+            },
+            {
+              "id": "nova",
+              "monogram": "N",
+              "name": "Nova",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "echo",
+              "monogram": "E",
+              "name": "Echo",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Check the forecast",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Check the forecast",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "atlas",
+              "monogram": "A",
+              "name": "Atlas",
+              "status": "available"
+            },
+            {
+              "id": "nova",
+              "monogram": "N",
+              "name": "Nova",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "echo",
+              "monogram": "E",
+              "name": "Echo",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answer": "Sunny, 18°C.",
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Check the forecast",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Check the forecast",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "done"
+            },
+            {
+              "id": "atlas",
+              "monogram": "A",
+              "name": "Atlas",
+              "status": "available"
+            },
+            {
+              "id": "nova",
+              "monogram": "N",
+              "name": "Nova",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "echo",
+              "monogram": "E",
+              "name": "Echo",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answer": "Sunny, 18°C.",
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Check the forecast",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "done"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "And again"
+    },
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          },
+          {
+            "id": "scout",
+            "status": "available"
+          },
+          {
+            "id": "gpt",
+            "status": "done"
+          },
+          {
+            "id": "atlas",
+            "status": "available"
+          },
+          {
+            "id": "nova",
+            "status": "available"
+          },
+          {
+            "id": "muse-spark",
+            "status": "available"
+          },
+          {
+            "id": "echo",
+            "status": "available"
+          }
+        ],
+        "shape": "octagon"
+      },
+      "gesture": {
+        "agent": "gpt",
+        "kind": "task",
+        "text": "Check the forecast"
+      },
+      "intent": {
+        "intent": {
+          "id": "gpt",
+          "kind": "deployTask",
+          "prompt": "Check the forecast"
+        },
+        "v": 1
+      },
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "atlas",
+              "monogram": "A",
+              "name": "Atlas",
+              "status": "available"
+            },
+            {
+              "id": "nova",
+              "monogram": "N",
+              "name": "Nova",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "echo",
+              "monogram": "E",
+              "name": "Echo",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Check the forecast",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "queued"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Check the forecast",
+                "promptTruncated": false,
+                "status": "queued"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "atlas",
+              "monogram": "A",
+              "name": "Atlas",
+              "status": "available"
+            },
+            {
+              "id": "nova",
+              "monogram": "N",
+              "name": "Nova",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "echo",
+              "monogram": "E",
+              "name": "Echo",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Check the forecast",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Check the forecast",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "atlas",
+              "monogram": "A",
+              "name": "Atlas",
+              "status": "available"
+            },
+            {
+              "id": "nova",
+              "monogram": "N",
+              "name": "Nova",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "echo",
+              "monogram": "E",
+              "name": "Echo",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answer": "Sunny, 18°C.",
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Check the forecast",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Check the forecast",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "done"
+            },
+            {
+              "id": "atlas",
+              "monogram": "A",
+              "name": "Atlas",
+              "status": "available"
+            },
+            {
+              "id": "nova",
+              "monogram": "N",
+              "name": "Nova",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "echo",
+              "monogram": "E",
+              "name": "Echo",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answer": "Sunny, 18°C.",
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Check the forecast",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "done"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "And a third time: GPT now outranks Grok, but the drops wait while you're in the corral"
+    },
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "gpt",
+            "status": "done"
+          },
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          },
+          {
+            "id": "scout",
+            "status": "available"
+          },
+          {
+            "id": "atlas",
+            "status": "available"
+          },
+          {
+            "id": "nova",
+            "status": "available"
+          },
+          {
+            "id": "muse-spark",
+            "status": "available"
+          },
+          {
+            "id": "echo",
+            "status": "available"
+          }
+        ],
+        "shape": "octagon"
+      },
+      "gesture": {
+        "kind": "leaveCorral"
+      },
+      "intent": {
+        "intent": {
+          "idle": true,
+          "kind": "corralIdle"
+        },
+        "v": 1
+      },
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "done"
+            },
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            },
+            {
+              "id": "atlas",
+              "monogram": "A",
+              "name": "Atlas",
+              "status": "available"
+            },
+            {
+              "id": "nova",
+              "monogram": "N",
+              "name": "Nova",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "echo",
+              "monogram": "E",
+              "name": "Echo",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answer": "Sunny, 18°C.",
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Check the forecast",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "done"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "Leave the corral: once it's idle, GPT glides to the top-left"
+    },
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "gpt",
+            "status": "done"
+          },
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          },
+          {
+            "id": "scout",
+            "status": "available"
+          },
+          {
+            "id": "atlas",
+            "status": "available"
+          },
+          {
+            "id": "nova",
+            "status": "available"
+          },
+          {
+            "id": "muse-spark",
+            "status": "available"
+          },
+          {
+            "id": "echo",
+            "status": "available"
+          }
+        ],
+        "shape": "octagon"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [],
+      "say": "A 9th agent connects: the corral stays an octagon, and Pilot waits to be chosen"
+    },
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "gpt",
+            "status": "done"
+          },
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          },
+          {
+            "id": "scout",
+            "status": "available"
+          },
+          {
+            "id": "atlas",
+            "status": "available"
+          },
+          {
+            "id": "nova",
+            "status": "available"
+          },
+          {
+            "id": "muse-spark",
+            "status": "available"
+          },
+          {
+            "id": "echo",
+            "status": "available"
+          }
+        ],
+        "shape": "octagon"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [],
+      "say": "Settings → Corral asks which 8 show, with Pilot unticked",
+      "window": {
+        "answer": {
+          "agents": [
+            {
+              "id": "gpt",
+              "name": "GPT",
+              "shown": true
+            },
+            {
+              "id": "grok",
+              "name": "Grok",
+              "shown": true
+            },
+            {
+              "id": "claude",
+              "name": "Claude",
+              "shown": true
+            },
+            {
+              "id": "scout",
+              "name": "Scout",
+              "shown": true
+            },
+            {
+              "id": "atlas",
+              "name": "Atlas",
+              "shown": true
+            },
+            {
+              "id": "nova",
+              "name": "Nova",
+              "shown": true
+            },
+            {
+              "id": "muse-spark",
+              "name": "Muse Spark",
+              "shown": true
+            },
+            {
+              "id": "echo",
+              "name": "Echo",
+              "shown": true
+            },
+            {
+              "id": "pilot",
+              "name": "Pilot",
+              "shown": false
+            }
+          ],
+          "keepFixed": false,
+          "maxShown": 8,
+          "needsChoice": true
+        },
+        "args": {},
+        "command": "corral_settings",
+        "gesture": {
+          "kind": "openCorralSettings"
+        }
+      }
+    },
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "gpt",
+            "status": "done"
+          },
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          },
+          {
+            "id": "atlas",
+            "status": "available"
+          },
+          {
+            "id": "nova",
+            "status": "available"
+          },
+          {
+            "id": "muse-spark",
+            "status": "available"
+          },
+          {
+            "id": "echo",
+            "status": "available"
+          }
+        ],
+        "shape": "heptagon"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "done"
+            },
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "atlas",
+              "monogram": "A",
+              "name": "Atlas",
+              "status": "available"
+            },
+            {
+              "id": "nova",
+              "monogram": "N",
+              "name": "Nova",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "echo",
+              "monogram": "E",
+              "name": "Echo",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answer": "Sunny, 18°C.",
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Check the forecast",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "done"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "Untick Scout: the corral is a heptagon",
+      "window": {
+        "answer": {
+          "agents": [
+            {
+              "id": "gpt",
+              "name": "GPT",
+              "shown": true
+            },
+            {
+              "id": "grok",
+              "name": "Grok",
+              "shown": true
+            },
+            {
+              "id": "claude",
+              "name": "Claude",
+              "shown": true
+            },
+            {
+              "id": "atlas",
+              "name": "Atlas",
+              "shown": true
+            },
+            {
+              "id": "nova",
+              "name": "Nova",
+              "shown": true
+            },
+            {
+              "id": "muse-spark",
+              "name": "Muse Spark",
+              "shown": true
+            },
+            {
+              "id": "echo",
+              "name": "Echo",
+              "shown": true
+            },
+            {
+              "id": "scout",
+              "name": "Scout",
+              "shown": false
+            },
+            {
+              "id": "pilot",
+              "name": "Pilot",
+              "shown": false
+            }
+          ],
+          "keepFixed": false,
+          "maxShown": 8,
+          "needsChoice": false
+        },
+        "args": {
+          "ids": [
+            "gpt",
+            "grok",
+            "claude",
+            "atlas",
+            "nova",
+            "muse-spark",
+            "echo"
+          ]
+        },
+        "command": "set_corral_shown",
+        "gesture": {
+          "kind": "untick",
+          "name": "Scout"
+        }
+      }
+    },
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "gpt",
+            "status": "done"
+          },
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          },
+          {
+            "id": "atlas",
+            "status": "available"
+          },
+          {
+            "id": "nova",
+            "status": "available"
+          },
+          {
+            "id": "muse-spark",
+            "status": "available"
+          },
+          {
+            "id": "echo",
+            "status": "available"
+          },
+          {
+            "id": "pilot",
+            "status": "available"
+          }
+        ],
+        "shape": "octagon"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "done"
+            },
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "atlas",
+              "monogram": "A",
+              "name": "Atlas",
+              "status": "available"
+            },
+            {
+              "id": "nova",
+              "monogram": "N",
+              "name": "Nova",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "echo",
+              "monogram": "E",
+              "name": "Echo",
+              "status": "available"
+            },
+            {
+              "id": "pilot",
+              "monogram": "P",
+              "name": "Pilot",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answer": "Sunny, 18°C.",
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Check the forecast",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "done"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "Tick Pilot: an octagon of the chosen eight",
+      "window": {
+        "answer": {
+          "agents": [
+            {
+              "id": "gpt",
+              "name": "GPT",
+              "shown": true
+            },
+            {
+              "id": "grok",
+              "name": "Grok",
+              "shown": true
+            },
+            {
+              "id": "claude",
+              "name": "Claude",
+              "shown": true
+            },
+            {
+              "id": "atlas",
+              "name": "Atlas",
+              "shown": true
+            },
+            {
+              "id": "nova",
+              "name": "Nova",
+              "shown": true
+            },
+            {
+              "id": "muse-spark",
+              "name": "Muse Spark",
+              "shown": true
+            },
+            {
+              "id": "echo",
+              "name": "Echo",
+              "shown": true
+            },
+            {
+              "id": "pilot",
+              "name": "Pilot",
+              "shown": true
+            },
+            {
+              "id": "scout",
+              "name": "Scout",
+              "shown": false
+            }
+          ],
+          "keepFixed": false,
+          "maxShown": 8,
+          "needsChoice": false
+        },
+        "args": {
+          "ids": [
+            "gpt",
+            "grok",
+            "claude",
+            "atlas",
+            "nova",
+            "muse-spark",
+            "echo",
+            "pilot"
+          ]
+        },
+        "command": "set_corral_shown",
+        "gesture": {
+          "kind": "tick",
+          "name": "Pilot"
+        }
+      }
+    }
+  ],
+  "title": "Usage order and shown set"
+}

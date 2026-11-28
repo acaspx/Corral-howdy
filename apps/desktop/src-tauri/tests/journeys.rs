@@ -22,14 +22,17 @@ use corral_adapters::linked::LinkedSettings;
 use corral_core::budget::BudgetConfig;
 use corral_core::clock::Clock;
 use corral_core::controls::CorralControls;
+use corral_core::corral_view::AgentCard;
 use corral_core::domain::ActionClass;
 use corral_core::event::Event;
 use corral_core::ids::{AgentId, CheckpointId};
 use corral_core::supervisor::{
     EventLog, LogError, RunDriver, Supervisor, SupervisorConfig, WatchedLog,
 };
+use corral_core::usage_rank::Deploy;
 use corral_desktop_lib::bridge::{Intent, decode_intent};
-use corral_desktop_lib::corral_order::CorralOrder;
+use corral_desktop_lib::corral_order::{CorralOrder, CorralSettingsView};
+use corral_desktop_lib::corral_settings::{CorralControl, CorralSettings};
 use corral_desktop_lib::corral_state::CorralState;
 use corral_desktop_lib::prompt_bar_feed;
 use corral_policy::{Policy, Profile};
@@ -129,6 +132,38 @@ struct Core {
     /// The last roster sent, for a step that sends none.
     last: Mutex<Value>,
     clock: Arc<PausedClock>,
+    /// The main window's Corral section, reaching this corral as the app's does.
+    settings: CorralSettings,
+}
+
+/// What the app's feed does for the Corral section's commands (`impl CorralControl for
+/// CorralFeed`): the corral's state decides, and a change sends the roster.
+struct StateControl {
+    state: Arc<Mutex<CorralState>>,
+    sent: Arc<Mutex<Vec<Value>>>,
+    clock: Arc<PausedClock>,
+}
+
+impl CorralControl for StateControl {
+    fn settings(&self) -> Result<CorralSettingsView, String> {
+        Ok(self.state.lock().expect("state").settings())
+    }
+
+    fn choose_shown(&self, ids: Vec<String>) -> Result<CorralSettingsView, String> {
+        let mut state = self.state.lock().expect("state");
+        let now = self.clock.now_ms();
+        if state.choose_shown(&ids, now)? {
+            self.sent
+                .lock()
+                .expect("sent")
+                .push(roster_json(&state, now));
+        }
+        Ok(state.settings())
+    }
+
+    fn keep_order_fixed(&self, keep: bool) -> Result<CorralSettingsView, String> {
+        Ok(self.state.lock().expect("state").keep_order_fixed(keep))
+    }
 }
 
 fn roster_json(state: &CorralState, now_ms: u64) -> Value {
@@ -138,11 +173,20 @@ fn roster_json(state: &CorralState, now_ms: u64) -> Value {
 
 impl Core {
     fn new(driver: Arc<dyn RunDriver>, desk: Arc<CheckpointDesk>, agents: &[Provider]) -> Self {
+        Self::with_cards(driver, desk, cards(agents))
+    }
+
+    /// The core with these agents, some of them stand-ins beyond today's catalog.
+    fn with_cards(
+        driver: Arc<dyn RunDriver>,
+        desk: Arc<CheckpointDesk>,
+        agents: Vec<AgentCard>,
+    ) -> Self {
         let clock = Arc::new(PausedClock(tokio::time::Instant::now()));
         let nonce = Arc::new(AtomicU64::new(1));
         let state = CorralState::open(
             CorralOrder::open(None),
-            cards(agents),
+            agents.clone(),
             LinkedSettings::default(),
             clock.now_ms(),
         )
@@ -177,9 +221,15 @@ impl Core {
         let ids = Arc::new(AtomicU64::new(1));
         let controls = CorralControls::new(
             supervisor,
-            agents.iter().map(|p| agent_for(*p).id),
+            agents.iter().map(|card| card.id.clone()),
             Arc::new(move || format!("j-{}", ids.fetch_add(1, Ordering::SeqCst))),
         );
+        let settings = CorralSettings::default();
+        settings.attach(Arc::new(StateControl {
+            state: Arc::clone(&state),
+            sent: Arc::clone(&sent),
+            clock: Arc::clone(&clock),
+        }));
         let opening = roster_json(&state.lock().expect("state"), clock.now_ms());
         let core = Self {
             state,
@@ -189,6 +239,7 @@ impl Core {
             bars: Mutex::new(Vec::new()),
             last: Mutex::new(opening.clone()),
             clock,
+            settings,
         };
         // The roster the corral opens with (the app's `publish_now`).
         core.sent.lock().expect("sent").push(opening);
@@ -251,6 +302,23 @@ impl Core {
                 self.answer(&agent, &checkpoint, Answer::Edit { how, args });
                 None
             }
+            Intent::StopAll => {
+                let report = self.controls.stop_all().await;
+                assert_eq!(report.forced, 0, "every run stopped when asked");
+                None
+            }
+            Intent::CorralIdle(idle) => {
+                // The app's `corral_idle`: an order waiting takes once the corral is idle.
+                let mut state = self.state.lock().expect("state");
+                let now = self.clock.now_ms();
+                if state.corral_idle(idle, now) {
+                    self.sent
+                        .lock()
+                        .expect("sent")
+                        .push(roster_json(&state, now));
+                }
+                None
+            }
             other @ (Intent::OpenAgent(_)
             | Intent::Deploy(_)
             | Intent::SummonPromptBar
@@ -264,8 +332,6 @@ impl Core {
             | Intent::ShowLinked { .. }
             | Intent::HideLinked(_)
             | Intent::OpenLinked(_)
-            | Intent::StopAll
-            | Intent::CorralIdle(_)
             | Intent::ApproveWithTouchId { .. }
             | Intent::OpenTrace(_)) => panic!("not in a journey yet: {other:?}"),
         };
@@ -301,16 +367,56 @@ impl Core {
 
     /// A key connected or removed: the corral's agents change (`Corral::refresh`).
     fn set_agents(&self, agents: &[Provider]) {
+        self.set_cards(cards(agents));
+    }
+
+    /// The corral's agents change to these, some of them stand-ins.
+    fn set_cards(&self, agents: Vec<AgentCard>) {
         self.controls
-            .set_agents(agents.iter().map(|p| agent_for(*p).id));
+            .set_agents(agents.iter().map(|card| card.id.clone()));
         let mut state = self.state.lock().expect("state");
         let now = self.clock.now_ms();
-        if state.set_agents(cards(agents), LinkedSettings::default(), now) {
+        if state.set_agents(agents, LinkedSettings::default(), now) {
             self.sent
                 .lock()
                 .expect("sent")
                 .push(roster_json(&state, now));
         }
+    }
+
+    /// At launch, once the store is open: the deploys of the last 90 days (`seed_usage`).
+    fn seed(&self, deploys: Vec<Deploy>) {
+        let mut state = self.state.lock().expect("state");
+        let now = self.clock.now_ms();
+        if state.seed_usage(deploys, now) {
+            self.sent
+                .lock()
+                .expect("sent")
+                .push(roster_json(&state, now));
+        }
+    }
+
+    /// The main window's Corral section opens: the `corral_settings` command.
+    fn window_settings(&self) -> Value {
+        let view = self.settings.settings().expect("the settings");
+        json!({"command": "corral_settings", "args": {}, "answer": view})
+    }
+
+    /// A box ticked or unticked in the Corral section, as its `toggle` asks the core: the shown
+    /// agents in the section's order, with `agent` flipped (`set_corral_shown`).
+    fn window_toggle(&self, agent: &str) -> Value {
+        let view = self.settings.settings().expect("the settings");
+        let ids: Vec<String> = view
+            .agents
+            .iter()
+            .filter(|a| if a.id == agent { !a.shown } else { a.shown })
+            .map(|a| a.id.clone())
+            .collect();
+        let answer = self
+            .settings
+            .choose_shown(ids.clone())
+            .expect("the core takes it");
+        json!({"command": "set_corral_shown", "args": {"ids": ids}, "answer": answer})
     }
 
     /// The rosters sent since the last step.
@@ -367,6 +473,10 @@ struct Step {
     intent: Value,
     rosters: Vec<Value>,
     bars: Vec<Value>,
+    /// A main-window step: its gesture, the command it calls and the core's answer.
+    window: Value,
+    /// Only the step's last roster is kept: its runs end in no fixed order.
+    settled: bool,
     expect: Value,
 }
 
@@ -379,9 +489,15 @@ impl Step {
             "rosters": self.rosters,
             "expect": self.expect,
         });
-        // Only a step the prompt bar answered has bars.
+        // Only a step the prompt bar answered has bars, and only a main-window step a window.
         if !self.bars.is_empty() {
             step["bars"] = json!(self.bars);
+        }
+        if !self.window.is_null() {
+            step["window"] = self.window.clone();
+        }
+        if self.settled {
+            step["settled"] = json!(true);
         }
         step
     }
@@ -502,13 +618,79 @@ fn checked(core: &Core, say: &'static str, gesture: Value, intent: Value, expect
             bar["outcome"]
         );
     }
+    if let Some(more) = expected["moreColumns"].as_u64() {
+        assert_eq!(
+            last["trace"]["more"].as_u64().unwrap_or(0),
+            more,
+            "{say}: the columns not shown"
+        );
+    }
+    if let Some(offered) = expected["stopAllOffered"].as_bool() {
+        let busy = last["agents"].as_array().expect("agents").iter().any(|a| {
+            ["working", "paused", "needsYou"].contains(&a["status"].as_str().unwrap_or_default())
+        });
+        assert_eq!(busy, offered, "{say}: Stop all agents is offered");
+    }
     Step {
         say,
         gesture,
         intent,
         rosters,
         bars,
+        window: Value::Null,
+        settled: false,
         expect: expected,
+    }
+}
+
+/// `expected`, with how many more runs the trace tree counts than it shows ("+N more running").
+fn with_more_columns(mut expected: Value, more: u64) -> Value {
+    expected["moreColumns"] = json!(more);
+    expected
+}
+
+/// `checked`, for a step whose runs end in no fixed order (Stop all cancels them together): only
+/// the roster after the last one is kept, so the transcript is the same on every run.
+fn checked_settled(
+    core: &Core,
+    say: &'static str,
+    gesture: Value,
+    intent: Value,
+    expected: Value,
+) -> Step {
+    {
+        let mut sent = core.sent.lock().expect("sent");
+        let last = sent.pop();
+        sent.clear();
+        sent.extend(last);
+    }
+    let mut step = checked(core, say, gesture, intent, expected);
+    step.settled = true;
+    step
+}
+
+/// `expected`, with whether the corral's menu offers Stop all agents.
+fn with_stop_all(mut expected: Value, offered: bool) -> Value {
+    expected["stopAllOffered"] = json!(offered);
+    expected
+}
+
+/// A main-window step: `checked`, with the command it called. `gesture` is what the user does in
+/// the window, which the Vitest journey test performs.
+fn in_window(core: &Core, say: &'static str, gesture: Value, call: Value, expected: Value) -> Step {
+    let mut window = call;
+    window["gesture"] = gesture;
+    let mut step = checked(core, say, Value::Null, Value::Null, expected);
+    step.window = window;
+    step
+}
+
+/// A stand-in agent beyond today's catalog: the corral treats every agent the same.
+fn stand_in(id: &str, name: &str) -> AgentCard {
+    AgentCard {
+        id: AgentId::from(id),
+        name: name.to_owned(),
+        monogram: name.chars().take(1).collect(),
     }
 }
 
@@ -1191,4 +1373,329 @@ async fn play_j11() -> String {
 #[tokio::test(start_paused = true)]
 async fn j11_a_checkpoint_is_denied_then_approved_from_the_hover_card() {
     check("J11", play_j11).await;
+}
+
+// ---- J6: Stop all, with five runs ----------------------------------------------------------
+
+const J6_TASK: &str = "Research the trip";
+
+/// Today's catalog and one stand-in: five agents, so five runs at once.
+fn j6_agents() -> Vec<AgentCard> {
+    let mut agents = cards(&[
+        Provider::Xai,
+        Provider::OpenAi,
+        Provider::Anthropic,
+        Provider::Meta,
+    ]);
+    agents.push(stand_in("scout", "Scout"));
+    agents
+}
+
+/// J6 (`docs/04-test-plan.md` §6): one task to every agent from the prompt bar (⌘↩), then
+/// Stop all agents from the corral's right-click menu: every run stops, every column folds away,
+/// the menu stops offering it, and each agent can take a new task.
+async fn play_j6() -> String {
+    let script = FakeScript::default()
+        .say("Looking at flights and hotels.")
+        .wait(Duration::from_secs(300))
+        .say(" Found three options.");
+    let core = Core::with_cards(
+        // Every task takes a while, so the runs are still going when Stop all is pressed.
+        Arc::new(FakeDriver::new(script)),
+        Arc::new(CheckpointDesk::default()),
+        j6_agents(),
+    );
+    let none = Value::Null;
+    let ids = ["grok", "gpt", "claude", "muse-spark", "scout"];
+    let all = |status: &'static str| ids.map(|id| (id, status));
+    let mut steps = Vec::new();
+
+    steps.push(checked(
+        &core,
+        "The corral opens with five agents",
+        none.clone(),
+        none.clone(),
+        with_stop_all(expect("pentagon", &all("available"), &[]), false),
+    ));
+
+    let intent = json!({"v": 1, "intent": {
+        "kind": "promptBarEdited", "seq": 1, "text": "", "cursor": 0, "selection": []}});
+    core.intent(&intent).await;
+    steps.push(checked(
+        &core,
+        "Open the prompt bar with nothing selected",
+        json!({"kind": "openBar", "select": []}),
+        intent,
+        expect("pentagon", &all("available"), &[]),
+    ));
+
+    let intent = json!({"v": 1, "intent": {
+        "kind": "promptBarEdited", "seq": 2, "text": J6_TASK, "cursor": J6_TASK.len(),
+        "selection": []}});
+    core.intent(&intent).await;
+    steps.push(checked(
+        &core,
+        "Type the task",
+        json!({"kind": "typeInBar", "text": J6_TASK}),
+        intent,
+        expect("pentagon", &all("available"), &[]),
+    ));
+
+    let intent = json!({"v": 1, "intent": {
+        "kind": "promptBarSend", "seq": 3, "text": J6_TASK, "selection": [], "all": true}});
+    core.intent(&intent).await;
+    wait(1).await;
+    steps.push(checked(
+        &core,
+        "⌘↩ sends it to every agent: five runs, three columns and \"+2 more running\"",
+        json!({"kind": "sendBar", "all": true}),
+        intent,
+        with_stop_all(
+            with_more_columns(expect("pentagon", &all("working"), &ids[..3]), 2),
+            true,
+        ),
+    ));
+
+    let intent = json!({"v": 1, "intent": {"kind": "stopAll"}});
+    core.intent(&intent).await;
+    wait(1).await;
+    steps.push(checked_settled(
+        &core,
+        "Right-click the corral and choose Stop all agents: every run stops and its column folds \
+         away",
+        json!({"kind": "stopAll"}),
+        intent,
+        with_stop_all(expect("pentagon", &all("available"), &[]), false),
+    ));
+
+    let task = "Book the hotel";
+    let intent = json!({"v": 1, "intent": {"kind": "deployTask", "id": "claude", "prompt": task}});
+    core.intent(&intent).await;
+    wait(1).await;
+    steps.push(checked(
+        &core,
+        "Claude takes a new task",
+        json!({"kind": "task", "agent": "claude", "text": task}),
+        intent,
+        with_stop_all(
+            expect(
+                "pentagon",
+                &[
+                    ("grok", "available"),
+                    ("gpt", "available"),
+                    ("claude", "working"),
+                    ("muse-spark", "available"),
+                    ("scout", "available"),
+                ],
+                &["claude"],
+            ),
+            true,
+        ),
+    ));
+
+    transcript("J6", "Stop all", &steps)
+}
+
+#[tokio::test(start_paused = true)]
+async fn j6_stop_all_stops_five_runs_and_each_agent_can_go_again() {
+    check("J6", play_j6).await;
+}
+
+// ---- J10: the usage order and the shown set ------------------------------------------------
+
+const J10_TASK: &str = "Check the forecast";
+
+/// Today's catalog and four stand-ins: a full corral of eight.
+fn j10_agents() -> Vec<AgentCard> {
+    let mut agents = cards(&[
+        Provider::Xai,
+        Provider::OpenAi,
+        Provider::Anthropic,
+        Provider::Meta,
+    ]);
+    for (id, name) in [
+        ("scout", "Scout"),
+        ("atlas", "Atlas"),
+        ("nova", "Nova"),
+        ("echo", "Echo"),
+    ] {
+        agents.push(stand_in(id, name));
+    }
+    agents
+}
+
+/// The deploys of the last 90 days: ten days ago, Grok most and GPT fourth.
+fn j10_history() -> Vec<Deploy> {
+    let ten_days_ago = START_MS - 10 * 24 * 3_600_000;
+    [
+        ("grok", 6),
+        ("claude", 5),
+        ("scout", 4),
+        ("gpt", 3),
+        ("atlas", 2),
+        ("nova", 1),
+    ]
+    .into_iter()
+    .flat_map(|(agent, times)| {
+        (0..times).map(move |n| Deploy {
+            agent: AgentId::from(agent),
+            ts_ms: ten_days_ago + n * 60_000,
+        })
+    })
+    .collect()
+}
+
+/// J10 (`docs/04-test-plan.md` §6): deploy the rank-4 agent until it outranks rank 1; the
+/// corral keeps its order while you're in it, and once you leave it GPT glides to the top-left.
+/// A 9th agent keeps the corral at eight and asks which show; untick one (a heptagon) and tick
+/// the new one, and the corral is an octagon of the chosen eight.
+async fn play_j10() -> String {
+    let script = FakeScript::default().say("Sunny, 18°C.");
+    let core = Core::with_cards(
+        Arc::new(FakeDriver::new(FakeScript::default()).with_prompt(J10_TASK, script)),
+        Arc::new(CheckpointDesk::default()),
+        j10_agents(),
+    );
+    core.seed(j10_history());
+    let none = Value::Null;
+    let mut steps = Vec::new();
+    let by_use = [
+        "grok",
+        "claude",
+        "scout",
+        "gpt",
+        "atlas",
+        "nova",
+        "muse-spark",
+        "echo",
+    ];
+    let ready = |order: &[&'static str]| -> Vec<(&'static str, &'static str)> {
+        order.iter().map(|id| (*id, "available")).collect()
+    };
+    let gpt_done = |order: &[&'static str]| -> Vec<(&'static str, &'static str)> {
+        order
+            .iter()
+            .map(|id| (*id, if *id == "gpt" { "done" } else { "available" }))
+            .collect()
+    };
+
+    steps.push(checked(
+        &core,
+        "The corral opens with eight agents, most used first: GPT is fourth",
+        none.clone(),
+        none.clone(),
+        expect("octagon", &ready(&by_use), &[]),
+    ));
+
+    let intent = json!({"v": 1, "intent": {"kind": "corralIdle", "idle": false}});
+    core.intent(&intent).await;
+    steps.push(checked(
+        &core,
+        "Point at GPT: its card opens, and the corral isn't idle",
+        json!({"kind": "pointAt", "agent": "gpt"}),
+        intent,
+        expect("octagon", &ready(&by_use), &[]),
+    ));
+
+    for say in [
+        "Give GPT a task from its card: it runs and finishes, and the order stays",
+        "And again",
+        "And a third time: GPT now outranks Grok, but the drops wait while you're in the corral",
+    ] {
+        let intent =
+            json!({"v": 1, "intent": {"kind": "deployTask", "id": "gpt", "prompt": J10_TASK}});
+        core.intent(&intent).await;
+        wait(1).await;
+        steps.push(checked(
+            &core,
+            say,
+            json!({"kind": "task", "agent": "gpt", "text": J10_TASK}),
+            intent,
+            expect("octagon", &gpt_done(&by_use), &[]),
+        ));
+    }
+
+    let glided = [
+        "gpt",
+        "grok",
+        "claude",
+        "scout",
+        "atlas",
+        "nova",
+        "muse-spark",
+        "echo",
+    ];
+    let intent = json!({"v": 1, "intent": {"kind": "corralIdle", "idle": true}});
+    core.intent(&intent).await;
+    steps.push(checked(
+        &core,
+        "Leave the corral: once it's idle, GPT glides to the top-left",
+        json!({"kind": "leaveCorral"}),
+        intent,
+        expect("octagon", &gpt_done(&glided), &[]),
+    ));
+
+    let mut nine = j10_agents();
+    nine.push(stand_in("pilot", "Pilot"));
+    core.set_cards(nine);
+    steps.push(checked(
+        &core,
+        "A 9th agent connects: the corral stays an octagon, and Pilot waits to be chosen",
+        none.clone(),
+        none.clone(),
+        expect("octagon", &gpt_done(&glided), &[]),
+    ));
+
+    let call = core.window_settings();
+    steps.push(in_window(
+        &core,
+        "Settings → Corral asks which 8 show, with Pilot unticked",
+        json!({"kind": "openCorralSettings"}),
+        call,
+        expect("octagon", &gpt_done(&glided), &[]),
+    ));
+
+    let call = core.window_toggle("scout");
+    let without_scout = [
+        "gpt",
+        "grok",
+        "claude",
+        "atlas",
+        "nova",
+        "muse-spark",
+        "echo",
+    ];
+    steps.push(in_window(
+        &core,
+        "Untick Scout: the corral is a heptagon",
+        json!({"kind": "untick", "name": "Scout"}),
+        call,
+        expect("heptagon", &gpt_done(&without_scout), &[]),
+    ));
+
+    let call = core.window_toggle("pilot");
+    let chosen = [
+        "gpt",
+        "grok",
+        "claude",
+        "atlas",
+        "nova",
+        "muse-spark",
+        "echo",
+        "pilot",
+    ];
+    steps.push(in_window(
+        &core,
+        "Tick Pilot: an octagon of the chosen eight",
+        json!({"kind": "tick", "name": "Pilot"}),
+        call,
+        expect("octagon", &gpt_done(&chosen), &[]),
+    ));
+
+    transcript("J10", "Usage order and shown set", &steps)
+}
+
+#[tokio::test(start_paused = true)]
+async fn j10_the_most_used_agent_glides_to_the_top_once_idle_and_eight_are_chosen() {
+    check("J10", play_j10).await;
 }
