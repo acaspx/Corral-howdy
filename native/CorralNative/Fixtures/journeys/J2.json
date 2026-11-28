@@ -1,0 +1,1518 @@
+{
+  "journey": "J2",
+  "steps": [
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "gpt",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          }
+        ],
+        "shape": "triangle"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "The corral opens with Grok, GPT and Claude"
+    },
+    {
+      "bars": [
+        {
+          "seq": 1,
+          "v": 1,
+          "view": {
+            "button": {
+              "all": false,
+              "enabled": true,
+              "label": "Deploy to 3"
+            },
+            "chips": [
+              "3 selected"
+            ],
+            "error": null,
+            "placeholder": "Give Grok, GPT and Claude a task",
+            "suggestions": []
+          }
+        }
+      ],
+      "expect": {
+        "bar": {
+          "button": "Deploy to 3",
+          "chips": [
+            "3 selected"
+          ],
+          "outcome": null
+        },
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "gpt",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          }
+        ],
+        "shape": "triangle"
+      },
+      "gesture": {
+        "kind": "openBar",
+        "select": [
+          "claude",
+          "grok",
+          "gpt"
+        ]
+      },
+      "intent": {
+        "intent": {
+          "cursor": 0,
+          "kind": "promptBarEdited",
+          "selection": [
+            "grok",
+            "gpt",
+            "claude"
+          ],
+          "seq": 1,
+          "text": ""
+        },
+        "v": 1
+      },
+      "rosters": [],
+      "say": "⌘-click Claude, Grok and GPT, then open the prompt bar: it's for the three"
+    },
+    {
+      "bars": [
+        {
+          "seq": 2,
+          "v": 1,
+          "view": {
+            "button": {
+              "all": false,
+              "enabled": true,
+              "label": "Deploy to 3"
+            },
+            "chips": [
+              "3 selected"
+            ],
+            "error": null,
+            "placeholder": "Give Grok, GPT and Claude a task",
+            "suggestions": []
+          }
+        }
+      ],
+      "expect": {
+        "bar": {
+          "button": "Deploy to 3",
+          "chips": [
+            "3 selected"
+          ],
+          "outcome": null
+        },
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "gpt",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          }
+        ],
+        "shape": "triangle"
+      },
+      "gesture": {
+        "kind": "typeInBar",
+        "text": "Plan my week"
+      },
+      "intent": {
+        "intent": {
+          "cursor": 12,
+          "kind": "promptBarEdited",
+          "selection": [
+            "grok",
+            "gpt",
+            "claude"
+          ],
+          "seq": 2,
+          "text": "Plan my week"
+        },
+        "v": 1
+      },
+      "rosters": [],
+      "say": "Type the task"
+    },
+    {
+      "bars": [
+        {
+          "outcome": {
+            "kind": "sent"
+          },
+          "seq": 3,
+          "v": 1,
+          "view": {
+            "button": {
+              "all": false,
+              "enabled": true,
+              "label": "Deploy to 3"
+            },
+            "chips": [
+              "3 selected"
+            ],
+            "error": null,
+            "placeholder": "Give Grok, GPT and Claude a task",
+            "suggestions": []
+          }
+        }
+      ],
+      "expect": {
+        "bar": {
+          "button": "Deploy to 3",
+          "chips": [
+            "3 selected"
+          ],
+          "outcome": "sent"
+        },
+        "columns": [
+          "grok",
+          "gpt",
+          "claude"
+        ],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "working"
+          },
+          {
+            "id": "gpt",
+            "status": "working"
+          },
+          {
+            "id": "claude",
+            "status": "working"
+          }
+        ],
+        "shape": "triangle"
+      },
+      "gesture": {
+        "kind": "sendBar"
+      },
+      "intent": {
+        "intent": {
+          "all": false,
+          "kind": "promptBarSend",
+          "selection": [
+            "grok",
+            "gpt",
+            "claude"
+          ],
+          "seq": 3,
+          "text": "Plan my week"
+        },
+        "v": 1
+      },
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "queued"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "queued"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "queued"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "queued"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "claude",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "queued"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "queued"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "claude",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        }
+      ],
+      "say": "Press Deploy to 3: all three work, each with its own column"
+    },
+    {
+      "expect": {
+        "columns": [
+          "gpt",
+          "claude"
+        ],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "done"
+          },
+          {
+            "id": "gpt",
+            "status": "working"
+          },
+          {
+            "id": "claude",
+            "status": "working"
+          }
+        ],
+        "shape": "triangle"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answer": "Monday: the Q4 draft.",
+              "answerTruncated": false,
+              "elapsedMs": 10000,
+              "id": "grok",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 10000,
+              "id": "gpt",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 10000,
+              "id": "claude",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answer": "Monday: the Q4 draft.",
+              "answerTruncated": false,
+              "elapsedMs": 10000,
+              "id": "grok",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.0020",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 10000,
+              "id": "gpt",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 10000,
+              "id": "claude",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "done"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answer": "Monday: the Q4 draft.",
+              "answerTruncated": false,
+              "elapsedMs": 10000,
+              "id": "grok",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.0020",
+              "status": "done"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 10000,
+              "id": "gpt",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 10000,
+              "id": "claude",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        }
+      ],
+      "say": "Grok finishes first: only its column folds away"
+    },
+    {
+      "expect": {
+        "columns": [
+          "claude"
+        ],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "done"
+          },
+          {
+            "id": "gpt",
+            "status": "done"
+          },
+          {
+            "id": "claude",
+            "status": "working"
+          }
+        ],
+        "shape": "triangle"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "done"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answer": "Monday: the Q4 draft.",
+              "answerTruncated": false,
+              "elapsedMs": 10000,
+              "id": "grok",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.0020",
+              "status": "done"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answer": "Tuesday: errands and the dentist.",
+              "answerTruncated": false,
+              "elapsedMs": 20000,
+              "id": "gpt",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 20000,
+              "id": "claude",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "done"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answer": "Monday: the Q4 draft.",
+              "answerTruncated": false,
+              "elapsedMs": 10000,
+              "id": "grok",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.0020",
+              "status": "done"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answer": "Tuesday: errands and the dentist.",
+              "answerTruncated": false,
+              "elapsedMs": 20000,
+              "id": "gpt",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.0020",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 20000,
+              "id": "claude",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "done"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "done"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answer": "Monday: the Q4 draft.",
+              "answerTruncated": false,
+              "elapsedMs": 10000,
+              "id": "grok",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.0020",
+              "status": "done"
+            },
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answer": "Tuesday: errands and the dentist.",
+              "answerTruncated": false,
+              "elapsedMs": 20000,
+              "id": "gpt",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.0020",
+              "status": "done"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 20000,
+              "id": "claude",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        }
+      ],
+      "say": "Then GPT"
+    },
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "done"
+          },
+          {
+            "id": "gpt",
+            "status": "done"
+          },
+          {
+            "id": "claude",
+            "status": "done"
+          }
+        ],
+        "shape": "triangle"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "done"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "done"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answer": "Monday: the Q4 draft.",
+              "answerTruncated": false,
+              "elapsedMs": 10000,
+              "id": "grok",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.0020",
+              "status": "done"
+            },
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answer": "Tuesday: errands and the dentist.",
+              "answerTruncated": false,
+              "elapsedMs": 20000,
+              "id": "gpt",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.0020",
+              "status": "done"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answer": "Friday: keep it free.",
+              "answerTruncated": false,
+              "elapsedMs": 30000,
+              "id": "claude",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "done"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "done"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answer": "Monday: the Q4 draft.",
+              "answerTruncated": false,
+              "elapsedMs": 10000,
+              "id": "grok",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.0020",
+              "status": "done"
+            },
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answer": "Tuesday: errands and the dentist.",
+              "answerTruncated": false,
+              "elapsedMs": 20000,
+              "id": "gpt",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.0020",
+              "status": "done"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answer": "Friday: keep it free.",
+              "answerTruncated": false,
+              "elapsedMs": 30000,
+              "id": "claude",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.0020",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Plan my week",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "done"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "done"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "done"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answer": "Monday: the Q4 draft.",
+              "answerTruncated": false,
+              "elapsedMs": 10000,
+              "id": "grok",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.0020",
+              "status": "done"
+            },
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answer": "Tuesday: errands and the dentist.",
+              "answerTruncated": false,
+              "elapsedMs": 20000,
+              "id": "gpt",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.0020",
+              "status": "done"
+            },
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answer": "Friday: keep it free.",
+              "answerTruncated": false,
+              "elapsedMs": 30000,
+              "id": "claude",
+              "prompt": "Plan my week",
+              "promptTruncated": false,
+              "spend": "$0.0020",
+              "status": "done"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "Then Claude: every column has folded away"
+    }
+  ],
+  "title": "Three agents at once"
+}

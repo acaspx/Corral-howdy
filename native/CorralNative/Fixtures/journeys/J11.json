@@ -1,0 +1,976 @@
+{
+  "journey": "J11",
+  "steps": [
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "gpt",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          }
+        ],
+        "shape": "triangle"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "The corral opens with Grok, GPT and Claude"
+    },
+    {
+      "expect": {
+        "approval": {
+          "agent": "grok",
+          "class": "comms.send",
+          "detail": [
+            "sam@example.test",
+            "Flights: SFO to LIS, Dec 12"
+          ],
+          "risk": "high"
+        },
+        "columnStatus": {
+          "grok": "needsYou"
+        },
+        "columns": [
+          "grok"
+        ],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "needsYou"
+          },
+          {
+            "id": "gpt",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          }
+        ],
+        "shape": "triangle"
+      },
+      "gesture": {
+        "agent": "grok",
+        "kind": "task",
+        "text": "Send the itinerary to Sam"
+      },
+      "intent": {
+        "intent": {
+          "id": "grok",
+          "kind": "deployTask",
+          "prompt": "Send the itinerary to Sam"
+        },
+        "v": 1
+      },
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "prompt": "Send the itinerary to Sam",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "queued"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Send the itinerary to Sam",
+                "promptTruncated": false,
+                "status": "queued"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "prompt": "Send the itinerary to Sam",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Send the itinerary to Sam",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "plan": {
+                "now": "email.send",
+                "segments": [
+                  "current"
+                ],
+                "step": 1,
+                "total": 1
+              },
+              "prompt": "Send the itinerary to Sam",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Send the itinerary to Sam",
+                "promptTruncated": false,
+                "status": "working",
+                "subtask": {
+                  "step": 1,
+                  "title": "email.send",
+                  "total": 1
+                }
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "needsYou"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "approve",
+                "deny"
+              ],
+              "answerTruncated": false,
+              "checkpoint": {
+                "class": "comms.send",
+                "detail": "email.send to sam@example.test\n{\"body\":\"Flights: SFO to LIS, Dec 12\",\"to\":\"sam@example.test\"}",
+                "detailTruncated": false,
+                "fields": [
+                  {
+                    "key": "body",
+                    "kind": "text",
+                    "label": "Body",
+                    "value": "Flights: SFO to LIS, Dec 12"
+                  },
+                  {
+                    "key": "to",
+                    "kind": "text",
+                    "label": "To",
+                    "value": "sam@example.test"
+                  }
+                ],
+                "id": "j11-2",
+                "risk": "high",
+                "title": "Sending a message or email"
+              },
+              "elapsedMs": 0,
+              "id": "grok",
+              "plan": {
+                "now": "email.send",
+                "segments": [
+                  "current"
+                ],
+                "step": 1,
+                "total": 1
+              },
+              "prompt": "Send the itinerary to Sam",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "needsYou"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Send the itinerary to Sam",
+                "promptTruncated": false,
+                "status": "needsYou",
+                "subtask": {
+                  "step": 1,
+                  "title": "email.send",
+                  "total": 1
+                }
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        }
+      ],
+      "say": "Grok asks to send an email: its drop and its wire wait on you, and the card shows the destination and the message"
+    },
+    {
+      "expect": {
+        "approval": {
+          "agent": "grok",
+          "class": "comms.send",
+          "detail": [
+            "alex@example.test",
+            "Can you confirm Sam's dates?"
+          ],
+          "risk": "high"
+        },
+        "columnStatus": {
+          "grok": "needsYou"
+        },
+        "columns": [
+          "grok"
+        ],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "needsYou"
+          },
+          {
+            "id": "gpt",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          }
+        ],
+        "shape": "triangle"
+      },
+      "gesture": {
+        "agent": "grok",
+        "kind": "note",
+        "text": "Wait until I confirm the dates."
+      },
+      "intent": {
+        "intent": {
+          "checkpoint": "j11-2",
+          "id": "grok",
+          "kind": "denyCheckpoint",
+          "note": "Wait until I confirm the dates."
+        },
+        "v": 1
+      },
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "grok",
+              "plan": {
+                "segments": [
+                  "skipped"
+                ],
+                "total": 1
+              },
+              "prompt": "Send the itinerary to Sam",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Send the itinerary to Sam",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "grok",
+              "plan": {
+                "now": "email.send",
+                "segments": [
+                  "skipped",
+                  "current"
+                ],
+                "step": 2,
+                "total": 2
+              },
+              "prompt": "Send the itinerary to Sam",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Send the itinerary to Sam",
+                "promptTruncated": false,
+                "status": "working",
+                "subtask": {
+                  "step": 2,
+                  "title": "email.send",
+                  "total": 2
+                }
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "needsYou"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "approve",
+                "deny"
+              ],
+              "answerTruncated": false,
+              "checkpoint": {
+                "class": "comms.send",
+                "detail": "email.send to alex@example.test\n{\"body\":\"Can you confirm Sam's dates?\",\"to\":\"alex@example.test\"}",
+                "detailTruncated": false,
+                "fields": [
+                  {
+                    "key": "body",
+                    "kind": "text",
+                    "label": "Body",
+                    "value": "Can you confirm Sam's dates?"
+                  },
+                  {
+                    "key": "to",
+                    "kind": "text",
+                    "label": "To",
+                    "value": "alex@example.test"
+                  }
+                ],
+                "id": "j11-4",
+                "risk": "high",
+                "title": "Sending a message or email"
+              },
+              "elapsedMs": 1000,
+              "id": "grok",
+              "plan": {
+                "now": "email.send",
+                "segments": [
+                  "skipped",
+                  "current"
+                ],
+                "step": 2,
+                "total": 2
+              },
+              "prompt": "Send the itinerary to Sam",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "needsYou"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Send the itinerary to Sam",
+                "promptTruncated": false,
+                "status": "needsYou",
+                "subtask": {
+                  "step": 2,
+                  "title": "email.send",
+                  "total": 2
+                }
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        }
+      ],
+      "say": "Deny with a note: Grok carries on and asks to email Alex instead"
+    },
+    {
+      "expect": {
+        "columnStatus": {
+          "grok": "working"
+        },
+        "columns": [
+          "grok"
+        ],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "working"
+          },
+          {
+            "id": "gpt",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          }
+        ],
+        "shape": "triangle"
+      },
+      "gesture": {
+        "agent": "grok",
+        "button": "approve",
+        "kind": "press",
+        "pinned": true
+      },
+      "intent": {
+        "intent": {
+          "checkpoint": "j11-4",
+          "how": "click",
+          "id": "grok",
+          "kind": "approveCheckpoint",
+          "scope": "once"
+        },
+        "v": 1
+      },
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 2000,
+              "id": "grok",
+              "plan": {
+                "now": "email.send",
+                "segments": [
+                  "skipped",
+                  "current"
+                ],
+                "step": 2,
+                "total": 2
+              },
+              "prompt": "Send the itinerary to Sam",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Send the itinerary to Sam",
+                "promptTruncated": false,
+                "status": "working",
+                "subtask": {
+                  "step": 2,
+                  "title": "email.send",
+                  "total": 2
+                }
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 2000,
+              "id": "grok",
+              "plan": {
+                "segments": [
+                  "skipped",
+                  "done"
+                ],
+                "total": 2
+              },
+              "prompt": "Send the itinerary to Sam",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Send the itinerary to Sam",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        }
+      ],
+      "say": "Pin the card and Approve: the email goes, and Grok's column goes on"
+    },
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "done"
+          },
+          {
+            "id": "gpt",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          }
+        ],
+        "shape": "triangle"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answer": "Sending Sam the itinerary. OK. I'll ask Sam's assistant to confirm the dates first. Sent. Waiting for Alex. Alex confirmed Dec 12.",
+              "answerTruncated": false,
+              "elapsedMs": 32000,
+              "id": "grok",
+              "plan": {
+                "segments": [
+                  "skipped",
+                  "done"
+                ],
+                "total": 2
+              },
+              "prompt": "Send the itinerary to Sam",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Send the itinerary to Sam",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answer": "Sending Sam the itinerary. OK. I'll ask Sam's assistant to confirm the dates first. Sent. Waiting for Alex. Alex confirmed Dec 12.",
+              "answerTruncated": false,
+              "elapsedMs": 32000,
+              "id": "grok",
+              "plan": {
+                "segments": [
+                  "skipped",
+                  "done"
+                ],
+                "total": 2
+              },
+              "prompt": "Send the itinerary to Sam",
+              "promptTruncated": false,
+              "spend": "$0.0040",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Send the itinerary to Sam",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "done"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answer": "Sending Sam the itinerary. OK. I'll ask Sam's assistant to confirm the dates first. Sent. Waiting for Alex. Alex confirmed Dec 12.",
+              "answerTruncated": false,
+              "elapsedMs": 32000,
+              "id": "grok",
+              "plan": {
+                "segments": [
+                  "skipped",
+                  "done"
+                ],
+                "total": 2
+              },
+              "prompt": "Send the itinerary to Sam",
+              "promptTruncated": false,
+              "spend": "$0.0040",
+              "status": "done"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "Grok finishes"
+    }
+  ],
+  "title": "Hover approval"
+}

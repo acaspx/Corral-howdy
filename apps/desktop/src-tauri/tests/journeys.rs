@@ -2,8 +2,9 @@
 //! through the real core: the supervisor, the corral's controls and what the corral shows
 //! ([`CorralState`], the same state the app's feed holds), with `FakeAdapter` scripts in place of
 //! providers and a clock that moves only with tokio's paused time. Each user gesture is the
-//! intent JSON Swift sends, decoded by the bridge; each change the core makes is recorded as the
-//! roster Swift gets.
+//! intent JSON Swift sends, decoded by the bridge and handled as the app's `on_intent` does;
+//! each change the core makes is recorded as the roster Swift gets, and each prompt bar answer
+//! as the bar's wire.
 //!
 //! The recording is the journey's transcript, checked in beside the bridge fixtures
 //! (`native/CorralNative/Fixtures/journeys/`). This test fails when the core no longer produces
@@ -12,22 +13,30 @@
 //! the corral shows. Regenerate with
 //! `CORRAL_WRITE_FIXTURES=1 cargo test -p corral-desktop --test journeys`.
 //!
-//! No keys and no network (AGENTS.md rule 7), and no gate bypass (rule 4): the agents here call
-//! no tools.
+//! No keys and no network (AGENTS.md rule 7). Tools go through the gateway and the policy, with
+//! checkpoints answered on the desk the app uses (rule 4: no bypass).
 
-use corral_adapters::catalog::agent_for;
-use corral_adapters::fake::{FakeDriver, FakeScript};
+use corral_adapters::catalog::{AgentRouter, agent_for};
+use corral_adapters::fake::{FakeDriver, FakeScript, ToolSetup};
 use corral_adapters::linked::LinkedSettings;
 use corral_core::budget::BudgetConfig;
 use corral_core::clock::Clock;
 use corral_core::controls::CorralControls;
+use corral_core::domain::ActionClass;
 use corral_core::event::Event;
-use corral_core::supervisor::{EventLog, LogError, Supervisor, SupervisorConfig, WatchedLog};
+use corral_core::ids::{AgentId, CheckpointId};
+use corral_core::supervisor::{
+    EventLog, LogError, RunDriver, Supervisor, SupervisorConfig, WatchedLog,
+};
 use corral_desktop_lib::bridge::{Intent, decode_intent};
 use corral_desktop_lib::corral_order::CorralOrder;
 use corral_desktop_lib::corral_state::CorralState;
+use corral_desktop_lib::prompt_bar_feed;
+use corral_policy::{Policy, Profile};
 use corral_secrets::Provider;
+use corral_tools::{Answer, BoxFuture, CheckpointDesk, Tool, ToolError, ToolGateway};
 use serde_json::{Value, json};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -57,11 +66,68 @@ impl EventLog for MemLog {
     }
 }
 
-/// The core as the app wires it, recording every roster it sends.
+/// A tool that answers at once.
+struct Plain {
+    name: &'static str,
+    class: ActionClass,
+    answer: &'static str,
+}
+
+impl Tool for Plain {
+    fn name(&self) -> &str {
+        self.name
+    }
+
+    fn class(&self) -> ActionClass {
+        self.class
+    }
+
+    fn destination(&self, args: &Value) -> Option<String> {
+        args["to"].as_str().map(str::to_owned)
+    }
+
+    fn call<'a>(&'a self, _args: &'a Value) -> BoxFuture<'a, Result<String, ToolError>> {
+        Box::pin(async { Ok(self.answer.to_owned()) })
+    }
+}
+
+/// Files and email behind the gate, under the default policy: writing a file asks, at normal
+/// risk; sending an email asks, at high risk.
+fn tools(desk: &Arc<CheckpointDesk>, journey: &str) -> ToolSetup {
+    let mut gateway = ToolGateway::new();
+    for tool in [
+        Plain {
+            name: "fs.write",
+            class: ActionClass::WriteLocal,
+            answer: "Saved.",
+        },
+        Plain {
+            name: "email.send",
+            class: ActionClass::CommsSend,
+            answer: "Sent.",
+        },
+    ] {
+        gateway.register(Arc::new(tool)).expect("register");
+    }
+    let n = Arc::new(AtomicU64::new(0));
+    let prefix = journey.to_owned();
+    ToolSetup {
+        policy: Policy::new(Profile::default()),
+        gateway: Arc::new(gateway),
+        desk: Arc::clone(desk),
+        ids: Arc::new(move || format!("{prefix}-{}", n.fetch_add(1, Ordering::SeqCst) + 1)),
+    }
+}
+
+/// The core as the app wires it, recording every roster and prompt bar answer it sends.
 struct Core {
     state: Arc<Mutex<CorralState>>,
     controls: CorralControls,
+    desk: Arc<CheckpointDesk>,
     sent: Arc<Mutex<Vec<Value>>>,
+    bars: Mutex<Vec<Value>>,
+    /// The last roster sent, for a step that sends none.
+    last: Mutex<Value>,
     clock: Arc<PausedClock>,
 }
 
@@ -71,7 +137,7 @@ fn roster_json(state: &CorralState, now_ms: u64) -> Value {
 }
 
 impl Core {
-    fn new(driver: FakeDriver, agents: &[Provider]) -> Self {
+    fn new(driver: Arc<dyn RunDriver>, desk: Arc<CheckpointDesk>, agents: &[Provider]) -> Self {
         let clock = Arc::new(PausedClock(tokio::time::Instant::now()));
         let nonce = Arc::new(AtomicU64::new(1));
         let state = CorralState::open(
@@ -104,7 +170,7 @@ impl Core {
         let supervisor = Supervisor::with_budget(
             SupervisorConfig::default(),
             BudgetConfig::default(),
-            Arc::new(driver),
+            driver,
             log,
             Arc::clone(&clock) as Arc<dyn Clock>,
         );
@@ -114,31 +180,123 @@ impl Core {
             agents.iter().map(|p| agent_for(*p).id),
             Arc::new(move || format!("j-{}", ids.fetch_add(1, Ordering::SeqCst))),
         );
+        let opening = roster_json(&state.lock().expect("state"), clock.now_ms());
         let core = Self {
             state,
             controls,
+            desk,
             sent,
+            bars: Mutex::new(Vec::new()),
+            last: Mutex::new(opening.clone()),
             clock,
         };
         // The roster the corral opens with (the app's `publish_now`).
-        let opening = roster_json(&core.state.lock().expect("state"), core.clock.now_ms());
         core.sent.lock().expect("sent").push(opening);
         core
     }
 
-    /// A gesture's intent, as Swift sends it, through the bridge to the controls.
+    /// A gesture's intent, as Swift sends it, through the bridge and handled as the app's
+    /// `on_intent` does.
     async fn intent(&self, wire: &Value) {
         let bytes = serde_json::to_vec(wire).expect("intent");
         let intent = decode_intent(&bytes).expect("the bridge takes it");
-        // As the app's `on_intent` does, for the intents the journeys use so far.
-        if let Intent::DeployTask { agent, prompt } = &intent {
-            self.controls.deploy(agent, prompt).expect("deployed");
-        } else if let Intent::SendBack(agent) = &intent {
-            self.controls.send_back(agent).expect("sent back");
-        } else {
-            panic!("not in a journey yet: {intent:?}");
+        let answer = match intent {
+            Intent::DeployTask { agent, prompt } => {
+                self.controls.deploy(&agent, &prompt).expect("deployed");
+                None
+            }
+            Intent::SendBack(agent) => {
+                self.controls.send_back(&agent).expect("sent back");
+                None
+            }
+            Intent::PromptBarEdited(edit) => {
+                let agents = self.bar_agents();
+                Some(prompt_bar_feed::edited(&edit, &agents))
+            }
+            Intent::PromptBarSend { edit, how } => {
+                let agents = self.bar_agents();
+                Some(prompt_bar_feed::sent(&edit, how, &agents, |agent, task| {
+                    self.controls.deploy(agent, task)
+                }))
+            }
+            Intent::ApproveCheckpoint {
+                agent,
+                checkpoint,
+                scope,
+                how,
+            } => {
+                self.answer(&agent, &checkpoint, Answer::Approve { how, scope });
+                None
+            }
+            Intent::DenyCheckpoint {
+                agent,
+                checkpoint,
+                note,
+            } => {
+                self.answer(&agent, &checkpoint, Answer::Deny { note });
+                None
+            }
+            Intent::EditCheckpoint {
+                agent,
+                checkpoint,
+                changes,
+                how,
+            } => {
+                let args = self
+                    .state
+                    .lock()
+                    .expect("state")
+                    .edited_args(&agent, &checkpoint, &changes)
+                    .expect("the core takes the edit");
+                self.answer(&agent, &checkpoint, Answer::Edit { how, args });
+                None
+            }
+            other @ (Intent::OpenAgent(_)
+            | Intent::Deploy(_)
+            | Intent::SummonPromptBar
+            | Intent::NotificationAction { .. }
+            | Intent::NotificationFailed { .. }
+            | Intent::AuthResult { .. }
+            | Intent::Stop(_)
+            | Intent::Pause(_)
+            | Intent::Resume(_)
+            | Intent::Retry(_)
+            | Intent::ShowLinked { .. }
+            | Intent::HideLinked(_)
+            | Intent::OpenLinked(_)
+            | Intent::StopAll
+            | Intent::CorralIdle(_)
+            | Intent::ApproveWithTouchId { .. }
+            | Intent::OpenTrace(_)) => panic!("not in a journey yet: {other:?}"),
+        };
+        if let Some(answer) = answer {
+            let answer = self.state.lock().expect("state").with_bar_logos(answer);
+            let bytes = answer.to_bytes().expect("the bar's answer");
+            let bar = serde_json::from_slice(&bytes).expect("the bar's JSON");
+            self.bars.lock().expect("bars").push(bar);
         }
         settle().await;
+    }
+
+    fn bar_agents(&self) -> Vec<corral_core::prompt_bar::BarAgent> {
+        self.state
+            .lock()
+            .expect("state")
+            .bar_agents(self.clock.now_ms())
+    }
+
+    /// The app's `Corral::answer`: only the checkpoint the card shows may be answered from it,
+    /// and the desk takes each one once. The state's lock is let go first: the answer is logged.
+    fn answer(&self, agent: &AgentId, checkpoint: &CheckpointId, answer: Answer) {
+        let shown = self
+            .state
+            .lock()
+            .expect("state")
+            .waits_on(agent, checkpoint);
+        assert!(shown, "{checkpoint} doesn't wait on {agent}'s card");
+        self.desk
+            .answer(checkpoint, answer)
+            .expect("the desk takes it");
     }
 
     /// A key connected or removed: the corral's agents change (`Corral::refresh`).
@@ -157,7 +315,33 @@ impl Core {
 
     /// The rosters sent since the last step.
     fn take_sent(&self) -> Vec<Value> {
-        std::mem::take(&mut *self.sent.lock().expect("sent"))
+        let sent = std::mem::take(&mut *self.sent.lock().expect("sent"));
+        if let Some(last) = sent.last() {
+            *self.last.lock().expect("last") = last.clone();
+        }
+        sent
+    }
+
+    /// The prompt bar answers sent since the last step.
+    fn take_bars(&self) -> Vec<Value> {
+        std::mem::take(&mut *self.bars.lock().expect("bars"))
+    }
+
+    /// The checkpoint waiting on `agent`'s card, as the latest roster shows it.
+    fn waiting(&self, agent: &str) -> String {
+        let latest = self
+            .sent
+            .lock()
+            .expect("sent")
+            .last()
+            .cloned()
+            .unwrap_or_else(|| self.last.lock().expect("last").clone());
+        latest["cards"]
+            .as_array()
+            .and_then(|cards| cards.iter().find(|c| c["id"] == agent))
+            .and_then(|card| card["checkpoint"]["id"].as_str())
+            .unwrap_or_else(|| panic!("nothing waits on {agent}'s card"))
+            .to_owned()
     }
 }
 
@@ -182,18 +366,24 @@ struct Step {
     gesture: Value,
     intent: Value,
     rosters: Vec<Value>,
+    bars: Vec<Value>,
     expect: Value,
 }
 
 impl Step {
     fn to_json(&self) -> Value {
-        json!({
+        let mut step = json!({
             "say": self.say,
             "gesture": self.gesture,
             "intent": self.intent,
             "rosters": self.rosters,
             "expect": self.expect,
-        })
+        });
+        // Only a step the prompt bar answered has bars.
+        if !self.bars.is_empty() {
+            step["bars"] = json!(self.bars);
+        }
+        step
     }
 }
 
@@ -207,16 +397,47 @@ fn expect(shape: &str, drops: &[(&str, &str)], columns: &[&str]) -> Value {
     })
 }
 
-fn checked(
-    say: &'static str,
-    gesture: Value,
-    intent: Value,
-    rosters: Vec<Value>,
-    expected: Value,
-) -> Step {
-    let last = rosters
-        .last()
-        .unwrap_or_else(|| panic!("{say}: the core sent no roster"));
+/// `expected`, with each trace column's status (its wire's colour).
+fn with_column_status(mut expected: Value, statuses: &[(&str, &str)]) -> Value {
+    let map: serde_json::Map<String, Value> = statuses
+        .iter()
+        .map(|(id, status)| ((*id).to_owned(), json!(status)))
+        .collect();
+    expected["columnStatus"] = Value::Object(map);
+    expected
+}
+
+/// `expected`, with the approval box on `agent`'s card: the checkpoint's class and risk, and
+/// text its detail must hold (where it goes and what it says).
+fn with_approval(
+    mut expected: Value,
+    agent: &str,
+    class: &str,
+    risk: &str,
+    detail: &[&str],
+) -> Value {
+    expected["approval"] = json!({"agent": agent, "class": class, "risk": risk, "detail": detail});
+    expected
+}
+
+/// `expected`, with what the prompt bar shows: its chips, its button and how the last send went
+/// (`None` for no send).
+fn with_bar(mut expected: Value, chips: &[&str], button: &str, outcome: Option<&str>) -> Value {
+    expected["bar"] = json!({"chips": chips, "button": button, "outcome": outcome});
+    expected
+}
+
+/// A bar answer's outcome, as its kind on the wire (`sent`, `note` or `refused`), or `null`
+/// for an edit's answer.
+fn outcome_word(outcome: &Value) -> Value {
+    outcome.get("kind").cloned().unwrap_or(Value::Null)
+}
+
+/// Records a step, checking the core's last roster and bar answer against `expected`.
+fn checked(core: &Core, say: &'static str, gesture: Value, intent: Value, expected: Value) -> Step {
+    let rosters = core.take_sent();
+    let bars = core.take_bars();
+    let last = core.last.lock().expect("last").clone();
     let drops: Vec<Value> = last["agents"]
         .as_array()
         .expect("agents")
@@ -226,18 +447,67 @@ fn checked(
     assert_eq!(Value::Array(drops), expected["drops"], "{say}: the drops");
     let columns: Vec<Value> = last["trace"]["columns"]
         .as_array()
-        .map(|cs| cs.iter().map(|c| c["id"].clone()).collect())
+        .cloned()
         .unwrap_or_default();
+    let ids: Vec<Value> = columns.iter().map(|c| c["id"].clone()).collect();
     assert_eq!(
-        Value::Array(columns),
+        Value::Array(ids),
         expected["columns"],
         "{say}: the trace columns"
     );
+    if let Some(statuses) = expected["columnStatus"].as_object() {
+        for (id, status) in statuses {
+            let column = columns.iter().find(|c| c["id"] == id.as_str());
+            assert_eq!(
+                column.map(|c| &c["status"]),
+                Some(status),
+                "{say}: {id}'s column"
+            );
+        }
+    }
+    if expected["approval"].is_object() {
+        let approval = &expected["approval"];
+        let card = last["cards"]
+            .as_array()
+            .and_then(|cards| cards.iter().find(|c| c["id"] == approval["agent"]))
+            .unwrap_or_else(|| panic!("{say}: no card"));
+        let checkpoint = &card["checkpoint"];
+        assert_eq!(checkpoint["class"], approval["class"], "{say}: the class");
+        assert_eq!(checkpoint["risk"], approval["risk"], "{say}: the risk");
+        let detail = checkpoint["detail"].as_str().unwrap_or_default();
+        for text in approval["detail"].as_array().expect("detail") {
+            let text = text.as_str().expect("text");
+            assert!(
+                detail.contains(text),
+                "{say}: the detail says {text:?}: {detail}"
+            );
+        }
+    }
+    if expected["bar"].is_object() {
+        let bar = bars
+            .last()
+            .unwrap_or_else(|| panic!("{say}: the bar wasn't answered"));
+        assert_eq!(
+            bar["view"]["chips"], expected["bar"]["chips"],
+            "{say}: the chips"
+        );
+        assert_eq!(
+            bar["view"]["button"]["label"], expected["bar"]["button"],
+            "{say}: the button"
+        );
+        assert_eq!(
+            outcome_word(&bar["outcome"]),
+            expected["bar"]["outcome"],
+            "{say}: the outcome: {}",
+            bar["outcome"]
+        );
+    }
     Step {
         say,
         gesture,
         intent,
         rosters,
+        bars,
         expect: expected,
     }
 }
@@ -276,6 +546,17 @@ fn matches_checked_in(journey: &str, played: &str) {
     );
 }
 
+/// Plays a journey twice (the same each time) and checks it against its transcript.
+async fn check<F, Fut>(journey: &str, play: F)
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = String>,
+{
+    let played = play().await;
+    assert_eq!(play().await, played, "{journey} is the same on every run");
+    matches_checked_in(journey, &played);
+}
+
 // ---- J9: the corral morphs ---------------------------------------------------------------
 
 const J9_TASK: &str = "Summarize my inbox";
@@ -289,17 +570,18 @@ async fn play_j9() -> String {
         .wait(Duration::from_secs(40))
         .usage(1_200, 80, 2_000);
     let core = Core::new(
-        FakeDriver::new(FakeScript::default()).with_prompt(J9_TASK, script),
+        Arc::new(FakeDriver::new(FakeScript::default()).with_prompt(J9_TASK, script)),
+        Arc::new(CheckpointDesk::default()),
         &[Provider::Xai, Provider::OpenAi, Provider::Anthropic],
     );
     let none = Value::Null;
     let mut steps = Vec::new();
 
     steps.push(checked(
+        &core,
         "The corral opens with Grok, GPT and Claude",
         none.clone(),
         none.clone(),
-        core.take_sent(),
         expect(
             "triangle",
             &[
@@ -315,10 +597,10 @@ async fn play_j9() -> String {
     core.intent(&intent).await;
     wait(1).await;
     steps.push(checked(
+        &core,
         "Give Grok a task in its card: still a triangle, its ring turns, its column rises",
         json!({"kind": "task", "agent": "grok", "text": J9_TASK}),
         intent,
-        core.take_sent(),
         expect(
             "triangle",
             &[
@@ -337,10 +619,10 @@ async fn play_j9() -> String {
         Provider::Meta,
     ]);
     steps.push(checked(
+        &core,
         "Connect a Meta key: Muse Spark joins and the corral becomes a square",
         none.clone(),
         none.clone(),
-        core.take_sent(),
         expect(
             "square",
             &[
@@ -355,10 +637,10 @@ async fn play_j9() -> String {
 
     core.set_agents(&[Provider::Xai, Provider::Anthropic, Provider::Meta]);
     steps.push(checked(
+        &core,
         "Sign out of ChatGPT: GPT leaves and the corral is a triangle again",
         none.clone(),
         none.clone(),
-        core.take_sent(),
         expect(
             "triangle",
             &[
@@ -372,10 +654,10 @@ async fn play_j9() -> String {
 
     wait(60).await;
     steps.push(checked(
+        &core,
         "Grok finishes: its drop shows it's done, and its column folds away",
         none.clone(),
         none.clone(),
-        core.take_sent(),
         expect(
             "triangle",
             &[
@@ -390,10 +672,10 @@ async fn play_j9() -> String {
     let intent = json!({"v": 1, "intent": {"kind": "sendBack", "id": "grok"}});
     core.intent(&intent).await;
     steps.push(checked(
+        &core,
         "Send Grok back from its card: still a triangle, and Grok is ready for a task",
         json!({"kind": "press", "agent": "grok", "button": "sendBack"}),
         intent,
-        core.take_sent(),
         expect(
             "triangle",
             &[
@@ -410,7 +692,503 @@ async fn play_j9() -> String {
 
 #[tokio::test(start_paused = true)]
 async fn j9_the_corral_morphs_as_agents_come_and_go() {
-    let played = play_j9().await;
-    assert_eq!(play_j9().await, played, "the same on every run");
-    matches_checked_in("J9", &played);
+    check("J9", play_j9).await;
+}
+
+// ---- J2: three agents at once --------------------------------------------------------------
+
+const J2_TASK: &str = "Plan my week";
+
+/// Each agent's own run of the same task, finishing at its own pace.
+fn j2_driver() -> Arc<dyn RunDriver> {
+    let run = |seconds: u64, plan: &str| {
+        Arc::new(
+            FakeDriver::new(FakeScript::default()).with_prompt(
+                J2_TASK,
+                FakeScript::default()
+                    .say(plan.to_owned())
+                    .wait(Duration::from_secs(seconds))
+                    .usage(1_000, 200, 2_000),
+            ),
+        ) as Arc<dyn RunDriver>
+    };
+    let mut drivers: HashMap<AgentId, Arc<dyn RunDriver>> = HashMap::new();
+    drivers.insert(
+        agent_for(Provider::Xai).id,
+        run(10, "Monday: the Q4 draft."),
+    );
+    drivers.insert(
+        agent_for(Provider::OpenAi).id,
+        run(20, "Tuesday: errands and the dentist."),
+    );
+    drivers.insert(
+        agent_for(Provider::Anthropic).id,
+        run(30, "Friday: keep it free."),
+    );
+    Arc::new(AgentRouter::new(drivers))
+}
+
+/// J2 (`docs/04-test-plan.md` §6): ⌘-click three drops, type a task in the prompt bar and press
+/// "Deploy to 3"; each agent's column rises and then folds away as that agent finishes, on its
+/// own.
+async fn play_j2() -> String {
+    let core = Core::new(
+        j2_driver(),
+        Arc::new(CheckpointDesk::default()),
+        &[Provider::Xai, Provider::OpenAi, Provider::Anthropic],
+    );
+    let none = Value::Null;
+    let all_ready = [
+        ("grok", "available"),
+        ("gpt", "available"),
+        ("claude", "available"),
+    ];
+    let selection = json!(["grok", "gpt", "claude"]);
+    let mut steps = Vec::new();
+
+    steps.push(checked(
+        &core,
+        "The corral opens with Grok, GPT and Claude",
+        none.clone(),
+        none.clone(),
+        expect("triangle", &all_ready, &[]),
+    ));
+
+    let intent = json!({"v": 1, "intent": {
+        "kind": "promptBarEdited", "seq": 1, "text": "", "cursor": 0, "selection": selection}});
+    core.intent(&intent).await;
+    steps.push(checked(
+        &core,
+        "⌘-click Claude, Grok and GPT, then open the prompt bar: it's for the three",
+        json!({"kind": "openBar", "select": ["claude", "grok", "gpt"]}),
+        intent,
+        with_bar(
+            expect("triangle", &all_ready, &[]),
+            &["3 selected"],
+            "Deploy to 3",
+            None,
+        ),
+    ));
+
+    let intent = json!({"v": 1, "intent": {
+        "kind": "promptBarEdited", "seq": 2, "text": J2_TASK, "cursor": J2_TASK.len(),
+        "selection": selection}});
+    core.intent(&intent).await;
+    steps.push(checked(
+        &core,
+        "Type the task",
+        json!({"kind": "typeInBar", "text": J2_TASK}),
+        intent,
+        with_bar(
+            expect("triangle", &all_ready, &[]),
+            &["3 selected"],
+            "Deploy to 3",
+            None,
+        ),
+    ));
+
+    let intent = json!({"v": 1, "intent": {
+        "kind": "promptBarSend", "seq": 3, "text": J2_TASK, "selection": selection, "all": false}});
+    core.intent(&intent).await;
+    wait(1).await;
+    steps.push(checked(
+        &core,
+        "Press Deploy to 3: all three work, each with its own column",
+        json!({"kind": "sendBar"}),
+        intent,
+        with_bar(
+            expect(
+                "triangle",
+                &[
+                    ("grok", "working"),
+                    ("gpt", "working"),
+                    ("claude", "working"),
+                ],
+                &["grok", "gpt", "claude"],
+            ),
+            &["3 selected"],
+            "Deploy to 3",
+            Some("sent"),
+        ),
+    ));
+
+    wait(10).await;
+    steps.push(checked(
+        &core,
+        "Grok finishes first: only its column folds away",
+        none.clone(),
+        none.clone(),
+        expect(
+            "triangle",
+            &[("grok", "done"), ("gpt", "working"), ("claude", "working")],
+            &["gpt", "claude"],
+        ),
+    ));
+
+    wait(10).await;
+    steps.push(checked(
+        &core,
+        "Then GPT",
+        none.clone(),
+        none.clone(),
+        expect(
+            "triangle",
+            &[("grok", "done"), ("gpt", "done"), ("claude", "working")],
+            &["claude"],
+        ),
+    ));
+
+    wait(10).await;
+    steps.push(checked(
+        &core,
+        "Then Claude: every column has folded away",
+        none.clone(),
+        none.clone(),
+        expect(
+            "triangle",
+            &[("grok", "done"), ("gpt", "done"), ("claude", "done")],
+            &[],
+        ),
+    ));
+
+    transcript("J2", "Three agents at once", &steps)
+}
+
+#[tokio::test(start_paused = true)]
+async fn j2_three_agents_deployed_at_once_update_on_their_own() {
+    check("J2", play_j2).await;
+}
+
+// ---- J3: every way to answer a checkpoint ----------------------------------------------------
+
+const J3_TASK: &str = "Tidy my notes";
+
+/// The corral of J3 while Claude waits on you.
+fn j3_waiting() -> Value {
+    with_column_status(
+        expect(
+            "dumbbell",
+            &[("grok", "available"), ("claude", "needsYou")],
+            &["claude"],
+        ),
+        &[("claude", "needsYou")],
+    )
+}
+
+/// J3 (`docs/04-test-plan.md` §6): one run asks four times. Approve the first save; deny the
+/// email with a note, and the agent carries on; edit the backup's path and approve the edited
+/// call; allow saves for the rest of the run, and the next save doesn't ask.
+async fn play_j3() -> String {
+    let desk = Arc::new(CheckpointDesk::default());
+    let script = FakeScript::default()
+        .say("Saving a tidier copy.")
+        .tool(
+            "fs.write",
+            json!({"path": "notes.md", "text": "This week: call the dentist, draft the Q4 plan"}),
+        )
+        .say(" Emailing it to Sam.")
+        .tool(
+            "email.send",
+            json!({"to": "sam@example.test", "body": "My notes, tidied"}),
+        )
+        .say(" OK, I won't email anyone. Saving a backup.")
+        .tool(
+            "fs.write",
+            json!({"path": "notes-backup.md", "text": "This week: call the dentist"}),
+        )
+        .say(" Writing the to-do list.")
+        .tool(
+            "fs.write",
+            json!({"path": "todo.md", "text": "Call the dentist"}),
+        )
+        .say(" And the done list.")
+        .tool(
+            "fs.write",
+            json!({"path": "done.md", "text": "Booked flights"}),
+        )
+        .say(" All tidy.")
+        .usage(3_000, 600, 9_000);
+    let core = Core::new(
+        Arc::new(
+            FakeDriver::new(FakeScript::default())
+                .with_prompt(J3_TASK, script)
+                .with_tools(tools(&desk, "j3")),
+        ),
+        desk,
+        &[Provider::Xai, Provider::Anthropic],
+    );
+    let none = Value::Null;
+    let mut steps = Vec::new();
+
+    steps.push(checked(
+        &core,
+        "The corral opens with Grok and Claude",
+        none.clone(),
+        none.clone(),
+        expect(
+            "dumbbell",
+            &[("grok", "available"), ("claude", "available")],
+            &[],
+        ),
+    ));
+
+    let intent =
+        json!({"v": 1, "intent": {"kind": "deployTask", "id": "claude", "prompt": J3_TASK}});
+    core.intent(&intent).await;
+    wait(1).await;
+    let cp = core.waiting("claude");
+    steps.push(checked(
+        &core,
+        "Give Claude a task: it asks before saving a file",
+        json!({"kind": "task", "agent": "claude", "text": J3_TASK}),
+        intent,
+        with_approval(
+            j3_waiting(),
+            "claude",
+            "write.local",
+            "normal",
+            &["notes.md"],
+        ),
+    ));
+
+    let intent = json!({"v": 1, "intent": {
+        "kind": "approveCheckpoint", "id": "claude", "checkpoint": cp, "scope": "once",
+        "how": "click"}});
+    core.intent(&intent).await;
+    wait(1).await;
+    let cp = core.waiting("claude");
+    steps.push(checked(
+        &core,
+        "Approve: it saves, then asks before emailing Sam",
+        json!({"kind": "press", "agent": "claude", "button": "approve"}),
+        intent,
+        with_approval(
+            j3_waiting(),
+            "claude",
+            "comms.send",
+            "high",
+            &["sam@example.test", "My notes, tidied"],
+        ),
+    ));
+
+    let note = "Don't email anyone yet.";
+    let intent = json!({"v": 1, "intent": {
+        "kind": "denyCheckpoint", "id": "claude", "checkpoint": cp, "note": note}});
+    core.intent(&intent).await;
+    wait(1).await;
+    let cp = core.waiting("claude");
+    steps.push(checked(
+        &core,
+        "Deny with a note in the card's field: it carries on, and asks before saving a backup",
+        json!({"kind": "note", "agent": "claude", "text": note}),
+        intent,
+        with_approval(
+            j3_waiting(),
+            "claude",
+            "write.local",
+            "normal",
+            &["notes-backup.md"],
+        ),
+    ));
+
+    let intent = json!({"v": 1, "intent": {
+        "kind": "editCheckpoint", "id": "claude", "checkpoint": cp,
+        "changes": {"path": "archive/notes-backup.md"}, "how": "click"}});
+    core.intent(&intent).await;
+    wait(1).await;
+    let cp = core.waiting("claude");
+    steps.push(checked(
+        &core,
+        "Edit the backup's path and approve the edited call: then it asks before the to-do list",
+        json!({"kind": "edit", "agent": "claude", "changes": {"path": "archive/notes-backup.md"}}),
+        intent,
+        with_approval(
+            j3_waiting(),
+            "claude",
+            "write.local",
+            "normal",
+            &["todo.md"],
+        ),
+    ));
+
+    let intent = json!({"v": 1, "intent": {
+        "kind": "approveCheckpoint", "id": "claude", "checkpoint": cp, "scope": "forRun",
+        "how": "click"}});
+    core.intent(&intent).await;
+    wait(1).await;
+    steps.push(checked(
+        &core,
+        "Allow for this run: the to-do list and the done list save without asking, and it's done",
+        json!({"kind": "press", "agent": "claude", "button": "allowForRun"}),
+        intent,
+        expect(
+            "dumbbell",
+            &[("grok", "available"), ("claude", "done")],
+            &[],
+        ),
+    ));
+
+    transcript("J3", "Answering checkpoints", &steps)
+}
+
+#[tokio::test(start_paused = true)]
+async fn j3_a_checkpoint_is_approved_denied_edited_and_allowed_for_the_run() {
+    check("J3", play_j3).await;
+}
+
+// ---- J11: approving from the hover card ----------------------------------------------------
+
+const J11_TASK: &str = "Send the itinerary to Sam";
+
+/// The corral of J11 while Grok waits on you: its drop pulses and its wire turns maroon.
+fn j11_waiting() -> Value {
+    with_column_status(
+        expect(
+            "triangle",
+            &[
+                ("grok", "needsYou"),
+                ("gpt", "available"),
+                ("claude", "available"),
+            ],
+            &["grok"],
+        ),
+        &[("grok", "needsYou")],
+    )
+}
+
+/// J11 (`docs/04-test-plan.md` §6): an agent asks to send an email; its drop and its column wait
+/// on you; the card shows where it goes and what it says; Deny with a note, and the agent tries
+/// another way; it asks again, and Approve on the pinned card lets the column go on.
+async fn play_j11() -> String {
+    let desk = Arc::new(CheckpointDesk::default());
+    let script = FakeScript::default()
+        .say("Sending Sam the itinerary.")
+        .tool(
+            "email.send",
+            json!({"to": "sam@example.test", "body": "Flights: SFO to LIS, Dec 12"}),
+        )
+        .say(" OK. I'll ask Sam's assistant to confirm the dates first.")
+        .tool(
+            "email.send",
+            json!({"to": "alex@example.test", "body": "Can you confirm Sam's dates?"}),
+        )
+        .say(" Sent. Waiting for Alex.")
+        .wait(Duration::from_secs(30))
+        .say(" Alex confirmed Dec 12.")
+        .usage(1_500, 300, 4_000);
+    let core = Core::new(
+        Arc::new(
+            FakeDriver::new(FakeScript::default())
+                .with_prompt(J11_TASK, script)
+                .with_tools(tools(&desk, "j11")),
+        ),
+        desk,
+        &[Provider::Xai, Provider::OpenAi, Provider::Anthropic],
+    );
+    let none = Value::Null;
+    let mut steps = Vec::new();
+
+    steps.push(checked(
+        &core,
+        "The corral opens with Grok, GPT and Claude",
+        none.clone(),
+        none.clone(),
+        expect(
+            "triangle",
+            &[
+                ("grok", "available"),
+                ("gpt", "available"),
+                ("claude", "available"),
+            ],
+            &[],
+        ),
+    ));
+
+    let intent =
+        json!({"v": 1, "intent": {"kind": "deployTask", "id": "grok", "prompt": J11_TASK}});
+    core.intent(&intent).await;
+    wait(1).await;
+    let cp = core.waiting("grok");
+    steps.push(checked(
+        &core,
+        "Grok asks to send an email: its drop and its wire wait on you, and the card shows the \
+         destination and the message",
+        json!({"kind": "task", "agent": "grok", "text": J11_TASK}),
+        intent,
+        with_approval(
+            j11_waiting(),
+            "grok",
+            "comms.send",
+            "high",
+            &["sam@example.test", "Flights: SFO to LIS, Dec 12"],
+        ),
+    ));
+
+    let note = "Wait until I confirm the dates.";
+    let intent = json!({"v": 1, "intent": {
+        "kind": "denyCheckpoint", "id": "grok", "checkpoint": cp, "note": note}});
+    core.intent(&intent).await;
+    wait(1).await;
+    let cp = core.waiting("grok");
+    steps.push(checked(
+        &core,
+        "Deny with a note: Grok carries on and asks to email Alex instead",
+        json!({"kind": "note", "agent": "grok", "text": note}),
+        intent,
+        with_approval(
+            j11_waiting(),
+            "grok",
+            "comms.send",
+            "high",
+            &["alex@example.test", "Can you confirm Sam's dates?"],
+        ),
+    ));
+
+    let intent = json!({"v": 1, "intent": {
+        "kind": "approveCheckpoint", "id": "grok", "checkpoint": cp, "scope": "once",
+        "how": "click"}});
+    core.intent(&intent).await;
+    wait(1).await;
+    steps.push(checked(
+        &core,
+        "Pin the card and Approve: the email goes, and Grok's column goes on",
+        json!({"kind": "press", "agent": "grok", "button": "approve", "pinned": true}),
+        intent,
+        with_column_status(
+            expect(
+                "triangle",
+                &[
+                    ("grok", "working"),
+                    ("gpt", "available"),
+                    ("claude", "available"),
+                ],
+                &["grok"],
+            ),
+            &[("grok", "working")],
+        ),
+    ));
+
+    wait(40).await;
+    steps.push(checked(
+        &core,
+        "Grok finishes",
+        none.clone(),
+        none.clone(),
+        expect(
+            "triangle",
+            &[
+                ("grok", "done"),
+                ("gpt", "available"),
+                ("claude", "available"),
+            ],
+            &[],
+        ),
+    ));
+
+    transcript("J11", "Hover approval", &steps)
+}
+
+#[tokio::test(start_paused = true)]
+async fn j11_a_checkpoint_is_denied_then_approved_from_the_hover_card() {
+    check("J11", play_j11).await;
 }

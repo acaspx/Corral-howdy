@@ -1,0 +1,1589 @@
+{
+  "journey": "J3",
+  "steps": [
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          }
+        ],
+        "shape": "dumbbell"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "The corral opens with Grok and Claude"
+    },
+    {
+      "expect": {
+        "approval": {
+          "agent": "claude",
+          "class": "write.local",
+          "detail": [
+            "notes.md"
+          ],
+          "risk": "normal"
+        },
+        "columnStatus": {
+          "claude": "needsYou"
+        },
+        "columns": [
+          "claude"
+        ],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "needsYou"
+          }
+        ],
+        "shape": "dumbbell"
+      },
+      "gesture": {
+        "agent": "claude",
+        "kind": "task",
+        "text": "Tidy my notes"
+      },
+      "intent": {
+        "intent": {
+          "id": "claude",
+          "kind": "deployTask",
+          "prompt": "Tidy my notes"
+        },
+        "v": 1
+      },
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "claude",
+              "prompt": "Tidy my notes",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "queued"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Tidy my notes",
+                "promptTruncated": false,
+                "status": "queued"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "claude",
+              "prompt": "Tidy my notes",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Tidy my notes",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "claude",
+              "plan": {
+                "now": "fs.write",
+                "segments": [
+                  "current"
+                ],
+                "step": 1,
+                "total": 1
+              },
+              "prompt": "Tidy my notes",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Tidy my notes",
+                "promptTruncated": false,
+                "status": "working",
+                "subtask": {
+                  "step": 1,
+                  "title": "fs.write",
+                  "total": 1
+                }
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "needsYou"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "approve",
+                "deny"
+              ],
+              "answerTruncated": false,
+              "checkpoint": {
+                "class": "write.local",
+                "detail": "fs.write\n{\"path\":\"notes.md\",\"text\":\"This week: call the dentist, draft the Q4 plan\"}",
+                "detailTruncated": false,
+                "fields": [
+                  {
+                    "key": "path",
+                    "kind": "text",
+                    "label": "Path",
+                    "value": "notes.md"
+                  },
+                  {
+                    "key": "text",
+                    "kind": "text",
+                    "label": "Text",
+                    "value": "This week: call the dentist, draft the Q4 plan"
+                  }
+                ],
+                "id": "j3-2",
+                "risk": "normal",
+                "title": "Changing a file in its folder"
+              },
+              "elapsedMs": 0,
+              "id": "claude",
+              "plan": {
+                "now": "fs.write",
+                "segments": [
+                  "current"
+                ],
+                "step": 1,
+                "total": 1
+              },
+              "prompt": "Tidy my notes",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "needsYou"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Tidy my notes",
+                "promptTruncated": false,
+                "status": "needsYou",
+                "subtask": {
+                  "step": 1,
+                  "title": "fs.write",
+                  "total": 1
+                }
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        }
+      ],
+      "say": "Give Claude a task: it asks before saving a file"
+    },
+    {
+      "expect": {
+        "approval": {
+          "agent": "claude",
+          "class": "comms.send",
+          "detail": [
+            "sam@example.test",
+            "My notes, tidied"
+          ],
+          "risk": "high"
+        },
+        "columnStatus": {
+          "claude": "needsYou"
+        },
+        "columns": [
+          "claude"
+        ],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "needsYou"
+          }
+        ],
+        "shape": "dumbbell"
+      },
+      "gesture": {
+        "agent": "claude",
+        "button": "approve",
+        "kind": "press"
+      },
+      "intent": {
+        "intent": {
+          "checkpoint": "j3-2",
+          "how": "click",
+          "id": "claude",
+          "kind": "approveCheckpoint",
+          "scope": "once"
+        },
+        "v": 1
+      },
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "claude",
+              "plan": {
+                "now": "fs.write",
+                "segments": [
+                  "current"
+                ],
+                "step": 1,
+                "total": 1
+              },
+              "prompt": "Tidy my notes",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Tidy my notes",
+                "promptTruncated": false,
+                "status": "working",
+                "subtask": {
+                  "step": 1,
+                  "title": "fs.write",
+                  "total": 1
+                }
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "claude",
+              "plan": {
+                "segments": [
+                  "done"
+                ],
+                "total": 1
+              },
+              "prompt": "Tidy my notes",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Tidy my notes",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "claude",
+              "plan": {
+                "now": "email.send",
+                "segments": [
+                  "done",
+                  "current"
+                ],
+                "step": 2,
+                "total": 2
+              },
+              "prompt": "Tidy my notes",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Tidy my notes",
+                "promptTruncated": false,
+                "status": "working",
+                "subtask": {
+                  "step": 2,
+                  "title": "email.send",
+                  "total": 2
+                }
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "needsYou"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "approve",
+                "deny"
+              ],
+              "answerTruncated": false,
+              "checkpoint": {
+                "class": "comms.send",
+                "detail": "email.send to sam@example.test\n{\"body\":\"My notes, tidied\",\"to\":\"sam@example.test\"}",
+                "detailTruncated": false,
+                "fields": [
+                  {
+                    "key": "body",
+                    "kind": "text",
+                    "label": "Body",
+                    "value": "My notes, tidied"
+                  },
+                  {
+                    "key": "to",
+                    "kind": "text",
+                    "label": "To",
+                    "value": "sam@example.test"
+                  }
+                ],
+                "id": "j3-4",
+                "risk": "high",
+                "title": "Sending a message or email"
+              },
+              "elapsedMs": 1000,
+              "id": "claude",
+              "plan": {
+                "now": "email.send",
+                "segments": [
+                  "done",
+                  "current"
+                ],
+                "step": 2,
+                "total": 2
+              },
+              "prompt": "Tidy my notes",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "needsYou"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Tidy my notes",
+                "promptTruncated": false,
+                "status": "needsYou",
+                "subtask": {
+                  "step": 2,
+                  "title": "email.send",
+                  "total": 2
+                }
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        }
+      ],
+      "say": "Approve: it saves, then asks before emailing Sam"
+    },
+    {
+      "expect": {
+        "approval": {
+          "agent": "claude",
+          "class": "write.local",
+          "detail": [
+            "notes-backup.md"
+          ],
+          "risk": "normal"
+        },
+        "columnStatus": {
+          "claude": "needsYou"
+        },
+        "columns": [
+          "claude"
+        ],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "needsYou"
+          }
+        ],
+        "shape": "dumbbell"
+      },
+      "gesture": {
+        "agent": "claude",
+        "kind": "note",
+        "text": "Don't email anyone yet."
+      },
+      "intent": {
+        "intent": {
+          "checkpoint": "j3-4",
+          "id": "claude",
+          "kind": "denyCheckpoint",
+          "note": "Don't email anyone yet."
+        },
+        "v": 1
+      },
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 2000,
+              "id": "claude",
+              "plan": {
+                "segments": [
+                  "done",
+                  "skipped"
+                ],
+                "total": 2
+              },
+              "prompt": "Tidy my notes",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Tidy my notes",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 2000,
+              "id": "claude",
+              "plan": {
+                "now": "fs.write",
+                "segments": [
+                  "done",
+                  "skipped",
+                  "current"
+                ],
+                "step": 3,
+                "total": 3
+              },
+              "prompt": "Tidy my notes",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Tidy my notes",
+                "promptTruncated": false,
+                "status": "working",
+                "subtask": {
+                  "step": 3,
+                  "title": "fs.write",
+                  "total": 3
+                }
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "needsYou"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "approve",
+                "deny"
+              ],
+              "answerTruncated": false,
+              "checkpoint": {
+                "class": "write.local",
+                "detail": "fs.write\n{\"path\":\"notes-backup.md\",\"text\":\"This week: call the dentist\"}",
+                "detailTruncated": false,
+                "fields": [
+                  {
+                    "key": "path",
+                    "kind": "text",
+                    "label": "Path",
+                    "value": "notes-backup.md"
+                  },
+                  {
+                    "key": "text",
+                    "kind": "text",
+                    "label": "Text",
+                    "value": "This week: call the dentist"
+                  }
+                ],
+                "id": "j3-6",
+                "risk": "normal",
+                "title": "Changing a file in its folder"
+              },
+              "elapsedMs": 2000,
+              "id": "claude",
+              "plan": {
+                "now": "fs.write",
+                "segments": [
+                  "done",
+                  "skipped",
+                  "current"
+                ],
+                "step": 3,
+                "total": 3
+              },
+              "prompt": "Tidy my notes",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "needsYou"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Tidy my notes",
+                "promptTruncated": false,
+                "status": "needsYou",
+                "subtask": {
+                  "step": 3,
+                  "title": "fs.write",
+                  "total": 3
+                }
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        }
+      ],
+      "say": "Deny with a note in the card's field: it carries on, and asks before saving a backup"
+    },
+    {
+      "expect": {
+        "approval": {
+          "agent": "claude",
+          "class": "write.local",
+          "detail": [
+            "todo.md"
+          ],
+          "risk": "normal"
+        },
+        "columnStatus": {
+          "claude": "needsYou"
+        },
+        "columns": [
+          "claude"
+        ],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "needsYou"
+          }
+        ],
+        "shape": "dumbbell"
+      },
+      "gesture": {
+        "agent": "claude",
+        "changes": {
+          "path": "archive/notes-backup.md"
+        },
+        "kind": "edit"
+      },
+      "intent": {
+        "intent": {
+          "changes": {
+            "path": "archive/notes-backup.md"
+          },
+          "checkpoint": "j3-6",
+          "how": "click",
+          "id": "claude",
+          "kind": "editCheckpoint"
+        },
+        "v": 1
+      },
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 3000,
+              "id": "claude",
+              "plan": {
+                "now": "fs.write",
+                "segments": [
+                  "done",
+                  "skipped",
+                  "current"
+                ],
+                "step": 3,
+                "total": 3
+              },
+              "prompt": "Tidy my notes",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Tidy my notes",
+                "promptTruncated": false,
+                "status": "working",
+                "subtask": {
+                  "step": 3,
+                  "title": "fs.write",
+                  "total": 3
+                }
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 3000,
+              "id": "claude",
+              "plan": {
+                "segments": [
+                  "done",
+                  "skipped",
+                  "done"
+                ],
+                "total": 3
+              },
+              "prompt": "Tidy my notes",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Tidy my notes",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 3000,
+              "id": "claude",
+              "plan": {
+                "now": "fs.write",
+                "segments": [
+                  "done",
+                  "skipped",
+                  "done",
+                  "current"
+                ],
+                "step": 4,
+                "total": 4
+              },
+              "prompt": "Tidy my notes",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Tidy my notes",
+                "promptTruncated": false,
+                "status": "working",
+                "subtask": {
+                  "step": 4,
+                  "title": "fs.write",
+                  "total": 4
+                }
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "needsYou"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "approve",
+                "deny"
+              ],
+              "answerTruncated": false,
+              "checkpoint": {
+                "class": "write.local",
+                "detail": "fs.write\n{\"path\":\"todo.md\",\"text\":\"Call the dentist\"}",
+                "detailTruncated": false,
+                "fields": [
+                  {
+                    "key": "path",
+                    "kind": "text",
+                    "label": "Path",
+                    "value": "todo.md"
+                  },
+                  {
+                    "key": "text",
+                    "kind": "text",
+                    "label": "Text",
+                    "value": "Call the dentist"
+                  }
+                ],
+                "id": "j3-8",
+                "risk": "normal",
+                "title": "Changing a file in its folder"
+              },
+              "elapsedMs": 3000,
+              "id": "claude",
+              "plan": {
+                "now": "fs.write",
+                "segments": [
+                  "done",
+                  "skipped",
+                  "done",
+                  "current"
+                ],
+                "step": 4,
+                "total": 4
+              },
+              "prompt": "Tidy my notes",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "needsYou"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Tidy my notes",
+                "promptTruncated": false,
+                "status": "needsYou",
+                "subtask": {
+                  "step": 4,
+                  "title": "fs.write",
+                  "total": 4
+                }
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        }
+      ],
+      "say": "Edit the backup's path and approve the edited call: then it asks before the to-do list"
+    },
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "done"
+          }
+        ],
+        "shape": "dumbbell"
+      },
+      "gesture": {
+        "agent": "claude",
+        "button": "allowForRun",
+        "kind": "press"
+      },
+      "intent": {
+        "intent": {
+          "checkpoint": "j3-8",
+          "how": "click",
+          "id": "claude",
+          "kind": "approveCheckpoint",
+          "scope": "forRun"
+        },
+        "v": 1
+      },
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 4000,
+              "id": "claude",
+              "plan": {
+                "now": "fs.write",
+                "segments": [
+                  "done",
+                  "skipped",
+                  "done",
+                  "current"
+                ],
+                "step": 4,
+                "total": 4
+              },
+              "prompt": "Tidy my notes",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Tidy my notes",
+                "promptTruncated": false,
+                "status": "working",
+                "subtask": {
+                  "step": 4,
+                  "title": "fs.write",
+                  "total": 4
+                }
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 4000,
+              "id": "claude",
+              "plan": {
+                "segments": [
+                  "done",
+                  "skipped",
+                  "done",
+                  "done"
+                ],
+                "total": 4
+              },
+              "prompt": "Tidy my notes",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Tidy my notes",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 4000,
+              "id": "claude",
+              "plan": {
+                "now": "fs.write",
+                "segments": [
+                  "done",
+                  "skipped",
+                  "done",
+                  "done",
+                  "current"
+                ],
+                "step": 5,
+                "total": 5
+              },
+              "prompt": "Tidy my notes",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Tidy my notes",
+                "promptTruncated": false,
+                "status": "working",
+                "subtask": {
+                  "step": 5,
+                  "title": "fs.write",
+                  "total": 5
+                }
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 4000,
+              "id": "claude",
+              "plan": {
+                "segments": [
+                  "done",
+                  "skipped",
+                  "done",
+                  "done",
+                  "done"
+                ],
+                "total": 5
+              },
+              "prompt": "Tidy my notes",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Tidy my notes",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answer": "Saving a tidier copy. Emailing it to Sam. OK, I won't email anyone. Saving a backup. Writing the to-do list. And the done list. All tidy.",
+              "answerTruncated": false,
+              "elapsedMs": 4000,
+              "id": "claude",
+              "plan": {
+                "segments": [
+                  "done",
+                  "skipped",
+                  "done",
+                  "done",
+                  "done"
+                ],
+                "total": 5
+              },
+              "prompt": "Tidy my notes",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Tidy my notes",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answer": "Saving a tidier copy. Emailing it to Sam. OK, I won't email anyone. Saving a backup. Writing the to-do list. And the done list. All tidy.",
+              "answerTruncated": false,
+              "elapsedMs": 4000,
+              "id": "claude",
+              "plan": {
+                "segments": [
+                  "done",
+                  "skipped",
+                  "done",
+                  "done",
+                  "done"
+                ],
+                "total": 5
+              },
+              "prompt": "Tidy my notes",
+              "promptTruncated": false,
+              "spend": "$0.0090",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Tidy my notes",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "done"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answer": "Saving a tidier copy. Emailing it to Sam. OK, I won't email anyone. Saving a backup. Writing the to-do list. And the done list. All tidy.",
+              "answerTruncated": false,
+              "elapsedMs": 4000,
+              "id": "claude",
+              "plan": {
+                "segments": [
+                  "done",
+                  "skipped",
+                  "done",
+                  "done",
+                  "done"
+                ],
+                "total": 5
+              },
+              "prompt": "Tidy my notes",
+              "promptTruncated": false,
+              "spend": "$0.0090",
+              "status": "done"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "Allow for this run: the to-do list and the done list save without asking, and it's done"
+    }
+  ],
+  "title": "Answering checkpoints"
+}

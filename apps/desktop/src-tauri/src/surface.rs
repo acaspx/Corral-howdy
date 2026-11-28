@@ -765,7 +765,7 @@ impl CorralFeed {
             eprintln!("corral: the corral view is poisoned, so no checkpoint can be answered");
             return false;
         };
-        views.cards.waits_on(agent, checkpoint)
+        views.waits_on(agent, checkpoint)
     }
 
     /// `agent`'s card showing `checkpoint` (one waiting on it, as the user stepped to it) and
@@ -803,7 +803,7 @@ impl CorralFeed {
             eprintln!("corral: the corral view is poisoned, so no edit can be taken");
             return Err(EditError::NotShown);
         };
-        views.cards.edited_args(agent, checkpoint, changes)
+        views.edited_args(agent, checkpoint, changes)
     }
 
     /// Wraps `log` so every event it accepts updates the corral. Give the result to the
@@ -1017,15 +1017,13 @@ impl CorralFeed {
             eprintln!("corral: the corral's state is poisoned, so the prompt bar knows no agents");
             return Vec::new();
         };
-        let now = self.clock.now_ms();
-        let settings = views.order.settings(&views.all_cards);
-        prompt_bar_feed::bar_agents(&settings, |id| views.cards.card(id, now).map(|c| c.status))
+        views.bar_agents(self.clock.now_ms())
     }
 
     /// Shows the prompt bar's answer, on the main thread, with each suggestion's logo.
     fn send_bar(&self, answer: PromptBarSnapshot) {
         let answer = match self.views.lock() {
-            Ok(views) => answer.with_logos(|id| views.logos.get(id).cloned()),
+            Ok(views) => views.with_bar_logos(answer),
             Err(_) => {
                 eprintln!(
                     "corral: the corral's state is poisoned, so the prompt bar shows no logos"

@@ -4,15 +4,15 @@
 //! Lifecycle, policy and budget decisions live in `corral-core` / `corral-policy`. The liquid-glass
 //! corral itself is native Swift (`native/CorralNative`), linked over a C ABI (ADR-001).
 
-// The bridge to CorralNative (ADR-001). `bridge` is the pure wire contract and `corral_state`
-// what the corral shows, both built and tested on every platform (the journeys drive them, Spike
-// S2); `native` (the FFI) and `surface` only build on macOS with `--features native`.
+// The bridge to CorralNative (ADR-001). `bridge` is the pure wire contract, `corral_state` what
+// the corral shows and `prompt_bar_feed` the prompt bar's glue, all built and tested on every
+// platform (the journeys drive them, Spike S2); `native` (the FFI) and `surface` only build on
+// macOS with `--features native`.
 pub mod bridge;
 pub mod corral_state;
 #[cfg(all(target_os = "macos", feature = "native"))]
 #[allow(unsafe_code)] // the C ABI; see the module docs and docs/adr/001-stack.md
 pub mod native;
-#[cfg(any(test, all(target_os = "macos", feature = "native")))]
 pub mod prompt_bar_feed;
 #[cfg(all(target_os = "macos", feature = "native"))]
 pub mod surface;

@@ -62,7 +62,7 @@ The nightly native job measures them on the bundled app with `os_signpost` inter
 ## Order of work
 
 1. ✅ **J9 end to end:** the driver, the transcript format and the replay, for the journey with no main window and no checkpoint (2026-11-26). The driver plays through `CorralState`, the state the app's feed holds, now built on every platform, so the transcript is what the app sends.
-2. **J2, J3, J11:** deploys and checkpoints.
+2. ✅ **J2, J3, J11:** deploys and checkpoints (2026-11-27). The prompt bar's glue and the checks on a card's answer (`waits_on`, `edited_args`) are now shared with the app too, so the driver answers checkpoints on the desk as the app does.
 3. **J1, J4, J5, J6, J10:** the journeys that cross into the main window.
 4. **The nightly:** one proof run of XCUITest on `macos-26` (the permission question), then J0, J1 and the performance job. This needs a new workflow under `.github/`, a protected path, so it's its own PR for review.
 
