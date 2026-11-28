@@ -1,0 +1,88 @@
+# The nightly native smoke (Spike S2, step 4; docs/03 M4 exit). Its first job is the proof run S2
+# asks for before anything depends on it: can a GitHub-hosted macos-26 runner run a macOS UI test,
+# in a window and in a non-activating panel like the corral's (native/CorralUIProof)? If it can,
+# this grows into J0 and J1 on the bundled app and the performance budgets; if not, the nightly
+# moves to a self-hosted Mac. Non-blocking: no pull request waits on it.
+#
+# Hardening, as in ci.yml:
+# - Runs on a schedule or on demand, never on a pull request. It needs no secrets.
+# - Every run step uses bash with -eo pipefail; actions are pinned to full commit SHAs (T12), and
+#   the one tool downloaded (XcodeGen) is pinned to a version and its SHA-256.
+name: ui-nightly
+
+on:
+  schedule:
+    - cron: "41 12 * * *" # 04:41 in California
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ui-nightly
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  proof:
+    name: UI test proof (XCUITest on a hosted macos-26)
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      XCODEGEN_VERSION: 2.45.4
+      XCODEGEN_SHA256: 090ec29491aad50aec10631bf6e62253fed733c50f3aab0f5ffc86bc170bdbef
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing here pushes, and an artifact leaves the runner: don't keep the token.
+          persist-credentials: false
+
+      # XCUITest asks for a password before it can drive the UI, which no one can type on a
+      # runner. Apple's tool for CI machines turns that prompt off.
+      - name: Allow UI automation without a password prompt
+        run: |
+          sudo automationmodetool enable-automationmode-without-authentication
+          automationmodetool
+
+      # What the session looks like, for the record: a UI test can't run in a locked one.
+      - name: The runner's session
+        run: |
+          sw_vers
+          xcodebuild -version
+          id -un
+          launchctl managername
+
+      - name: XcodeGen ${{ env.XCODEGEN_VERSION }}, checked
+        run: |
+          zip="$RUNNER_TEMP/xcodegen.zip"
+          curl -fsSL -o "$zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          echo "${XCODEGEN_SHA256}  ${zip}" | shasum -a 256 -c -
+          unzip -q "$zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+
+      - name: Generate the proof project
+        working-directory: native/CorralUIProof
+        run: xcodegen generate
+
+      - name: Run the UI tests
+        working-directory: native/CorralUIProof
+        run: |
+          xcodebuild test \
+            -project CorralUIProof.xcodeproj \
+            -scheme CorralUIProof \
+            -destination 'platform=macOS' \
+            -resultBundlePath "$RUNNER_TEMP/ui-proof.xcresult"
+
+      # The result bundle shows where a blocked run stopped (launch, first click) and its screen.
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: ui-proof-xcresult
+          path: ${{ runner.temp }}/ui-proof.xcresult
+          if-no-files-found: warn
+          retention-days: 14
