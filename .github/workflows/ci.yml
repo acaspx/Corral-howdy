@@ -48,6 +48,8 @@ jobs:
       # The Tauri shell embeds the built frontend, so build it before clippy compiles the workspace.
       - run: pnpm -r build
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      # The e2e build the nightly drives (Spike S2): fake providers, keys in memory.
+      - run: cargo clippy -p corral-desktop --features e2e --all-targets -- -D warnings
 
   test:
     name: test (Rust + TS)
@@ -63,6 +65,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r build
       - run: cargo test --workspace
+      - run: cargo test -p corral-desktop --features e2e --test e2e_build
       - run: pnpm -r test
 
   eval-gate:
@@ -107,6 +110,8 @@ jobs:
       # The Tauri shell embeds the built frontend.
       - run: pnpm -r build
       - run: cargo clippy -p corral-desktop --features native --all-targets -- -D warnings
+      # The e2e build swaps the corral's agents and logos for fakes (src/surface.rs).
+      - run: cargo clippy -p corral-desktop --features native,e2e --all-targets -- -D warnings
       - run: cargo test -p corral-desktop --features native
 
   scope-guard:

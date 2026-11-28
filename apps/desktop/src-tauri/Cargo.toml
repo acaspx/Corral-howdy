@@ -15,6 +15,9 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [features]
 # Link CorralNative (Swift) and show the corral (ADR-001). macOS + Xcode 26 only.
 native = ["dep:swift-rs"]
+# The e2e build the nightly drives (Spike S2 step 4): scripted fake providers, keys in memory, no
+# network (src/e2e.rs). Never in a release: scripts/ci/no_e2e_in_release.sh checks.
+e2e = []
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

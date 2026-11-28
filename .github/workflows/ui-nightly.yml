@@ -1,11 +1,16 @@
-# The nightly native smoke (Spike S2, step 4; docs/03 M4 exit). Its first job is the proof run S2
-# asks for before anything depends on it: can a GitHub-hosted macos-26 runner run a macOS UI test,
-# in a window and in a non-activating panel like the corral's (native/CorralUIProof)? If it can,
-# this grows into J0 and J1 on the bundled app and the performance budgets; if not, the nightly
-# moves to a self-hosted Mac. Non-blocking: no pull request waits on it.
+# The nightly native smoke (Spike S2, step 4; docs/03 M4 exit). Non-blocking: no pull request
+# waits on it.
+# - proof: can this runner run a macOS UI test, in a window and in a non-activating panel like the
+#   corral's (native/CorralUIProof)? It could, on 2026-11-27. It stays first, so a runner that
+#   loses UI automation shows up as that, not as a broken journey.
+# - journeys: J0 on the bundled e2e app (`--features native,e2e`: scripted fake providers, keys in
+#   memory, no network), driven by XCUITest (native/CorralE2E). The same job checks that a release
+#   build doesn't carry the e2e build (scripts/ci/no_e2e_in_release.sh), and that the check
+#   catches the e2e build it just made.
 #
 # Hardening, as in ci.yml:
-# - Runs on a schedule or on demand, never on a pull request. It needs no secrets.
+# - Runs on a schedule or on demand, never on a pull request. It needs no secrets: the e2e build
+#   takes a made-up key and asks no one.
 # - Every run step uses bash with -eo pipefail; actions are pinned to full commit SHAs (T12), and
 #   the one tool downloaded (XcodeGen) is pinned to a version and its SHA-256.
 name: ui-nightly
@@ -84,5 +89,95 @@ jobs:
         with:
           name: ui-proof-xcresult
           path: ${{ runner.temp }}/ui-proof.xcresult
+          if-no-files-found: warn
+          retention-days: 14
+
+  journeys:
+    name: J0 on the bundled e2e app (XCUITest), and the release check
+    needs: proof
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      XCODEGEN_VERSION: 2.45.4
+      XCODEGEN_SHA256: 090ec29491aad50aec10631bf6e62253fed733c50f3aab0f5ffc86bc170bdbef
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Allow UI automation without a password prompt
+        run: sudo automationmodetool enable-automationmode-without-authentication
+
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+
+      # Its own bundle ID (com.studioacas.corral.e2e), so it never shares a data folder with a
+      # real install. Copied out before the release build below replaces the bundle folder.
+      - name: Build the e2e app
+        working-directory: apps/desktop
+        run: |
+          pnpm tauri build --ci --bundles app --features native,e2e \
+            --config "$GITHUB_WORKSPACE/apps/desktop/src-tauri/tauri.e2e.conf.json"
+          built="$GITHUB_WORKSPACE/target/release/bundle/macos/CorralE2E.app"
+          test -d "$built"
+          ditto "$built" "$RUNNER_TEMP/CorralE2E.app"
+          echo "E2E_APP=$RUNNER_TEMP/CorralE2E.app" >> "$GITHUB_ENV"
+
+      # The check has to catch the build it exists to stop: exit 1 (found), not 0 (missed) or 2
+      # (couldn't read). Then a release build must pass it.
+      - name: The release check catches the e2e build, and passes a release build
+        run: |
+          plist() { /usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$1/Contents/Info.plist"; }
+          e2e_bin="$E2E_APP/Contents/MacOS/$(plist "$E2E_APP")"
+          status=0
+          scripts/ci/no_e2e_in_release.sh "$e2e_bin" || status=$?
+          if [ "$status" != 1 ]; then
+            echo "::error::the release check didn't catch the e2e build (exit $status)"
+            exit 1
+          fi
+          (cd apps/desktop && pnpm tauri build --ci --bundles app --features native)
+          release="$GITHUB_WORKSPACE/target/release/bundle/macos/Corral.app"
+          scripts/ci/no_e2e_in_release.sh "$release/Contents/MacOS/$(plist "$release")"
+
+      # XCUITest launches the app by bundle ID, so Launch Services must know where it is.
+      - name: Register the e2e app
+        run: |
+          lsregister=/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister
+          "$lsregister" -f "$E2E_APP"
+
+      - name: XcodeGen ${{ env.XCODEGEN_VERSION }}, checked
+        run: |
+          zip="$RUNNER_TEMP/xcodegen.zip"
+          curl -fsSL -o "$zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          echo "${XCODEGEN_SHA256}  ${zip}" | shasum -a 256 -c -
+          unzip -q "$zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+
+      - name: Generate the journeys project
+        working-directory: native/CorralE2E
+        run: xcodegen generate
+
+      - name: J0 on the bundled app
+        working-directory: native/CorralE2E
+        run: |
+          xcodebuild test \
+            -project CorralE2E.xcodeproj \
+            -scheme CorralE2E \
+            -destination 'platform=macOS' \
+            -resultBundlePath "$RUNNER_TEMP/journeys.xcresult"
+
+      # Each failure's screenshot, and the steps before it.
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: journeys-xcresult
+          path: ${{ runner.temp }}/journeys.xcresult
           if-no-files-found: warn
           retention-days: 14

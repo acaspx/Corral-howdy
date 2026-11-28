@@ -28,6 +28,8 @@ pub mod bindings;
 pub mod chatgpt_signin;
 pub mod corral_order;
 pub mod corral_settings;
+#[cfg(feature = "e2e")]
+pub mod e2e;
 pub mod keys;
 pub mod linked;
 pub mod logos;
@@ -88,8 +90,15 @@ pub(crate) fn show_main_window(app: &AppHandle) {
     }
 }
 
+/// The e2e build's ChatGPT plan: signed out, in memory, offline.
+#[cfg(feature = "e2e")]
+fn chatgpt_plan() -> Result<corral_adapters::chatgpt::ChatGptPlan, String> {
+    Ok(e2e::plan())
+}
+
 /// The ChatGPT plan: tokens in the login Keychain on macOS (in memory elsewhere; Corral only
 /// ships on macOS), reaching OpenAI over HTTPS.
+#[cfg(not(feature = "e2e"))]
 fn chatgpt_plan() -> Result<corral_adapters::chatgpt::ChatGptPlan, String> {
     #[cfg(target_os = "macos")]
     let store: std::sync::Arc<dyn corral_secrets::PlanStore> =
@@ -108,9 +117,17 @@ fn chatgpt_plan() -> Result<corral_adapters::chatgpt::ChatGptPlan, String> {
 
 /// Builds and runs the app.
 pub fn run() {
+    // The e2e build keeps keys in memory and accepts any key (src/e2e.rs).
+    #[cfg(feature = "e2e")]
+    let (keys, checker) = {
+        e2e::announce();
+        (e2e::keys(), e2e::key_checker())
+    };
+    #[cfg(not(feature = "e2e"))]
+    let (keys, checker) = (keys::Keys::system(), keys::KeyChecker::system());
     let app = tauri::Builder::default()
-        .manage(keys::Keys::system())
-        .manage(keys::KeyChecker::system())
+        .manage(keys)
+        .manage(checker)
         .invoke_handler(tauri::generate_handler![
             keys::provider_key_status,
             keys::identify_provider_key,
