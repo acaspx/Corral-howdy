@@ -485,11 +485,11 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 
 ## 6. End-to-end journeys
 - **J0** Walking skeleton: add an xAI key → click Grok's drop → type a question → Deploy → the ring turns and the hover card shows elapsed time and spend → the result card shows the answer → Send back (cassette in CI, live once by the owner with a $0.25 cap)
-- **J1** First launch → add xAI key → create agent (with a logo) → deploy → watch its trace column and hover card → completed → send back
+- **J1** First launch → add xAI key → create agent (with a logo) → deploy → watch its trace column and hover card → completed → send back. Creating the agent is naming it in the agent editor: Grok drops in with its provider's logo when the key connects, and is renamed Ada. Transcript: `native/CorralNative/Fixtures/journeys/J1.json`; its key and agent-editor steps are played by `apps/desktop/src/journeys.test.tsx`
 - **J2** Deploy three agents at once (⌘-click three drops, then "Deploy to 3" in the prompt bar); all three trace columns update independently. Transcript: `native/CorralNative/Fixtures/journeys/J2.json`
 - **J3** Checkpoint: approve, deny with note, edit args, allow-for-run. Transcript: `native/CorralNative/Fixtures/journeys/J3.json`
 - **J4** Open trace from a task card (or Trace › in the hover card); filter to tool calls; copy JSON
-- **J5** Budget soft limit → checkpoint → raise limit → continue
+- **J5** Budget soft limit → checkpoint → raise limit → continue: at the app's $0.10 soft limit nothing more is sent and the card asks (`budget.threshold`, no Allow for this run); Approve raises the limit to the run's $0.25 cap, and the run finishes. Transcript: `native/CorralNative/Fixtures/journeys/J5.json`
 - **J6** Stop all during 5 active runs: one task to every agent from the prompt bar (⌘↩), then **Stop all agents** in the corral's right-click menu → every run stops and its column folds away (the tree shows 3 columns and "+2 more running" before) → the menu stops offering it → an agent takes a new task. The recall-all hotkey isn't built yet, so the journey uses the menu. Transcript: `native/CorralNative/Fixtures/journeys/J6.json`
 - **J7** Voice: push-to-talk → edit transcript → deploy
 - **J8** Import a manifest from file → permission diff → accept → deploy

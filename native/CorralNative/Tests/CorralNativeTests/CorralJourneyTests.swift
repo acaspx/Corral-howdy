@@ -282,6 +282,21 @@ private final class Replay {
             for text in wanted["detail"] as? [String] ?? [] {
                 #expect(approval.detail.contains(text), "\(say): the box says \(text)")
             }
+            if let forRun = wanted["forRun"] as? Bool {
+                #expect((approval.forRunTitle != nil) == forRun, "\(say): Allow for this run is offered")
+            }
+        }
+
+        if let names = expect["names"] as? [String: String] {
+            for (id, name) in names {
+                #expect(shown.agents.first { $0.id == id }?.name == name, "\(say): \(id) is named \(name)")
+            }
+        }
+        if let logos = expect["logos"] as? [String] {
+            for id in logos {
+                let path = shown.agents.first { $0.id == id }?.logoPath
+                #expect(path != nil, "\(say): \(id) shows its logo (a path in a logos folder)")
+            }
         }
 
         if let wanted = expect["bar"] as? [String: Any] {
@@ -326,6 +341,18 @@ private func replay(_ journey: String) throws {
 @MainActor
 func j9CorralMorph() throws {
     try replay("J9")
+}
+
+@Test("J1 first launch: a key, a logo, a name, a task, and Send back")
+@MainActor
+func j1FirstLaunch() throws {
+    try replay("J1")
+}
+
+@Test("J5 a run at its soft limit asks on its card, and goes on when approved")
+@MainActor
+func j5SoftLimit() throws {
+    try replay("J5")
 }
 
 @Test("J2 three drops ⌘-clicked and one task from the prompt bar: three columns, each on its own")

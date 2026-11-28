@@ -17,9 +17,13 @@
 //! checkpoints answered on the desk the app uses (rule 4: no bypass).
 
 use corral_adapters::catalog::{AgentRouter, agent_for};
+use corral_adapters::chatgpt::ChatGptPlan;
 use corral_adapters::fake::{FakeDriver, FakeScript, ToolSetup};
 use corral_adapters::linked::LinkedSettings;
-use corral_core::budget::BudgetConfig;
+use corral_adapters::logos::{LogoError, LogoFetcher, LogoSource};
+use corral_adapters::transport::{Form, FormTransport, TransportError};
+use corral_adapters::verify::ModelsProbe;
+use corral_core::budget::{BudgetConfig, Price};
 use corral_core::clock::Clock;
 use corral_core::controls::CorralControls;
 use corral_core::corral_view::AgentCard;
@@ -30,13 +34,20 @@ use corral_core::supervisor::{
     EventLog, LogError, RunDriver, Supervisor, SupervisorConfig, WatchedLog,
 };
 use corral_core::usage_rank::Deploy;
+use corral_desktop_lib::agent_editor::{AgentEdit, AgentEditor};
+use corral_desktop_lib::agent_names::AgentNames;
+use corral_desktop_lib::agent_settings::AgentSettings;
 use corral_desktop_lib::bridge::{Intent, decode_intent};
 use corral_desktop_lib::corral_order::{CorralOrder, CorralSettingsView};
 use corral_desktop_lib::corral_settings::{CorralControl, CorralSettings};
-use corral_desktop_lib::corral_state::CorralState;
+use corral_desktop_lib::corral_state::{
+    CorralAgents, CorralState, RUN_CAP_MICRO_USD, SOFT_LIMIT_MICRO_USD, corral_for,
+};
+use corral_desktop_lib::keys;
+use corral_desktop_lib::logos::{LogoStore, fetch_missing, wanted};
 use corral_desktop_lib::prompt_bar_feed;
 use corral_policy::{Policy, Profile};
-use corral_secrets::Provider;
+use corral_secrets::{MemoryPlanStore, MemoryStore, Provider, SecretStore};
 use corral_tools::{Answer, BoxFuture, CheckpointDesk, Tool, ToolError, ToolGateway};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -134,6 +145,8 @@ struct Core {
     clock: Arc<PausedClock>,
     /// The main window's Corral section, reaching this corral as the app's does.
     settings: CorralSettings,
+    /// The rest of the app, for a journey that starts from the keys (J1).
+    app: Option<AppSide>,
 }
 
 /// What the app's feed does for the Corral section's commands (`impl CorralControl for
@@ -182,6 +195,32 @@ impl Core {
         desk: Arc<CheckpointDesk>,
         agents: Vec<AgentCard>,
     ) -> Self {
+        let runnable = agents.iter().map(|card| card.id.clone()).collect();
+        Self::with_agents(driver, desk, agents, runnable, None)
+    }
+
+    /// The core as the app starts it from its keys, its sign-in and the agents' names
+    /// (`surface::start`), with the app's soft limit for each run.
+    fn with_app(driver: Arc<dyn RunDriver>, desk: Arc<CheckpointDesk>, app: AppSide) -> Self {
+        let agents = app.agents();
+        let limits = (
+            BudgetConfig {
+                per_run_cap_micro_usd: RUN_CAP_MICRO_USD,
+            },
+            SOFT_LIMIT_MICRO_USD,
+        );
+        let mut core = Self::with_agents(driver, desk, agents.cards, agents.runnable, Some(limits));
+        core.app = Some(app);
+        core
+    }
+
+    fn with_agents(
+        driver: Arc<dyn RunDriver>,
+        desk: Arc<CheckpointDesk>,
+        agents: Vec<AgentCard>,
+        runnable: Vec<AgentId>,
+        limits: Option<(BudgetConfig, u64)>,
+    ) -> Self {
         let clock = Arc::new(PausedClock(tokio::time::Instant::now()));
         let nonce = Arc::new(AtomicU64::new(1));
         let state = CorralState::open(
@@ -211,17 +250,22 @@ impl Core {
                 },
             ))
         };
+        let (budget, soft_limit) = match limits {
+            Some((budget, soft)) => (budget, Some(soft)),
+            None => (BudgetConfig::default(), None),
+        };
         let supervisor = Supervisor::with_budget(
             SupervisorConfig::default(),
-            BudgetConfig::default(),
+            budget,
             driver,
             log,
             Arc::clone(&clock) as Arc<dyn Clock>,
         );
+        supervisor.set_soft_limit(soft_limit);
         let ids = Arc::new(AtomicU64::new(1));
         let controls = CorralControls::new(
             supervisor,
-            agents.iter().map(|card| card.id.clone()),
+            runnable,
             Arc::new(move || format!("j-{}", ids.fetch_add(1, Ordering::SeqCst))),
         );
         let settings = CorralSettings::default();
@@ -240,6 +284,7 @@ impl Core {
             last: Mutex::new(opening.clone()),
             clock,
             settings,
+            app: None,
         };
         // The roster the corral opens with (the app's `publish_now`).
         core.sent.lock().expect("sent").push(opening);
@@ -417,6 +462,46 @@ impl Core {
             .choose_shown(ids.clone())
             .expect("the core takes it");
         json!({"command": "set_corral_shown", "args": {"ids": ids}, "answer": answer})
+    }
+
+    /// The app's `Corral::refresh` after a key or a name changed: the corral's agents follow the
+    /// keys, and each new provider's logo is fetched (here, from a fake) and shown.
+    async fn refresh(&self) {
+        let app = self.app.as_ref().expect("a journey with the app");
+        let linked = LinkedSettings::default();
+        let connected = app.connected();
+        let agents = app.agents();
+        self.controls.set_agents(agents.runnable);
+        {
+            let mut state = self.state.lock().expect("state");
+            let now = self.clock.now_ms();
+            if state.set_agents(agents.cards, linked, now) {
+                self.sent
+                    .lock()
+                    .expect("sent")
+                    .push(roster_json(&state, now));
+            }
+        }
+        // `show_logos`: what's missing is fetched, and each saved logo shows.
+        let want = wanted(&connected, &linked);
+        let ids: Vec<_> = want.iter().map(|(id, _)| *id).collect();
+        for (id, result) in fetch_missing(&FakeLogos, &app.logos, &ids).await {
+            let agent = want
+                .iter()
+                .find(|(w, _)| *w == id)
+                .map(|(_, a)| a.clone())
+                .expect("wanted");
+            let path = result.expect("the logo is saved");
+            let mut state = self.state.lock().expect("state");
+            if state.set_logo(agent, path.to_string_lossy().into_owned()) {
+                let now = self.clock.now_ms();
+                self.sent
+                    .lock()
+                    .expect("sent")
+                    .push(roster_json(&state, now));
+            }
+        }
+        settle().await;
     }
 
     /// The rosters sent since the last step.
@@ -618,6 +703,20 @@ fn checked(core: &Core, say: &'static str, gesture: Value, intent: Value, expect
             bar["outcome"]
         );
     }
+    let agents = last["agents"].as_array().expect("agents");
+    if let Some(names) = expected["names"].as_object() {
+        for (id, name) in names {
+            let drop = agents.iter().find(|a| a["id"] == id.as_str());
+            assert_eq!(drop.map(|a| &a["name"]), Some(name), "{say}: {id}'s name");
+        }
+    }
+    if let Some(logos) = expected["logos"].as_array() {
+        for id in logos {
+            let drop = agents.iter().find(|a| &a["id"] == id);
+            let logo = drop.and_then(|a| a["logo"].as_str()).unwrap_or_default();
+            assert!(logo.ends_with(".png"), "{say}: {id} shows its logo");
+        }
+    }
     if let Some(more) = expected["moreColumns"].as_u64() {
         assert_eq!(
             last["trace"]["more"].as_u64().unwrap_or(0),
@@ -667,6 +766,28 @@ fn checked_settled(
     let mut step = checked(core, say, gesture, intent, expected);
     step.settled = true;
     step
+}
+
+/// `expected`, with the name each drop shows (`agent`, `name`).
+fn with_names(mut expected: Value, names: &[(&str, &str)]) -> Value {
+    let map: serde_json::Map<String, Value> = names
+        .iter()
+        .map(|(id, name)| ((*id).to_owned(), json!(name)))
+        .collect();
+    expected["names"] = Value::Object(map);
+    expected
+}
+
+/// `expected`, with the drops that show their provider's logo.
+fn with_logos(mut expected: Value, agents: &[&str]) -> Value {
+    expected["logos"] = json!(agents);
+    expected
+}
+
+/// `expected`, with whether the approval box offers Allow for this run.
+fn with_for_run(mut expected: Value, offered: bool) -> Value {
+    expected["approval"]["forRun"] = json!(offered);
+    expected
 }
 
 /// `expected`, with whether the corral's menu offers Stop all agents.
@@ -1698,4 +1819,375 @@ async fn play_j10() -> String {
 #[tokio::test(start_paused = true)]
 async fn j10_the_most_used_agent_glides_to_the_top_once_idle_and_eight_are_chosen() {
     check("J10", play_j10).await;
+}
+
+// ---- The rest of the app, for J1 -----------------------------------------------------------
+
+/// A made-up xAI key, typed into the key field. It never reaches a transcript: the window steps
+/// record the provider and the status the core answers, which shows only its last 4.
+const J1_KEY: &str = "xai-journeyNotARealKey7Qm2Lp9Rt4Wx"; // gitleaks:allow (made-up test key)
+
+/// The models check, accepting the key (the app's asks the provider; no network here).
+struct Accepting;
+
+impl ModelsProbe for Accepting {
+    fn get<'a>(
+        &'a self,
+        _url: &'a str,
+        _headers: &'a [(&'static str, String)],
+    ) -> BoxFuture<'a, Result<u16, String>> {
+        Box::pin(async { Ok(200) })
+    }
+}
+
+/// The provider's site, sending its logo: a small PNG.
+struct FakeLogos;
+
+impl LogoFetcher for FakeLogos {
+    fn get<'a>(&'a self, _source: &'a LogoSource) -> BoxFuture<'a, Result<Vec<u8>, LogoError>> {
+        let mut png = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+        png.extend_from_slice(&13_u32.to_be_bytes());
+        png.extend_from_slice(b"IHDR");
+        png.extend_from_slice(&64_u32.to_be_bytes());
+        png.extend_from_slice(&64_u32.to_be_bytes());
+        png.extend_from_slice(&[8, 6, 0, 0, 0, 0, 0, 0, 0]);
+        png.extend_from_slice(&[0; 32]);
+        Box::pin(async move { Ok(png) })
+    }
+}
+
+/// The ChatGPT sign-in, never asked: J1 doesn't sign in.
+struct NoNetwork;
+
+impl FormTransport for NoNetwork {
+    fn post_form<'a>(
+        &'a self,
+        url: &'a str,
+        _form: &'a Form,
+    ) -> BoxFuture<'a, Result<(u16, Vec<u8>), TransportError>> {
+        Box::pin(async move { Err(TransportError::Exhausted(format!("no network: {url}"))) })
+    }
+
+    fn get<'a>(&'a self, url: &'a str) -> BoxFuture<'a, Result<(u16, Vec<u8>), TransportError>> {
+        Box::pin(async move { Err(TransportError::Exhausted(format!("no network: {url}"))) })
+    }
+}
+
+/// What the transcripts call the user's home folder, as the bridge fixtures do.
+const HOME: &str = "/Users/you";
+
+/// The app around the core: the Keychain (in memory), ChatGPT signed out, the agents' settings and
+/// names, and the logos folder, all under a scratch home folder that's removed afterwards. Paths
+/// under it are recorded as under [`HOME`], so a transcript is the same on every machine.
+struct AppSide {
+    home: PathBuf,
+    keys: Arc<MemoryStore>,
+    plan: ChatGptPlan,
+    names: AgentNames,
+    editor: AgentEditor,
+    logos: LogoStore,
+    /// The editor told the corral to refresh (its `on_change`).
+    told: Arc<AtomicU64>,
+}
+
+impl AppSide {
+    fn new(journey: &str) -> Self {
+        let home = std::env::temp_dir().join(format!(
+            "corral-journey-{journey}-{}-{}",
+            std::process::id(),
+            HOMES.fetch_add(1, Ordering::SeqCst)
+        ));
+        let support = home.join("Library/Application Support/Corral");
+        std::fs::create_dir_all(&support).expect("a scratch home");
+        let names = AgentNames::default();
+        let editor = AgentEditor::open(
+            AgentSettings::new(support.join("agents")),
+            names.clone(),
+            Some(home.clone()),
+        );
+        let told = Arc::new(AtomicU64::new(0));
+        let count = Arc::clone(&told);
+        editor.on_change(Box::new(move || {
+            count.fetch_add(1, Ordering::SeqCst);
+        }));
+        Self {
+            logos: LogoStore::new(support.join("logos")),
+            home,
+            keys: Arc::new(MemoryStore::default()),
+            plan: ChatGptPlan::new(
+                Arc::new(MemoryPlanStore::default()),
+                Arc::new(NoNetwork),
+                Arc::new(PausedClock(tokio::time::Instant::now())),
+            ),
+            names,
+            editor,
+            told,
+        }
+    }
+
+    fn connected(&self) -> Vec<Provider> {
+        keys::connected(self.keys.as_ref(), &self.plan)
+    }
+
+    fn agents(&self) -> CorralAgents {
+        corral_for(&self.connected(), &LinkedSettings::default(), &self.names)
+    }
+
+    /// `text`, with the scratch home recorded as [`HOME`].
+    fn at_home(&self, text: &str) -> String {
+        text.replace(&*self.home.to_string_lossy(), HOME)
+    }
+}
+
+impl Drop for AppSide {
+    fn drop(&mut self) {
+        // Cleanup only; a leftover scratch folder in the temp folder harms nothing.
+        let _ = std::fs::remove_dir_all(&self.home);
+    }
+}
+
+static HOMES: AtomicU64 = AtomicU64::new(0);
+
+/// A main-window command's answer, as JSON.
+fn answer(value: impl serde::Serialize) -> Value {
+    serde_json::to_value(value).expect("an answer")
+}
+
+// ---- J1: first launch to a finished task -----------------------------------------------------
+
+const J1_TASK: &str = "Draft my week's plan";
+
+/// J1 (`docs/04-test-plan.md` §6): first launch with no keys and an empty corral; add an xAI
+/// key in Settings, and Grok drops in and shows its logo; name it Ada in the agent editor; give
+/// it a task and watch its column and card; it finishes, and is sent back.
+async fn play_j1() -> String {
+    let script = FakeScript::default()
+        .say("Monday: the Q4 draft. Tuesday: errands.")
+        .wait(Duration::from_secs(20))
+        .say(" Friday stays free.")
+        .usage(1_000, 300, 3_000);
+    let app = AppSide::new("j1");
+    let core = Core::with_app(
+        Arc::new(FakeDriver::new(FakeScript::default()).with_prompt(J1_TASK, script)),
+        Arc::new(CheckpointDesk::default()),
+        app,
+    );
+    let app = core.app.as_ref().expect("the app");
+    let none = Value::Null;
+    let mut steps = Vec::new();
+
+    let providers = ["xai", "anthropic", "openai", "meta"];
+    let statuses: Vec<Value> = [
+        Provider::Xai,
+        Provider::Anthropic,
+        Provider::OpenAi,
+        Provider::Meta,
+    ]
+    .into_iter()
+    .map(|p| answer(keys::key_status(app.keys.as_ref(), p).expect("a status")))
+    .collect();
+    steps.push(in_window(
+        &core,
+        "First launch: no keys, so the corral is empty, and Settings shows no providers",
+        json!({"kind": "openKeys"}),
+        json!({"command": "provider_key_status", "args": {"providers": providers},
+               "answer": statuses}),
+        expect("empty", &[], &[]),
+    ));
+
+    let identified = keys::identify_key(J1_KEY);
+    let connected = keys::connect_key(app.keys.as_ref(), &Accepting, Provider::Xai, J1_KEY.into())
+        .await
+        .expect("connected");
+    core.refresh().await;
+    steps.push(in_window(
+        &core,
+        "Paste an xAI key and Connect: Grok drops in, with its logo",
+        json!({"kind": "pasteKey", "looksLike": identified}),
+        json!({"command": "connect_provider_key", "args": {"provider": "xai"},
+               "answer": answer(connected)}),
+        with_logos(
+            with_names(
+                expect("circle", &[("grok", "available")], &[]),
+                &[("grok", "Grok")],
+            ),
+            &["grok"],
+        ),
+    ));
+
+    let views = app.editor.views();
+    steps.push(in_window(
+        &core,
+        "Settings → Agents shows Grok",
+        json!({"kind": "openAgents"}),
+        json!({"command": "agent_editor", "args": {}, "answer": answer(&views)}),
+        expect("circle", &[("grok", "available")], &[]),
+    ));
+
+    let grok = views
+        .iter()
+        .find(|v| v.agent == "grok")
+        .expect("Grok's settings");
+    let edit = json!({"name": "Ada", "model": grok.model, "monthlyCapMicroUsd": grok.monthly_cap_micro_usd});
+    let parsed: AgentEdit = serde_json::from_value(edit.clone()).expect("the command takes it");
+    let saved = app.editor.save("grok", parsed).expect("saved");
+    assert_eq!(
+        app.told.load(Ordering::SeqCst),
+        1,
+        "the editor tells the corral"
+    );
+    core.refresh().await;
+    steps.push(in_window(
+        &core,
+        "Name it Ada and Save: its drop is Ada now",
+        json!({"kind": "rename", "agent": "grok", "name": "Ada"}),
+        json!({"command": "save_agent", "args": {"agent": "grok", "edit": edit},
+               "answer": answer(saved)}),
+        with_logos(
+            with_names(
+                expect("circle", &[("grok", "available")], &[]),
+                &[("grok", "Ada")],
+            ),
+            &["grok"],
+        ),
+    ));
+
+    let intent = json!({"v": 1, "intent": {"kind": "deployTask", "id": "grok", "prompt": J1_TASK}});
+    core.intent(&intent).await;
+    wait(1).await;
+    steps.push(checked(
+        &core,
+        "Give Ada a task in its card: its ring turns and its column rises",
+        json!({"kind": "task", "agent": "grok", "text": J1_TASK}),
+        intent,
+        with_column_status(
+            expect("circle", &[("grok", "working")], &["grok"]),
+            &[("grok", "working")],
+        ),
+    ));
+
+    wait(30).await;
+    steps.push(checked(
+        &core,
+        "Ada finishes: its card offers Send back and a new task",
+        none.clone(),
+        none.clone(),
+        expect("circle", &[("grok", "done")], &[]),
+    ));
+
+    let intent = json!({"v": 1, "intent": {"kind": "sendBack", "id": "grok"}});
+    core.intent(&intent).await;
+    steps.push(checked(
+        &core,
+        "Send Ada back: it's ready for a task",
+        json!({"kind": "press", "agent": "grok", "button": "sendBack"}),
+        intent,
+        with_names(
+            expect("circle", &[("grok", "available")], &[]),
+            &[("grok", "Ada")],
+        ),
+    ));
+
+    let played = transcript("J1", "First launch", &steps);
+    app.at_home(&played)
+}
+
+#[tokio::test(start_paused = true)]
+async fn j1_first_launch_to_a_finished_task() {
+    check("J1", play_j1).await;
+}
+
+// ---- J5: the soft limit ----------------------------------------------------------------------
+
+const J5_TASK: &str = "Summarize the quarterly reports";
+
+/// J5 (`docs/04-test-plan.md` §6): a run reaches the app's soft limit ($0.10): nothing more is
+/// sent, and its card asks; Approve raises the limit to the run's cap, and the run goes on.
+async fn play_j5() -> String {
+    let desk = Arc::new(CheckpointDesk::default());
+    let script = FakeScript::default()
+        .say("Reading the Q1 and Q2 reports.")
+        // The first turn bills $0.104: past the soft limit, so the next request waits.
+        .usage(40_000, 2_000, 104_000)
+        .request()
+        .say(" Q3 and Q4 next.")
+        .usage(20_000, 1_000, 40_000)
+        .say(" Done: revenue grew each quarter.");
+    let app = AppSide::new("j5");
+    app.keys
+        .set(
+            Provider::Anthropic,
+            &corral_secrets::Secret::new(J5_KEY).expect("a key"),
+        )
+        .expect("stored");
+    let core = Core::with_app(
+        Arc::new(
+            FakeDriver::new(FakeScript::default())
+                .with_prompt(J5_TASK, script)
+                // Priced, so each request's worst case counts against the limit.
+                .priced(Price::per_million_tokens(2_000_000, 6_000_000))
+                .with_tools(tools(&desk, "j5")),
+        ),
+        desk,
+        app,
+    );
+    let none = Value::Null;
+    let mut steps = Vec::new();
+
+    steps.push(checked(
+        &core,
+        "The corral opens with Claude",
+        none.clone(),
+        none.clone(),
+        expect("circle", &[("claude", "available")], &[]),
+    ));
+
+    let intent =
+        json!({"v": 1, "intent": {"kind": "deployTask", "id": "claude", "prompt": J5_TASK}});
+    core.intent(&intent).await;
+    wait(1).await;
+    let cp = core.waiting("claude");
+    steps.push(checked(
+        &core,
+        "Give Claude a task: it reaches the $0.10 soft limit, and its card asks before spending more",
+        json!({"kind": "task", "agent": "claude", "text": J5_TASK}),
+        intent,
+        with_for_run(
+            with_approval(
+                with_column_status(
+                    expect("circle", &[("claude", "needsYou")], &["claude"]),
+                    &[("claude", "needsYou")],
+                ),
+                "claude",
+                "budget.threshold",
+                "normal",
+                &["soft limit is $0.10", "up to its $0.25 cap"],
+            ),
+            false,
+        ),
+    ));
+
+    let intent = json!({"v": 1, "intent": {
+        "kind": "approveCheckpoint", "id": "claude", "checkpoint": cp, "scope": "once",
+        "how": "click"}});
+    core.intent(&intent).await;
+    wait(1).await;
+    steps.push(checked(
+        &core,
+        "Approve: the limit is raised to the run's cap, and Claude finishes",
+        json!({"kind": "press", "agent": "claude", "button": "approve"}),
+        intent,
+        expect("circle", &[("claude", "done")], &[]),
+    ));
+
+    let played = transcript("J5", "Soft limit", &steps);
+    core.app.as_ref().expect("the app").at_home(&played)
+}
+
+/// A made-up Anthropic key, so Claude is in the corral.
+const J5_KEY: &str = "sk-ant-journeyNotARealKey3Hk8Nv1Qz6Tb"; // gitleaks:allow (made-up test key)
+
+#[tokio::test(start_paused = true)]
+async fn j5_a_run_at_its_soft_limit_asks_and_goes_on_when_approved() {
+    check("J5", play_j5).await;
 }

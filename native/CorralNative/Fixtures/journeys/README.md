@@ -35,8 +35,10 @@ Each file has the journey's ID and title, and its `steps`, in order. A step has:
 - `rosters`: every roster the core sent during the step, in order (none when nothing changed).
 - `bars`: the prompt bar's answers during the step, if any (see `../bridge/prompt-bar-v1.json`).
 - `window`: a step done in the main window: its `gesture` (`openCorralSettings`, `tick` or
-  `untick` a box by its agent's `name`), the `command` it calls with its `args`, and the core's
-  `answer`. `apps/desktop/src/journeys.test.tsx` performs it on the real screen; the Swift replay
+  `untick` a box by its agent's `name`; `openKeys`, `pasteKey` with the provider the key
+  `looksLike`; `openAgents`, `rename` an `agent` to a `name`), the `command` it calls with its
+  `args`, and the core's `answer`. A key is never recorded: the step records the provider and
+  the status the core answers, which shows only the key's last 4. `apps/desktop/src/journeys.test.tsx` performs it on the real screen; the Swift replay
   only takes its rosters.
 - `settled`: the step's runs end in no fixed order (Stop all cancels them together), so only its
   last roster is kept.
@@ -45,7 +47,9 @@ Each file has the journey's ID and title, and its `steps`, in order. A step has:
   each column's status (`columnStatus`, the wire's colour), the `approval` box on a card (its
   class, risk and text its detail holds), the prompt `bar` (its chips, its button and how the
   last send went), the runs the tree counts but doesn't show (`moreColumns`, "+N more running"),
-  and whether the corral's menu offers Stop all agents (`stopAllOffered`).
+  whether the corral's menu offers Stop all agents (`stopAllOffered`), the name each drop shows
+  (`names`), the drops showing their provider's logo (`logos`), and whether the approval box
+  offers Allow for this run (`approval.forRun`, checked by the replay).
 
 - `J9.json`: the corral morphs as agents come and go (triangle, square, triangle) while one works,
   finishes and is sent back.
@@ -54,10 +58,17 @@ Each file has the journey's ID and title, and its `steps`, in order. A step has:
 - `J3.json`: one run asks four times: approve, deny with a note, edit the call, allow for the run.
 - `J11.json`: an email waits on you; deny it with a note, then approve the next on the pinned
   card.
+- `J1.json`: first launch with an empty corral; an xAI key in Settings, and Grok drops in with
+  its logo; named Ada in the agent editor; a task, and Send back.
+- `J5.json`: a run at the $0.10 soft limit asks on its card; Approve, and it goes on to finish.
 - `J6.json`: one task to five agents with ⌘↩, then Stop all from the corral's menu; each can go
   again.
 - `J10.json`: the most used agent glides to the top-left once the corral is idle; a 9th agent,
   and Settings → Corral chooses which 8 show.
+
+J1 and J5 run with the app around the core: the keys, the agent editor's settings and names, and
+the logos folder live in a scratch home folder, recorded as `/Users/you` (as the bridge fixtures
+do), so a transcript is the same on every machine.
 
 Today's catalog has four agents. J6 and J10 add stand-ins (Scout, Atlas, …) to reach five and
 nine; the corral treats every agent the same.
