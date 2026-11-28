@@ -184,6 +184,12 @@ private final class Replay {
             #expect(hover.isIdle, "the card closed")
             let report = idleReporter.report(hover.isIdle)
             return .corralIdle(try #require(report, "the corral's idle state changed"))
+        case "openTraceCard":
+            // A click on the drop's task card in the trace tree, which is up while it works.
+            let roster = try #require(roster)
+            #expect(CorralTraceLayout.shows(roster.trace), "the trace tree is up")
+            let column = try #require(roster.trace.columns.first { $0.id == agent }, "\(agent) has a task card")
+            return .openTrace(id: column.id)
         case "stopAll":
             // The corral's right-click menu, which offers Stop all agents only while one works.
             let roster = try #require(roster)
@@ -347,6 +353,12 @@ func j9CorralMorph() throws {
 @MainActor
 func j1FirstLaunch() throws {
     try replay("J1")
+}
+
+@Test("J4 a task card's click in the trace tree opens its run in the main window")
+@MainActor
+func j4TraceViewer() throws {
+    try replay("J4")
 }
 
 @Test("J5 a run at its soft limit asks on its card, and goes on when approved")

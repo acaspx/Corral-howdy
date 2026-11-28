@@ -46,8 +46,10 @@ use corral_desktop_lib::corral_state::{
 use corral_desktop_lib::keys;
 use corral_desktop_lib::logos::{LogoStore, fetch_missing, wanted};
 use corral_desktop_lib::prompt_bar_feed;
+use corral_desktop_lib::traces::Traces;
 use corral_policy::{Policy, Profile};
 use corral_secrets::{MemoryPlanStore, MemoryStore, Provider, SecretStore};
+use corral_store::Store;
 use corral_tools::{Answer, BoxFuture, CheckpointDesk, Tool, ToolError, ToolGateway};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -196,7 +198,14 @@ impl Core {
         agents: Vec<AgentCard>,
     ) -> Self {
         let runnable = agents.iter().map(|card| card.id.clone()).collect();
-        Self::with_agents(driver, desk, agents, runnable, None)
+        Self::with_agents(
+            driver,
+            desk,
+            agents,
+            runnable,
+            None,
+            Arc::new(MemLog::default()),
+        )
     }
 
     /// The core as the app starts it from its keys, its sign-in and the agents' names
@@ -209,7 +218,15 @@ impl Core {
             },
             SOFT_LIMIT_MICRO_USD,
         );
-        let mut core = Self::with_agents(driver, desk, agents.cards, agents.runnable, Some(limits));
+        let store: Arc<dyn EventLog> = Arc::clone(&app.store) as Arc<dyn EventLog>;
+        let mut core = Self::with_agents(
+            driver,
+            desk,
+            agents.cards,
+            agents.runnable,
+            Some(limits),
+            store,
+        );
         core.app = Some(app);
         core
     }
@@ -220,6 +237,7 @@ impl Core {
         agents: Vec<AgentCard>,
         runnable: Vec<AgentId>,
         limits: Option<(BudgetConfig, u64)>,
+        events: Arc<dyn EventLog>,
     ) -> Self {
         let clock = Arc::new(PausedClock(tokio::time::Instant::now()));
         let nonce = Arc::new(AtomicU64::new(1));
@@ -238,17 +256,14 @@ impl Core {
         // if it changed.
         let log = {
             let (state, sent, clock) = (Arc::clone(&state), Arc::clone(&sent), Arc::clone(&clock));
-            Arc::new(WatchedLog::new(
-                Arc::new(MemLog::default()),
-                move |event: &Event| {
-                    let mut state = state.lock().expect("state");
-                    let now = clock.now_ms();
-                    let (changed, _notices) = state.observe(event, now);
-                    if changed {
-                        sent.lock().expect("sent").push(roster_json(&state, now));
-                    }
-                },
-            ))
+            Arc::new(WatchedLog::new(events, move |event: &Event| {
+                let mut state = state.lock().expect("state");
+                let now = clock.now_ms();
+                let (changed, _notices) = state.observe(event, now);
+                if changed {
+                    sent.lock().expect("sent").push(roster_json(&state, now));
+                }
+            }))
         };
         let (budget, soft_limit) = match limits {
             Some((budget, soft)) => (budget, Some(soft)),
@@ -377,8 +392,15 @@ impl Core {
             | Intent::ShowLinked { .. }
             | Intent::HideLinked(_)
             | Intent::OpenLinked(_)
-            | Intent::ApproveWithTouchId { .. }
-            | Intent::OpenTrace(_)) => panic!("not in a journey yet: {other:?}"),
+            | Intent::ApproveWithTouchId { .. }) => panic!("not in a journey yet: {other:?}"),
+            Intent::OpenTrace(agent) => {
+                // The app's `open_trace`: the run the card follows goes to the trace viewer,
+                // which takes it when the main window comes forward.
+                let app = self.app.as_ref().expect("a journey with the trace viewer");
+                let run = self.state.lock().expect("state").run_of(&agent);
+                app.traces.open_run(run.expect("the card has a run"));
+                None
+            }
         };
         if let Some(answer) = answer {
             let answer = self.state.lock().expect("state").with_bar_logos(answer);
@@ -1888,6 +1910,9 @@ struct AppSide {
     logos: LogoStore,
     /// The editor told the corral to refresh (its `on_change`).
     told: Arc<AtomicU64>,
+    /// The event store the core logs to, as the app's, and the trace viewer reading it.
+    store: Arc<Store>,
+    traces: Traces,
 }
 
 impl AppSide {
@@ -1905,6 +1930,9 @@ impl AppSide {
             names.clone(),
             Some(home.clone()),
         );
+        let store = Arc::new(Store::open(&support.join("events.db")).expect("the event store"));
+        let traces = Traces::named(names.clone());
+        traces.attach(Arc::clone(&store));
         let told = Arc::new(AtomicU64::new(0));
         let count = Arc::clone(&told);
         editor.on_change(Box::new(move || {
@@ -1922,6 +1950,8 @@ impl AppSide {
             names,
             editor,
             told,
+            store,
+            traces,
         }
     }
 
@@ -2190,4 +2220,171 @@ const J5_KEY: &str = "sk-ant-journeyNotARealKey3Hk8Nv1Qz6Tb"; // gitleaks:allow 
 #[tokio::test(start_paused = true)]
 async fn j5_a_run_at_its_soft_limit_asks_and_goes_on_when_approved() {
     check("J5", play_j5).await;
+}
+
+// ---- J4: a run's trace in the main window ----------------------------------------------------
+
+const J4_TASK: &str = "Find my notes on the trip";
+
+/// Reading files under the default policy, which allows it without asking.
+fn reading_tools(desk: &Arc<CheckpointDesk>) -> ToolSetup {
+    let mut gateway = ToolGateway::new();
+    gateway
+        .register(Arc::new(Plain {
+            name: "fs.read",
+            class: ActionClass::ReadLocal,
+            answer: "Lisbon, Dec 12 to 19. Budget: $2,400.",
+        }))
+        .expect("register");
+    let n = Arc::new(AtomicU64::new(0));
+    ToolSetup {
+        policy: Policy::new(Profile::default()),
+        gateway: Arc::new(gateway),
+        desk: Arc::clone(desk),
+        ids: Arc::new(move || format!("j4-{}", n.fetch_add(1, Ordering::SeqCst) + 1)),
+    }
+}
+
+/// J4 (`docs/04-test-plan.md` §6): while Claude works, click its task card in the trace tree;
+/// the main window comes forward with that run open; show only its tool calls; copy its events
+/// as JSON.
+async fn play_j4() -> String {
+    let desk = Arc::new(CheckpointDesk::default());
+    let script = FakeScript::default()
+        .say("Looking for the trip notes.")
+        .tool("fs.read", json!({"path": "trip.md"}))
+        .say(" Found the dates. Checking the budget.")
+        .tool("fs.read", json!({"path": "budget.md"}))
+        .say(" Writing it up.")
+        .wait(Duration::from_secs(120))
+        .say(" Lisbon, Dec 12 to 19, on $2,400.");
+    let app = AppSide::new("j4");
+    app.keys
+        .set(
+            Provider::Anthropic,
+            &corral_secrets::Secret::new(J5_KEY).expect("a key"),
+        )
+        .expect("stored");
+    let core = Core::with_app(
+        Arc::new(
+            FakeDriver::new(FakeScript::default())
+                .with_prompt(J4_TASK, script)
+                .with_tools(reading_tools(&desk)),
+        ),
+        desk,
+        app,
+    );
+    let app = core.app.as_ref().expect("the app");
+    let none = Value::Null;
+    let working = || {
+        with_column_status(
+            expect("circle", &[("claude", "working")], &["claude"]),
+            &[("claude", "working")],
+        )
+    };
+    let mut steps = Vec::new();
+
+    steps.push(checked(
+        &core,
+        "The corral opens with Claude",
+        none.clone(),
+        none.clone(),
+        expect("circle", &[("claude", "available")], &[]),
+    ));
+
+    let intent =
+        json!({"v": 1, "intent": {"kind": "deployTask", "id": "claude", "prompt": J4_TASK}});
+    core.intent(&intent).await;
+    wait(2).await;
+    steps.push(checked(
+        &core,
+        "Give Claude a task: it reads two files and keeps working, its column up",
+        json!({"kind": "task", "agent": "claude", "text": J4_TASK}),
+        intent,
+        working(),
+    ));
+
+    let intent = json!({"v": 1, "intent": {"kind": "openTrace", "id": "claude"}});
+    core.intent(&intent).await;
+    steps.push(checked(
+        &core,
+        "Click Claude's task card in the trace tree: the main window comes forward",
+        json!({"kind": "openTraceCard", "agent": "claude"}),
+        intent,
+        working(),
+    ));
+
+    let asked = app.traces.take_open_run();
+    let run = asked.clone().expect("the viewer is asked for a run");
+    steps.push(in_window(
+        &core,
+        "The trace viewer takes the run the card asked for, once",
+        json!({"kind": "viewerOpens"}),
+        json!({"command": "take_open_run", "args": {}, "answer": asked}),
+        working(),
+    ));
+
+    let runs = app.traces.recent_runs().expect("the runs");
+    assert_eq!(
+        runs.first().map(|r| r.run_id.as_str()),
+        Some(run.as_str()),
+        "newest first"
+    );
+    steps.push(in_window(
+        &core,
+        "It lists the newest runs, Claude's first and still running",
+        json!({"kind": "viewerOpens"}),
+        json!({"command": "recent_runs", "args": {}, "answer": answer(&runs)}),
+        working(),
+    ));
+
+    let trace = app.traces.run_trace(&run).expect("the trace");
+    let tool_spans: Vec<String> = trace
+        .view
+        .spans
+        .iter()
+        .filter(|span| answer(span.kind) == json!("tool"))
+        .map(|span| span.id.clone())
+        .collect();
+    assert_eq!(tool_spans.len(), 2, "two tool calls");
+    let run_span = trace
+        .view
+        .spans
+        .iter()
+        .find(|span| answer(span.kind) == json!("run"))
+        .map(|span| span.id.clone())
+        .expect("the run's span");
+    steps.push(in_window(
+        &core,
+        "It opens Claude's run: its model call and its two reads",
+        json!({"kind": "viewerOpens"}),
+        json!({"command": "run_trace", "args": {"runId": run}, "answer": answer(&trace)}),
+        working(),
+    ));
+
+    let mut shown = vec![run_span];
+    shown.extend(tool_spans);
+    steps.push(in_window(
+        &core,
+        "Show Tool calls: the run and its two reads",
+        json!({"kind": "show", "filter": "Tool calls", "spans": shown}),
+        json!({"command": null}),
+        working(),
+    ));
+
+    steps.push(in_window(
+        &core,
+        "Copy as JSON: the run's events go to the clipboard",
+        json!({"kind": "copyJson"}),
+        json!({"command": "clipboard", "args": {"text": trace.json}}),
+        working(),
+    ));
+
+    let played = transcript("J4", "Trace viewer", &steps);
+    app.at_home(&played)
+}
+
+#[tokio::test(start_paused = true)]
+async fn j4_a_task_cards_click_opens_its_run_filtered_and_copied_in_the_main_window() {
+    check("J4", play_j4).await;
 }
