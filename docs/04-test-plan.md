@@ -490,11 +490,11 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **J3** Checkpoint: approve, deny with note, edit args, allow-for-run. Transcript: `native/CorralNative/Fixtures/journeys/J3.json`
 - **J4** Open trace from a task card (or Trace › in the hover card); filter to tool calls; copy JSON
 - **J5** Budget soft limit → checkpoint → raise limit → continue
-- **J6** Recall-all from the hotkey during 5 active runs
+- **J6** Stop all during 5 active runs: one task to every agent from the prompt bar (⌘↩), then **Stop all agents** in the corral's right-click menu → every run stops and its column folds away (the tree shows 3 columns and "+2 more running" before) → the menu stops offering it → an agent takes a new task. The recall-all hotkey isn't built yet, so the journey uses the menu. Transcript: `native/CorralNative/Fixtures/journeys/J6.json`
 - **J7** Voice: push-to-talk → edit transcript → deploy
 - **J8** Import a manifest from file → permission diff → accept → deploy
 - **J9** Corral morph: start with 3 agents (triangle) → deploy one (the shape stays a triangle, its ring turns, its column rises) → add an agent (square) → remove one (triangle) → the working one finishes (its column folds away) → send it back (still a triangle; it's ready for a task). Transcript: `native/CorralNative/Fixtures/journeys/J9.json`, played by `apps/desktop/src-tauri/tests/journeys.rs` and replayed by `CorralJourneyTests.swift` (Spike S2)
-- **J10** Usage order + shown set: deploy the rank-4 agent repeatedly until it outranks #1 → with the corral idle, it glides to top-left → add a 9th agent → chooser appears → uncheck one → the corral stays an octagon with the chosen 8
+- **J10** Usage order + shown set: deploy the rank-4 agent repeatedly until it outranks #1 (the drops wait while the pointer is in the corral) → with the corral idle, it glides to top-left → add a 9th agent (the corral stays an octagon) → Settings → Corral asks which 8 show → untick one (a heptagon) → tick the new one → an octagon with the chosen 8. Transcript: `native/CorralNative/Fixtures/journeys/J10.json`; its main-window steps are played by `apps/desktop/src/journeys.test.tsx`
 - **J11** Hover approval: an agent hits a `comms.send` checkpoint → its drop pulses and its wire turns maroon → hover → the card shows the exact destination and message → Deny with a note → the agent continues → next checkpoint → Approve → the column advances. Transcript: `native/CorralNative/Fixtures/journeys/J11.json`
 - **J12** Same task, three agents: deploy one prompt to three agents → "3 results ready · Compare" → continue with one → the other two fold back into the corral and their results are in History
 

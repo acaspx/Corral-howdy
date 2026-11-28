@@ -1,0 +1,1763 @@
+{
+  "journey": "J6",
+  "steps": [
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "gpt",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          },
+          {
+            "id": "muse-spark",
+            "status": "available"
+          },
+          {
+            "id": "scout",
+            "status": "available"
+          }
+        ],
+        "shape": "pentagon",
+        "stopAllOffered": false
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "The corral opens with five agents"
+    },
+    {
+      "bars": [
+        {
+          "seq": 1,
+          "v": 1,
+          "view": {
+            "button": {
+              "all": true,
+              "enabled": true,
+              "label": "Deploy all (5)"
+            },
+            "chips": [],
+            "error": null,
+            "placeholder": "Type @ and a name, or pick agents in the corral",
+            "suggestions": []
+          }
+        }
+      ],
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "gpt",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          },
+          {
+            "id": "muse-spark",
+            "status": "available"
+          },
+          {
+            "id": "scout",
+            "status": "available"
+          }
+        ],
+        "shape": "pentagon"
+      },
+      "gesture": {
+        "kind": "openBar",
+        "select": []
+      },
+      "intent": {
+        "intent": {
+          "cursor": 0,
+          "kind": "promptBarEdited",
+          "selection": [],
+          "seq": 1,
+          "text": ""
+        },
+        "v": 1
+      },
+      "rosters": [],
+      "say": "Open the prompt bar with nothing selected"
+    },
+    {
+      "bars": [
+        {
+          "seq": 2,
+          "v": 1,
+          "view": {
+            "button": {
+              "all": true,
+              "enabled": true,
+              "label": "Deploy all (5)"
+            },
+            "chips": [],
+            "error": null,
+            "placeholder": "Type @ and a name, or pick agents in the corral",
+            "suggestions": []
+          }
+        }
+      ],
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "gpt",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          },
+          {
+            "id": "muse-spark",
+            "status": "available"
+          },
+          {
+            "id": "scout",
+            "status": "available"
+          }
+        ],
+        "shape": "pentagon"
+      },
+      "gesture": {
+        "kind": "typeInBar",
+        "text": "Research the trip"
+      },
+      "intent": {
+        "intent": {
+          "cursor": 17,
+          "kind": "promptBarEdited",
+          "selection": [],
+          "seq": 2,
+          "text": "Research the trip"
+        },
+        "v": 1
+      },
+      "rosters": [],
+      "say": "Type the task"
+    },
+    {
+      "bars": [
+        {
+          "outcome": {
+            "kind": "sent"
+          },
+          "seq": 3,
+          "v": 1,
+          "view": {
+            "button": {
+              "all": true,
+              "enabled": true,
+              "label": "Deploy all (5)"
+            },
+            "chips": [],
+            "error": null,
+            "placeholder": "Type @ and a name, or pick agents in the corral",
+            "suggestions": []
+          }
+        }
+      ],
+      "expect": {
+        "columns": [
+          "grok",
+          "gpt",
+          "claude"
+        ],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "working"
+          },
+          {
+            "id": "gpt",
+            "status": "working"
+          },
+          {
+            "id": "claude",
+            "status": "working"
+          },
+          {
+            "id": "muse-spark",
+            "status": "working"
+          },
+          {
+            "id": "scout",
+            "status": "working"
+          }
+        ],
+        "moreColumns": 2,
+        "shape": "pentagon",
+        "stopAllOffered": true
+      },
+      "gesture": {
+        "all": true,
+        "kind": "sendBar"
+      },
+      "intent": {
+        "intent": {
+          "all": true,
+          "kind": "promptBarSend",
+          "selection": [],
+          "seq": 3,
+          "text": "Research the trip"
+        },
+        "v": 1
+      },
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "queued"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "queued"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "queued"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "queued"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "claude",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "queued"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "queued"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "claude",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "working"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "claude",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "muse-spark",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "queued"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 1
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "working"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "claude",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "muse-spark",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 1
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "working"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "claude",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "muse-spark",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "scout",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "queued"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 2
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "working"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "working"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "working"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "gpt",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "claude",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "muse-spark",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "scout",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "name": "Grok",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "gpt",
+                "name": "GPT",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "working"
+              },
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Research the trip",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 2
+          },
+          "v": 1
+        }
+      ],
+      "say": "⌘↩ sends it to every agent: five runs, three columns and \"+2 more running\""
+    },
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "gpt",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "available"
+          },
+          {
+            "id": "muse-spark",
+            "status": "available"
+          },
+          {
+            "id": "scout",
+            "status": "available"
+          }
+        ],
+        "shape": "pentagon",
+        "stopAllOffered": false
+      },
+      "gesture": {
+        "kind": "stopAll"
+      },
+      "intent": {
+        "intent": {
+          "kind": "stopAll"
+        },
+        "v": 1
+      },
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "grok",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "stopped"
+            },
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "gpt",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "stopped"
+            },
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "claude",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "stopped"
+            },
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "muse-spark",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "stopped"
+            },
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "scout",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "stopped"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "Right-click the corral and choose Stop all agents: every run stops and its column folds away",
+      "settled": true
+    },
+    {
+      "expect": {
+        "columns": [
+          "claude"
+        ],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          },
+          {
+            "id": "gpt",
+            "status": "available"
+          },
+          {
+            "id": "claude",
+            "status": "working"
+          },
+          {
+            "id": "muse-spark",
+            "status": "available"
+          },
+          {
+            "id": "scout",
+            "status": "available"
+          }
+        ],
+        "shape": "pentagon",
+        "stopAllOffered": true
+      },
+      "gesture": {
+        "agent": "claude",
+        "kind": "task",
+        "text": "Book the hotel"
+      },
+      "intent": {
+        "intent": {
+          "id": "claude",
+          "kind": "deployTask",
+          "prompt": "Book the hotel"
+        },
+        "v": 1
+      },
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "available"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "grok",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "stopped"
+            },
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "gpt",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "stopped"
+            },
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "muse-spark",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "stopped"
+            },
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "scout",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "stopped"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "grok",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "stopped"
+            },
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "gpt",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "stopped"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "claude",
+              "prompt": "Book the hotel",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "queued"
+            },
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "muse-spark",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "stopped"
+            },
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "scout",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "stopped"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Book the hotel",
+                "promptTruncated": false,
+                "status": "queued"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            },
+            {
+              "id": "gpt",
+              "monogram": "GP",
+              "name": "GPT",
+              "status": "available"
+            },
+            {
+              "id": "claude",
+              "monogram": "C",
+              "name": "Claude",
+              "status": "working"
+            },
+            {
+              "id": "muse-spark",
+              "monogram": "MS",
+              "name": "Muse Spark",
+              "status": "available"
+            },
+            {
+              "id": "scout",
+              "monogram": "S",
+              "name": "Scout",
+              "status": "available"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "grok",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "stopped"
+            },
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "gpt",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "stopped"
+            },
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "claude",
+              "prompt": "Book the hotel",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            },
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "muse-spark",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "stopped"
+            },
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 1000,
+              "id": "scout",
+              "prompt": "Research the trip",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "stopped"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "claude",
+                "name": "Claude",
+                "next": [],
+                "prompt": "Book the hotel",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        }
+      ],
+      "say": "Claude takes a new task"
+    }
+  ],
+  "title": "Stop all"
+}

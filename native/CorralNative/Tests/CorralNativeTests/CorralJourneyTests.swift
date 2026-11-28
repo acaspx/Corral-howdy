@@ -6,7 +6,8 @@
 // must decode, each gesture performed on the corral's own models (the card, its approval box and
 // edit sheet, the prompt bar) must send exactly the recorded intent, and the shape, the drops in
 // slot order with their status, the trace columns, the approval box and the bar must be what the
-// step expects.
+// step expects. A step done in the main window (its `window`) is the Vitest journey test's to
+// perform (apps/desktop/src/journeys.test.tsx); here, only its rosters are taken.
 import Testing
 import Foundation
 @testable import CorralNative
@@ -105,6 +106,10 @@ private final class Replay {
     var barState = CorralPromptBarState()
     let bar = CorralPromptBar()
     var selection: [String] = []
+    /// The pointer over the corral, and what Rust has been told of its idle state.
+    var hover = CorralHoverState()
+    var idleReporter = CorralIdleReporter()
+    var clock: TimeInterval = 1_000
 
     /// The card model the corral builds for `agent`'s drop.
     func card(_ agent: String) throws -> CorralCardModel {
@@ -156,9 +161,34 @@ private final class Replay {
             #expect(barState.edit(text: text, cursor: text.utf16.count) == .edited)
             return bar.edited(text: barState.text, utf16Cursor: barState.cursor, selection: selection)
         case "sendBar":
-            // Return in the bar with no suggestion list: the bar's send button.
-            #expect(barState.key(.enter, suggestions: bar.view?.suggestions ?? []) == .send(all: false))
-            return bar.send(text: barState.text, selection: selection, all: false)
+            // Return in the bar with no suggestion list: the bar's send button. ⌘↩ sends to every
+            // agent.
+            let all = gesture["all"] as? Bool ?? false
+            let key: CorralPromptBarState.Key = all ? .commandEnter : .enter
+            #expect(barState.key(key, suggestions: bar.view?.suggestions ?? []) == .send(all: all))
+            return bar.send(text: barState.text, selection: selection, all: all)
+        case "pointAt":
+            // The pointer rests on a drop until its card opens: the corral isn't idle.
+            hover.pointer(overDrop: agent, at: clock)
+            clock += CorralHoverState.openDelay
+            hover.tick(at: clock)
+            #expect(hover.shown == agent, "\(agent)'s card opens")
+            let report = idleReporter.report(hover.isIdle)
+            return .corralIdle(try #require(report, "the corral's idle state changed"))
+        case "leaveCorral":
+            // The pointer leaves the drop and the card, and the card closes: the corral is idle.
+            hover.pointer(overDrop: nil, at: clock)
+            hover.pointer(overCard: false, at: clock)
+            clock += CorralHoverState.closeDelay
+            hover.tick(at: clock)
+            #expect(hover.isIdle, "the card closed")
+            let report = idleReporter.report(hover.isIdle)
+            return .corralIdle(try #require(report, "the corral's idle state changed"))
+        case "stopAll":
+            // The corral's right-click menu, which offers Stop all agents only while one works.
+            let roster = try #require(roster)
+            #expect(CorralStopAllMenu.isAvailable(agents: roster.agents), "the menu offers Stop all agents")
+            return .stopAll
         default:
             throw ReplayError.unknownGesture(kind)
         }
@@ -230,6 +260,13 @@ private final class Replay {
 
         let columns = try #require(expect["columns"] as? [String])
         #expect(shown.trace.columns.map(\.id) == columns, "\(say): the trace columns")
+        if let more = expect["moreColumns"] as? Int {
+            #expect(shown.trace.more == more, "\(say): \"+\(more) more running\"")
+        }
+        if let offered = expect["stopAllOffered"] as? Bool {
+            #expect(CorralStopAllMenu.isAvailable(agents: shown.agents) == offered,
+                    "\(say): the menu offers Stop all agents")
+        }
         if let statuses = expect["columnStatus"] as? [String: String] {
             for (id, status) in statuses {
                 let column = shown.trace.columns.first { $0.id == id }
@@ -301,6 +338,18 @@ func j2ThreeAgentsAtOnce() throws {
 @MainActor
 func j3AnsweringCheckpoints() throws {
     try replay("J3")
+}
+
+@Test("J6 Stop all from the corral's menu stops five runs, and each agent can go again")
+@MainActor
+func j6StopAll() throws {
+    try replay("J6")
+}
+
+@Test("J10 the most used agent glides to the top-left once the corral is idle; a 9th asks which 8 show")
+@MainActor
+func j10UsageOrderAndShownSet() throws {
+    try replay("J10")
 }
 
 @Test("J11 a message waits on you: the card shows where it goes; deny with a note, then approve pinned")
