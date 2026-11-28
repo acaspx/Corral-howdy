@@ -961,7 +961,7 @@ impl CorralFeed {
 impl CorralFeed {
     fn open_trace(&self, agent: &AgentId) {
         let run = match self.views.lock() {
-            Ok(views) => views.cards.run_of(agent).cloned(),
+            Ok(views) => views.run_of(agent),
             Err(_) => {
                 eprintln!("corral: the corral's state is poisoned, so its traces can't be opened");
                 return;

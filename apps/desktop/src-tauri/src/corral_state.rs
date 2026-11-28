@@ -16,7 +16,7 @@ use corral_adapters::linked::LinkedSettings;
 use corral_core::checkpoint_note::{NoteDesk, Notice};
 use corral_core::corral_view::{AgentCard, CorralTracker, DropState};
 use corral_core::event::{Event, EventBody};
-use corral_core::ids::{AgentId, CheckpointId};
+use corral_core::ids::{AgentId, CheckpointId, RunId};
 use corral_core::prompt_bar::BarAgent;
 use corral_core::run_card::{EditError, RunCards};
 use corral_core::trace_tree::trace_tree;
@@ -252,6 +252,12 @@ impl CorralState {
         self.order.set_keep_fixed(keep);
         save_order(&mut self.order);
         self.settings()
+    }
+
+    /// The run `agent`'s card follows, for its task card's click in the trace tree: the trace
+    /// viewer opens it (TP-TRACE-05). `None` when the card has no run.
+    pub fn run_of(&self, agent: &AgentId) -> Option<RunId> {
+        self.cards.run_of(agent).cloned()
     }
 
     /// Whether `checkpoint` waits on `agent`'s card, as the user stepped to it: the only one an
