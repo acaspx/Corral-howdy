@@ -7,9 +7,11 @@
 //! the end-to-end journeys (`tests/journeys.rs`, Spike S2) drive the same state without the
 //! native layer, so a journey's transcript is what the app sends.
 
+use crate::agent_names::AgentNames;
 use crate::bridge::{PromptBarSnapshot, RosterSnapshot};
 use crate::corral_order::{CorralOrder, CorralSettingsView};
 use crate::prompt_bar_feed;
+use corral_adapters::catalog::{agents_for, corral_agents};
 use corral_adapters::linked::LinkedSettings;
 use corral_core::checkpoint_note::{NoteDesk, Notice};
 use corral_core::corral_view::{AgentCard, CorralTracker, DropState};
@@ -19,8 +21,40 @@ use corral_core::prompt_bar::BarAgent;
 use corral_core::run_card::{EditError, RunCards};
 use corral_core::trace_tree::trace_tree;
 use corral_core::usage_rank::Deploy;
+use corral_secrets::Provider;
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
+
+/// The skeleton's per-run hard cap: $0.25 (docs/03, J0).
+pub const RUN_CAP_MICRO_USD: u64 = 250_000;
+/// Where a run asks on its card before spending more: $0.10 (TP-BUD-02). An agent that can't
+/// ask (one whose folder couldn't be made, so it has no tools) has each request held under it
+/// instead.
+pub const SOFT_LIMIT_MICRO_USD: u64 = 100_000;
+
+/// The corral's agents for the `connected` providers and the `linked` apps, with the user's names.
+pub struct CorralAgents {
+    /// The agents Corral runs, which take tasks; a linked drop never does (ADR-005).
+    pub runnable: Vec<AgentId>,
+    /// Every drop, renamed as the user named them (TP-ANM-03).
+    pub cards: Vec<AgentCard>,
+}
+
+/// What `Corral::refresh` gives the controls and the corral after a key, a sign-in, a linked app
+/// or a name changes (TP-VIEW-06).
+pub fn corral_for(
+    connected: &[Provider],
+    linked: &LinkedSettings,
+    names: &AgentNames,
+) -> CorralAgents {
+    CorralAgents {
+        runnable: agents_for(connected)
+            .into_iter()
+            .map(|card| card.id)
+            .collect(),
+        cards: names.rename(corral_agents(connected, linked)),
+    }
+}
 
 /// Makes each checkpoint notification's single-use nonce.
 pub type Nonces = Box<dyn FnMut() -> String + Send>;

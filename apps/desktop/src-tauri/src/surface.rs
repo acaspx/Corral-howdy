@@ -33,11 +33,12 @@ use crate::agent_tools::{allowing_provider_tools, file_tools_under};
 use crate::bridge::{
     AuthOutcome, BridgeError, Intent, NotificationRequest, PromptBarSnapshot, RosterSnapshot,
 };
-use crate::chatgpt_signin::{ChatGptSignIn, plan_signed_in, with_plan};
+use crate::chatgpt_signin::ChatGptSignIn;
 use crate::corral_order::{CorralOrder, CorralSettingsView};
 use crate::corral_settings::{CorralControl, CorralSettings};
-use crate::corral_state::CorralState;
+use crate::corral_state::{CorralState, corral_for};
 use crate::keys::Keys;
+use crate::keys::connected;
 use crate::linked::LinkedStore;
 use crate::logos::{LogoStore, fetch_missing};
 use crate::native;
@@ -46,9 +47,7 @@ use crate::provider_tools::ProviderTools;
 use crate::touch_id::{Finished, TouchIdDesk};
 use crate::traces::Traces;
 use corral_adapters::agent::{MessagesAgent, ProviderTool, ResponsesAgent, ToolSetup};
-use corral_adapters::catalog::{
-    AgentRouter, ModelChoice, Rebuilt, Switched, agent_for, agents_for, corral_agents, models,
-};
+use corral_adapters::catalog::{AgentRouter, ModelChoice, Rebuilt, Switched, agent_for, models};
 use corral_adapters::chatgpt::{ChatGptPlan, PlanAgent, PlanBuild};
 use corral_adapters::linked::{LinkChange, LinkedApp, LinkedSettings};
 use corral_adapters::logos::{LogoId, ReqwestLogoFetcher};
@@ -78,33 +77,11 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 use tauri::{AppHandle, Manager};
 
-/// The skeleton's per-run hard cap: $0.25 (docs/03, J0).
-pub const RUN_CAP_MICRO_USD: u64 = 250_000;
-/// Where a run asks on its card before spending more: $0.10 (TP-BUD-02). An agent that can't
-/// ask (one whose folder couldn't be made, so it has no tools) has each request held under it
-/// instead.
-pub const SOFT_LIMIT_MICRO_USD: u64 = 100_000;
+pub use crate::corral_state::{RUN_CAP_MICRO_USD, SOFT_LIMIT_MICRO_USD};
 /// The model Grok's drop uses: the catalog's, which the nightly live check watches (EV-PROV-03).
 pub const GROK_MODEL: &str = corral_adapters::catalog::GROK_MODEL;
 /// The model Claude's drop uses (SK-7): the catalog's, which the nightly live check watches.
 pub const CLAUDE_MODEL: &str = corral_adapters::catalog::CLAUDE_MODEL;
-
-/// The providers whose agents run: those with a key in the Keychain, and OpenAI's while the
-/// ChatGPT plan is signed in (TP-SUB-07). A key that can't be read counts as missing (the card
-/// would fail on it anyway) and is logged.
-fn connected(store: &dyn SecretStore, plan: &ChatGptPlan) -> Vec<Provider> {
-    let keyed = Provider::ALL
-        .into_iter()
-        .filter(|p| match corral_secrets::status(store, *p) {
-            Ok(status) => status.configured,
-            Err(e) => {
-                eprintln!("corral: couldn't read the {} key: {e}", p.display_name());
-                false
-            }
-        })
-        .collect();
-    with_plan(keyed, plan_signed_in(plan))
-}
 
 /// The linked apps the user chose, and where the choice is kept.
 struct Linked {
@@ -262,14 +239,12 @@ impl Corral {
     pub fn refresh(&self, store: &dyn SecretStore) {
         let connected = connected(store, &self.plan);
         let linked = self.linked_settings();
+        let agents = corral_for(&connected, &linked, &self.names);
         if let Some(controls) = &self.controls {
             // Only the agents Corral runs take tasks; a linked drop never does (ADR-005).
-            controls.set_agents(agents_for(&connected).into_iter().map(|c| c.id));
+            controls.set_agents(agents.runnable);
         }
-        self.feed.set_agents(
-            self.names.rename(corral_agents(&connected, &linked)),
-            linked,
-        );
+        self.feed.set_agents(agents.cards, linked);
         self.show_logos(&connected, &linked);
     }
 
@@ -327,14 +302,7 @@ impl Corral {
         let Some(logos) = self.logos.clone() else {
             return;
         };
-        let providers = connected
-            .iter()
-            .map(|p| (LogoId::Provider(*p), agent_for(*p).id));
-        let apps = linked
-            .shown()
-            .into_iter()
-            .filter_map(|app| linked.logo(app).map(|id| (id, app.agent_card().id)));
-        let wanted: Vec<(LogoId, AgentId)> = providers.chain(apps).collect();
+        let wanted = crate::logos::wanted(connected, linked);
         let feed = Arc::clone(&self.feed);
         // The task reports its own outcome, so its handle is dropped.
         tauri::async_runtime::spawn(async move {
@@ -395,9 +363,14 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
         eprintln!("corral: {problem}");
     }
     let names = app.state::<AgentNames>().inner().clone();
-    let all_cards = names.rename(corral_agents(&connected, &linked));
+    let agents = corral_for(&connected, &linked, &names);
     let feed = Arc::new(CorralFeed {
-        views: Mutex::new(CorralState::open(order, all_cards, linked, clock.now_ms())),
+        views: Mutex::new(CorralState::open(
+            order,
+            agents.cards,
+            linked,
+            clock.now_ms(),
+        )),
         app: app.clone(),
         clock: Arc::clone(&clock),
     });
@@ -408,7 +381,7 @@ pub fn start(app: &AppHandle) -> Result<Corral, native::NativeError> {
     feed.start_ticking();
 
     // Only the agents Corral runs take tasks; linked drops never do (ADR-005).
-    let runnable: Vec<AgentId> = agents_for(&connected).into_iter().map(|c| c.id).collect();
+    let runnable = agents.runnable;
     let desk = Arc::new(CheckpointDesk::default());
     let controls = match supervisor(app, &feed, clock, &desk) {
         Ok(supervisor) => {
