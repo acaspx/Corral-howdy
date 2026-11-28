@@ -50,7 +50,9 @@ use corral_adapters::agent::{MessagesAgent, ProviderTool, ResponsesAgent, ToolSe
 use corral_adapters::catalog::{AgentRouter, ModelChoice, Rebuilt, Switched, agent_for, models};
 use corral_adapters::chatgpt::{ChatGptPlan, PlanAgent, PlanBuild};
 use corral_adapters::linked::{LinkChange, LinkedApp, LinkedSettings};
-use corral_adapters::logos::{LogoId, ReqwestLogoFetcher};
+use corral_adapters::logos::LogoId;
+#[cfg(not(feature = "e2e"))]
+use corral_adapters::logos::ReqwestLogoFetcher;
 use corral_adapters::messages::{MessagesConfig, MessagesDriver};
 use corral_adapters::responses::{ResponsesConfig, ResponsesDriver};
 use corral_adapters::stream::KeySource;
@@ -307,7 +309,12 @@ impl Corral {
         // The task reports its own outcome, so its handle is dropped.
         tauri::async_runtime::spawn(async move {
             let ids: Vec<LogoId> = wanted.iter().map(|(id, _)| *id).collect();
-            for (id, result) in fetch_missing(&ReqwestLogoFetcher, &logos, &ids).await {
+            // The e2e build has no network: its logos are a fixed picture (src/e2e.rs).
+            #[cfg(feature = "e2e")]
+            let fetcher = crate::e2e::Logos;
+            #[cfg(not(feature = "e2e"))]
+            let fetcher = ReqwestLogoFetcher;
+            for (id, result) in fetch_missing(&fetcher, &logos, &ids).await {
                 let Some((_, agent)) = wanted.iter().find(|(w, _)| *w == id) else {
                     continue;
                 };
@@ -435,7 +442,8 @@ fn supervisor(
     app: &AppHandle,
     feed: &Arc<CorralFeed>,
     clock: Arc<dyn Clock>,
-    desk: &Arc<CheckpointDesk>,
+    // Only the providers' agents answer checkpoints; the e2e build's fakes have no tools.
+    #[cfg_attr(feature = "e2e", allow(unused_variables))] desk: &Arc<CheckpointDesk>,
 ) -> Result<Supervisor, String> {
     let dir = app
         .path()
@@ -484,34 +492,12 @@ fn supervisor(
     // A cap saved in the agent editor goes into this ledger, from the agent's next request.
     let agent_editor = Arc::clone(app.state::<Arc<AgentEditor>>().inner());
     agent_editor.attach(Arc::clone(&ledger), Arc::clone(&clock));
-    let transport = ReqwestTransport::new().map_err(|e| format!("no HTTPS client: {e}"))?;
-    let keys = app.state::<Keys>().0.clone();
-    let transport: Arc<dyn Transport> = Arc::new(transport);
-    // Each agent is built again for its next run after its policy or its settings are saved
-    // (TP-PED-07, TP-AED-06).
-    let editor = app.state::<PolicyEditor>().inner().clone();
-    let grok = rebuilt_on_save(&editor, &agent_editor, Provider::Xai, {
-        let (app, desk, transport, keys) = (
-            app.clone(),
-            Arc::clone(desk),
-            transport.clone(),
-            keys.clone(),
-        );
-        move || grok_agent(&app, &desk, transport.clone(), keys.clone())
-    });
-    let claude = rebuilt_on_save(&editor, &agent_editor, Provider::Anthropic, {
-        let (app, desk, transport) = (app.clone(), Arc::clone(desk), transport.clone());
-        move || claude_with_tools(&app, &desk, transport.clone(), keys.clone())
-    });
-    let gpt = rebuilt_on_save(&editor, &agent_editor, Provider::OpenAi, {
-        let (app, desk) = (app.clone(), Arc::clone(desk));
-        let plan = Arc::clone(app.state::<Arc<ChatGptSignIn>>().plan());
-        move || gpt_agent(&app, &desk, transport.clone(), Arc::clone(&plan))
-    });
-    let mut drivers: HashMap<AgentId, Arc<dyn RunDriver>> = HashMap::new();
-    drivers.insert(agent_for(Provider::Xai).id, grok);
-    drivers.insert(agent_for(Provider::Anthropic).id, claude);
-    drivers.insert(agent_for(Provider::OpenAi).id, gpt);
+    // The e2e build's agents are scripted fakes (src/e2e.rs); they still run through this
+    // supervisor and its budget meter.
+    #[cfg(feature = "e2e")]
+    let drivers = crate::e2e::drivers();
+    #[cfg(not(feature = "e2e"))]
+    let drivers = provider_drivers(app, desk, &agent_editor)?;
     let driver = AgentRouter::new(drivers);
     let built = Supervisor::with_ledger(
         SupervisorConfig::default(),
@@ -525,6 +511,45 @@ fn supervisor(
     );
     built.set_soft_limit(Some(SOFT_LIMIT_MICRO_USD));
     Ok(built)
+}
+
+/// Each provider's agent, reaching it over HTTPS with its key from the Keychain (or, for GPT, the
+/// ChatGPT plan). Not used by the e2e build, whose agents are fakes.
+#[cfg_attr(feature = "e2e", allow(dead_code))]
+fn provider_drivers(
+    app: &AppHandle,
+    desk: &Arc<CheckpointDesk>,
+    agent_editor: &Arc<AgentEditor>,
+) -> Result<HashMap<AgentId, Arc<dyn RunDriver>>, String> {
+    let transport = ReqwestTransport::new().map_err(|e| format!("no HTTPS client: {e}"))?;
+    let keys = app.state::<Keys>().0.clone();
+    let transport: Arc<dyn Transport> = Arc::new(transport);
+    // Each agent is built again for its next run after its policy or its settings are saved
+    // (TP-PED-07, TP-AED-06).
+    let editor = app.state::<PolicyEditor>().inner().clone();
+    let grok = rebuilt_on_save(&editor, agent_editor, Provider::Xai, {
+        let (app, desk, transport, keys) = (
+            app.clone(),
+            Arc::clone(desk),
+            transport.clone(),
+            keys.clone(),
+        );
+        move || grok_agent(&app, &desk, transport.clone(), keys.clone())
+    });
+    let claude = rebuilt_on_save(&editor, agent_editor, Provider::Anthropic, {
+        let (app, desk, transport) = (app.clone(), Arc::clone(desk), transport.clone());
+        move || claude_with_tools(&app, &desk, transport.clone(), keys.clone())
+    });
+    let gpt = rebuilt_on_save(&editor, agent_editor, Provider::OpenAi, {
+        let (app, desk) = (app.clone(), Arc::clone(desk));
+        let plan = Arc::clone(app.state::<Arc<ChatGptSignIn>>().plan());
+        move || gpt_agent(&app, &desk, transport.clone(), Arc::clone(&plan))
+    });
+    let mut drivers: HashMap<AgentId, Arc<dyn RunDriver>> = HashMap::new();
+    drivers.insert(agent_for(Provider::Xai).id, grok);
+    drivers.insert(agent_for(Provider::Anthropic).id, claude);
+    drivers.insert(agent_for(Provider::OpenAi).id, gpt);
+    Ok(drivers)
 }
 
 /// `provider`'s agent from `build`, built again for the run after its policy or its settings

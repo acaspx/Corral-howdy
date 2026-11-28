@@ -465,6 +465,14 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **TP-CI-14** A PR that changes files outside its linked issue's Allowed paths fails, listing them
 - **TP-CI-15** Tests and fixtures under an allowed path, and additions to this test plan, pass the fence
 - **TP-CI-16** No linked issue, or no Allowed paths section, fails closed; the fence is read from the issue, never the PR body
+- **TP-CI-17..19** The release check (`scripts/ci/no_e2e_in_release.sh`): a binary without the e2e build's mark passes, one with it fails, and a missing or unreadable binary fails instead of passing. The nightly also runs it on the e2e app it builds and fails unless it's caught
+
+### The e2e build (Spike S2 step 4)
+- **TP-E2E-01** Keys stay in memory, never the Keychain, and any key is accepted without asking its provider; a first launch has none, and ChatGPT is signed out (`apps/desktop/src-tauri/tests/e2e_build.rs`, `--features e2e`)
+- **TP-E2E-02** Every catalog agent is a priced, scripted fake run by the real supervisor: it answers `e2e::ANSWER` after a wait long enough to watch the ring and the hover card, and is billed for it
+- **TP-E2E-03** Nothing reaches the network: ChatGPT's transport refuses every request, and logos are a fixed picture the app's checks accept
+- **TP-E2E-04** The build carries the mark the release check looks for, and says what it is when it starts
+- **TP-E2E-05** J0 on the bundled e2e app, driven by XCUITest (`native/CorralE2E`, nightly): a first launch with an empty corral; the key field suggests xAI and connects; Grok's drop shows; a click pins its card and the question is sent from its task field; the drop's ring turns; with the card closed, hovering the drop shows the run's elapsed time and spend, and the time moves on; the run finishes, the card shows the answer, and Send back makes Grok available again
 
 ### Voice
 - **TP-VOICE-01** Push-to-talk start/stop; transcript lands in the prompt bar unsent
@@ -484,7 +492,7 @@ The shared suite is `crates/corral-adapters/tests/contract.rs`: one `adapter_con
 - **FZ-06** Logo import (PNG/PDF/SVG decoder and SVG sanitizer)
 
 ## 6. End-to-end journeys
-- **J0** Walking skeleton: add an xAI key → click Grok's drop → type a question → Deploy → the ring turns and the hover card shows elapsed time and spend → the result card shows the answer → Send back (cassette in CI, live once by the owner with a $0.25 cap)
+- **J0** Walking skeleton: add an xAI key → click Grok's drop → type a question → Deploy → the ring turns and the hover card shows elapsed time and spend → the result card shows the answer → Send back (cassette in CI, live once by the owner with a $0.25 cap). Nightly on the bundled e2e app: TP-E2E-05
 - **J1** First launch → add xAI key → create agent (with a logo) → deploy → watch its trace column and hover card → completed → send back. Creating the agent is naming it in the agent editor: Grok drops in with its provider's logo when the key connects, and is renamed Ada. Transcript: `native/CorralNative/Fixtures/journeys/J1.json`; its key and agent-editor steps are played by `apps/desktop/src/journeys.test.tsx`
 - **J2** Deploy three agents at once (⌘-click three drops, then "Deploy to 3" in the prompt bar); all three trace columns update independently. Transcript: `native/CorralNative/Fixtures/journeys/J2.json`
 - **J3** Checkpoint: approve, deny with note, edit args, allow-for-run. Transcript: `native/CorralNative/Fixtures/journeys/J3.json`

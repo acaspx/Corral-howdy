@@ -15,10 +15,12 @@ lint:
     pnpm -r lint
     pnpm -r build
     cargo clippy --workspace --all-targets -- -D warnings
+    cargo clippy -p corral-desktop --features e2e --all-targets -- -D warnings
 
 # Rust and TypeScript tests (the Tauri shell's tests need the frontend built: run `just lint` first).
 test:
     cargo test --workspace
+    cargo test -p corral-desktop --features e2e --test e2e_build
     pnpm -r test
 
 # Tests for the CI scripts themselves: scope guard and eval gate (TP-CI-*).
