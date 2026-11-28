@@ -6,6 +6,8 @@
 //! (TP-SETUP-01, TP-SEC-02). The key goes straight to the Keychain. Errors never quote it. Each
 //! command needs its own grant in `capabilities/default.json`.
 
+use crate::chatgpt_signin::{plan_signed_in, with_plan};
+use corral_adapters::chatgpt::ChatGptPlan;
 use corral_adapters::transport::BoxFuture;
 use corral_adapters::verify::{KeyCheck, ModelsProbe, ReqwestProbe, check_key};
 use corral_secrets::{KeyStatus, Provider, Secret, SecretStore, identify, status};
@@ -63,6 +65,23 @@ pub struct Connected {
     pub status: KeyStatus,
     /// Whether the provider accepted the key (`false`: there's no check for it yet).
     pub checked: bool,
+}
+
+/// The providers whose agents run: those with a key in the Keychain, and OpenAI's while the
+/// ChatGPT plan is signed in (TP-SUB-07). A key that can't be read counts as missing (the card
+/// would fail on it anyway) and is logged.
+pub fn connected(store: &dyn SecretStore, plan: &ChatGptPlan) -> Vec<Provider> {
+    let keyed = Provider::ALL
+        .into_iter()
+        .filter(|p| match status(store, *p) {
+            Ok(status) => status.configured,
+            Err(e) => {
+                eprintln!("corral: couldn't read the {} key: {e}", p.display_name());
+                false
+            }
+        })
+        .collect();
+    with_plan(keyed, plan_signed_in(plan))
 }
 
 /// The provider `key` most likely belongs to, for the field's hint.

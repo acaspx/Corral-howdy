@@ -1,0 +1,586 @@
+{
+  "journey": "J1",
+  "steps": [
+    {
+      "expect": {
+        "columns": [],
+        "drops": [],
+        "shape": "empty"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [
+        {
+          "agents": [],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "First launch: no keys, so the corral is empty, and Settings shows no providers",
+      "window": {
+        "answer": [
+          {
+            "configured": false,
+            "last4": null,
+            "provider": "xai"
+          },
+          {
+            "configured": false,
+            "last4": null,
+            "provider": "anthropic"
+          },
+          {
+            "configured": false,
+            "last4": null,
+            "provider": "openai"
+          },
+          {
+            "configured": false,
+            "last4": null,
+            "provider": "meta"
+          }
+        ],
+        "args": {
+          "providers": [
+            "xai",
+            "anthropic",
+            "openai",
+            "meta"
+          ]
+        },
+        "command": "provider_key_status",
+        "gesture": {
+          "kind": "openKeys"
+        }
+      }
+    },
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          }
+        ],
+        "logos": [
+          "grok"
+        ],
+        "names": {
+          "grok": "Grok"
+        },
+        "shape": "circle"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "logo": "/Users/you/Library/Application Support/Corral/logos/xai.png",
+              "monogram": "G",
+              "name": "Grok",
+              "status": "available"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "Paste an xAI key and Connect: Grok drops in, with its logo",
+      "window": {
+        "answer": {
+          "checked": true,
+          "status": {
+            "configured": true,
+            "last4": "t4Wx",
+            "provider": "xai"
+          }
+        },
+        "args": {
+          "provider": "xai"
+        },
+        "command": "connect_provider_key",
+        "gesture": {
+          "kind": "pasteKey",
+          "looksLike": "xai"
+        }
+      }
+    },
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          }
+        ],
+        "shape": "circle"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [],
+      "say": "Settings → Agents shows Grok",
+      "window": {
+        "answer": [
+          {
+            "agent": "grok",
+            "catalogName": "Grok",
+            "defaultCapMicroUsd": 25000000,
+            "folder": "~/Corral/Grok",
+            "maxCapMicroUsd": 100000000,
+            "model": "grok-4.7",
+            "models": [
+              {
+                "id": "grok-4.7",
+                "name": "Grok 4.7",
+                "price": "$2.00 in and $6.00 out per million tokens; $4.00 and $12.00 from 200,000 prompt tokens"
+              }
+            ],
+            "monthlyCapMicroUsd": null,
+            "name": "Grok",
+            "problem": null,
+            "spentMicroUsd": null
+          },
+          {
+            "agent": "gpt",
+            "catalogName": "GPT",
+            "chatgptPlan": {
+              "state": "signedOut"
+            },
+            "defaultCapMicroUsd": 25000000,
+            "folder": "~/Corral/GPT",
+            "maxCapMicroUsd": 100000000,
+            "model": null,
+            "models": [],
+            "monthlyCapMicroUsd": null,
+            "name": "GPT",
+            "problem": null,
+            "spentMicroUsd": null
+          },
+          {
+            "agent": "claude",
+            "catalogName": "Claude",
+            "defaultCapMicroUsd": 25000000,
+            "folder": "~/Corral/Claude",
+            "maxCapMicroUsd": 100000000,
+            "model": "claude-sonnet-5-5",
+            "models": [
+              {
+                "id": "claude-sonnet-5-5",
+                "name": "Claude Sonnet 5.5",
+                "price": "$2.00 in and $10.00 out per million tokens"
+              },
+              {
+                "id": "claude-opus-5-5",
+                "name": "Claude Opus 5.5",
+                "price": "$4.00 in and $20.00 out per million tokens"
+              },
+              {
+                "id": "claude-haiku-5-5",
+                "name": "Claude Haiku 5.5",
+                "price": "$0.10 in and $0.50 out per million tokens; $0.50 and $2.50 from 100,001 prompt tokens"
+              }
+            ],
+            "monthlyCapMicroUsd": null,
+            "name": "Claude",
+            "problem": null,
+            "spentMicroUsd": null
+          },
+          {
+            "agent": "muse-spark",
+            "catalogName": "Muse Spark",
+            "defaultCapMicroUsd": 25000000,
+            "folder": "~/Corral/Muse Spark",
+            "maxCapMicroUsd": 100000000,
+            "model": null,
+            "models": [],
+            "monthlyCapMicroUsd": null,
+            "name": "Muse Spark",
+            "problem": null,
+            "spentMicroUsd": null
+          }
+        ],
+        "args": {},
+        "command": "agent_editor",
+        "gesture": {
+          "kind": "openAgents"
+        }
+      }
+    },
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          }
+        ],
+        "logos": [
+          "grok"
+        ],
+        "names": {
+          "grok": "Ada"
+        },
+        "shape": "circle"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "logo": "/Users/you/Library/Application Support/Corral/logos/xai.png",
+              "monogram": "A",
+              "name": "Ada",
+              "status": "available"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "Name it Ada and Save: its drop is Ada now",
+      "window": {
+        "answer": {
+          "agent": "grok",
+          "catalogName": "Grok",
+          "defaultCapMicroUsd": 25000000,
+          "folder": "~/Corral/Ada",
+          "maxCapMicroUsd": 100000000,
+          "model": "grok-4.7",
+          "models": [
+            {
+              "id": "grok-4.7",
+              "name": "Grok 4.7",
+              "price": "$2.00 in and $6.00 out per million tokens; $4.00 and $12.00 from 200,000 prompt tokens"
+            }
+          ],
+          "monthlyCapMicroUsd": null,
+          "name": "Ada",
+          "problem": null,
+          "spentMicroUsd": null
+        },
+        "args": {
+          "agent": "grok",
+          "edit": {
+            "model": "grok-4.7",
+            "monthlyCapMicroUsd": null,
+            "name": "Ada"
+          }
+        },
+        "command": "save_agent",
+        "gesture": {
+          "agent": "grok",
+          "kind": "rename",
+          "name": "Ada"
+        }
+      }
+    },
+    {
+      "expect": {
+        "columnStatus": {
+          "grok": "working"
+        },
+        "columns": [
+          "grok"
+        ],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "working"
+          }
+        ],
+        "shape": "circle"
+      },
+      "gesture": {
+        "agent": "grok",
+        "kind": "task",
+        "text": "Draft my week's plan"
+      },
+      "intent": {
+        "intent": {
+          "id": "grok",
+          "kind": "deployTask",
+          "prompt": "Draft my week's plan"
+        },
+        "v": 1
+      },
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "logo": "/Users/you/Library/Application Support/Corral/logos/xai.png",
+              "monogram": "A",
+              "name": "Ada",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "prompt": "Draft my week's plan",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "queued"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "logo": "/Users/you/Library/Application Support/Corral/logos/xai.png",
+                "name": "Ada",
+                "next": [],
+                "prompt": "Draft my week's plan",
+                "promptTruncated": false,
+                "status": "queued"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "logo": "/Users/you/Library/Application Support/Corral/logos/xai.png",
+              "monogram": "A",
+              "name": "Ada",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answerTruncated": false,
+              "elapsedMs": 0,
+              "id": "grok",
+              "prompt": "Draft my week's plan",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "logo": "/Users/you/Library/Application Support/Corral/logos/xai.png",
+                "name": "Ada",
+                "next": [],
+                "prompt": "Draft my week's plan",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        }
+      ],
+      "say": "Give Ada a task in its card: its ring turns and its column rises"
+    },
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "done"
+          }
+        ],
+        "shape": "circle"
+      },
+      "gesture": null,
+      "intent": null,
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "logo": "/Users/you/Library/Application Support/Corral/logos/xai.png",
+              "monogram": "A",
+              "name": "Ada",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answer": "Monday: the Q4 draft. Tuesday: errands. Friday stays free.",
+              "answerTruncated": false,
+              "elapsedMs": 20000,
+              "id": "grok",
+              "prompt": "Draft my week's plan",
+              "promptTruncated": false,
+              "spend": "$0.00",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "logo": "/Users/you/Library/Application Support/Corral/logos/xai.png",
+                "name": "Ada",
+                "next": [],
+                "prompt": "Draft my week's plan",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "logo": "/Users/you/Library/Application Support/Corral/logos/xai.png",
+              "monogram": "A",
+              "name": "Ada",
+              "status": "working"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "stop"
+              ],
+              "answer": "Monday: the Q4 draft. Tuesday: errands. Friday stays free.",
+              "answerTruncated": false,
+              "elapsedMs": 20000,
+              "id": "grok",
+              "prompt": "Draft my week's plan",
+              "promptTruncated": false,
+              "spend": "$0.0030",
+              "status": "working"
+            }
+          ],
+          "hidden": 0,
+          "trace": {
+            "columns": [
+              {
+                "id": "grok",
+                "logo": "/Users/you/Library/Application Support/Corral/logos/xai.png",
+                "name": "Ada",
+                "next": [],
+                "prompt": "Draft my week's plan",
+                "promptTruncated": false,
+                "status": "working"
+              }
+            ],
+            "more": 0
+          },
+          "v": 1
+        },
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "logo": "/Users/you/Library/Application Support/Corral/logos/xai.png",
+              "monogram": "A",
+              "name": "Ada",
+              "status": "done"
+            }
+          ],
+          "cards": [
+            {
+              "actions": [
+                "sendBack",
+                "newTask"
+              ],
+              "answer": "Monday: the Q4 draft. Tuesday: errands. Friday stays free.",
+              "answerTruncated": false,
+              "elapsedMs": 20000,
+              "id": "grok",
+              "prompt": "Draft my week's plan",
+              "promptTruncated": false,
+              "spend": "$0.0030",
+              "status": "done"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "Ada finishes: its card offers Send back and a new task"
+    },
+    {
+      "expect": {
+        "columns": [],
+        "drops": [
+          {
+            "id": "grok",
+            "status": "available"
+          }
+        ],
+        "names": {
+          "grok": "Ada"
+        },
+        "shape": "circle"
+      },
+      "gesture": {
+        "agent": "grok",
+        "button": "sendBack",
+        "kind": "press"
+      },
+      "intent": {
+        "intent": {
+          "id": "grok",
+          "kind": "sendBack"
+        },
+        "v": 1
+      },
+      "rosters": [
+        {
+          "agents": [
+            {
+              "id": "grok",
+              "logo": "/Users/you/Library/Application Support/Corral/logos/xai.png",
+              "monogram": "A",
+              "name": "Ada",
+              "status": "available"
+            }
+          ],
+          "hidden": 0,
+          "v": 1
+        }
+      ],
+      "say": "Send Ada back: it's ready for a task"
+    }
+  ],
+  "title": "First launch"
+}

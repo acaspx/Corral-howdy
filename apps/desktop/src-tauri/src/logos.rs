@@ -3,9 +3,13 @@
 //! again before it's written, written to a temp file and renamed, so Swift never sees half a
 //! file. The fetch and the checks are in `corral_adapters::logos`.
 
+use corral_adapters::catalog::agent_for;
+use corral_adapters::linked::LinkedSettings;
 use corral_adapters::logos::{
     Logo, LogoError, LogoFetcher, LogoFormat, LogoId, check_logo, fetch_logo,
 };
+use corral_core::ids::AgentId;
+use corral_secrets::Provider;
 use std::path::{Path, PathBuf};
 
 /// Why a logo wasn't saved.
@@ -88,6 +92,19 @@ impl LogoStore {
         }
         Ok(path)
     }
+}
+
+/// The logos the corral shows, with the drop each is for: each connected provider's and each shown
+/// linked app's (ADR-015).
+pub fn wanted(connected: &[Provider], linked: &LinkedSettings) -> Vec<(LogoId, AgentId)> {
+    let providers = connected
+        .iter()
+        .map(|p| (LogoId::Provider(*p), agent_for(*p).id));
+    let apps = linked
+        .shown()
+        .into_iter()
+        .filter_map(|app| linked.logo(app).map(|id| (id, app.agent_card().id)));
+    providers.chain(apps).collect()
 }
 
 /// Each logo: the saved one, or else fetched and saved. Logos with no known source are left
