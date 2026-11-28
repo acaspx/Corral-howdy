@@ -8,7 +8,7 @@
 //! native layer, so a journey's transcript is what the app sends.
 
 use crate::bridge::{PromptBarSnapshot, RosterSnapshot};
-use crate::corral_order::CorralOrder;
+use crate::corral_order::{CorralOrder, CorralSettingsView};
 use crate::prompt_bar_feed;
 use corral_adapters::linked::LinkedSettings;
 use corral_core::checkpoint_note::{NoteDesk, Notice};
@@ -194,6 +194,30 @@ impl CorralState {
             })
             .with_logos(|id| self.logos.get(id).cloned())
             .with_linked(&self.linked)
+    }
+
+    /// The main window's Corral section (TP-USAGE-15, 16): every agent, which show, and whether
+    /// the order stays fixed.
+    pub fn settings(&self) -> CorralSettingsView {
+        self.order.settings(&self.all_cards)
+    }
+
+    /// Shows the agents `ids` (at most 8, the user's own), saved, with the drops re-placed at
+    /// once. True when the corral changed; an ID that isn't one of the agents is refused.
+    pub fn choose_shown(&mut self, ids: &[String], now_ms: u64) -> Result<bool, String> {
+        let picks: Vec<AgentId> = ids.iter().map(|id| AgentId::from(id.as_str())).collect();
+        self.order.choose_shown(&picks)?;
+        save_order(&mut self.order);
+        let cards = self.all_cards.clone();
+        let placed = self.order.place(cards, now_ms);
+        Ok(self.corral.set_agents(placed.cards))
+    }
+
+    /// Turns "Keep order fixed" on or off, saved. Deploys still count.
+    pub fn keep_order_fixed(&mut self, keep: bool) -> CorralSettingsView {
+        self.order.set_keep_fixed(keep);
+        save_order(&mut self.order);
+        self.settings()
     }
 
     /// Whether `checkpoint` waits on `agent`'s card, as the user stepped to it: the only one an
