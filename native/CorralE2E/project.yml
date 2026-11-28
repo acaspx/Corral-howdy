@@ -1,0 +1,36 @@
+# The nightly journeys on the bundled app (Spike S2, step 4): XCUITest drives the e2e build of
+# Corral (`--features native,e2e`, docs/spikes/S2-ui-test-harness.md), whose providers are scripted
+# fakes, its keys in memory and nothing on the network. Generated into an Xcode project by XcodeGen
+# in .github/workflows/ui-nightly.yml. The app isn't built here: the workflow builds and registers
+# it, and the tests launch it by its bundle ID.
+name: CorralE2E
+options:
+  bundleIdPrefix: app.corral.e2e
+  deploymentTarget:
+    macOS: "26.0"
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    GENERATE_INFOPLIST_FILE: YES
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Signed to run locally: nothing here is shipped.
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    DEVELOPMENT_TEAM: ""
+    ENABLE_HARDENED_RUNTIME: NO
+targets:
+  CorralE2EUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources: [UITests]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.corral.e2e.uitests
+schemes:
+  CorralE2E:
+    build:
+      targets:
+        CorralE2EUITests: [test]
+    test:
+      targets: [CorralE2EUITests]

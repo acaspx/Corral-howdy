@@ -117,6 +117,19 @@ if [ -x "$evals_bin" ]; then
     env CORRAL_EVALS_BIN="$evals_bin" bash -c "cd '$r' && bash '$ci/eval_gate.sh' 0000000000000000000000000000000000000000"
 fi
 
+echo "release check (the e2e build never ships, Spike S2)"
+d="$(mktemp -d)"
+printf 'some release bytes\0more bytes\n' > "$d/release"
+printf 'bytes\0corral-e2e-build: fake providers, keys in memory, no network\0more\n' > "$d/e2e"
+expect "TP-CI-17 release check: a binary without the e2e build's mark passes" 0 \
+  bash "$ci/no_e2e_in_release.sh" "$d/release"
+expect "TP-CI-18 release check: a binary with the e2e build's mark fails" 1 \
+  bash "$ci/no_e2e_in_release.sh" "$d/e2e"
+expect "TP-CI-19 release check: a missing binary fails instead of passing" 1 \
+  bash "$ci/no_e2e_in_release.sh" "$d/no-such-binary"
+expect "TP-CI-19 ...and so does no binary at all" 1 \
+  bash "$ci/no_e2e_in_release.sh"
+
 echo
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
